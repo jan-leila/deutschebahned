@@ -19,6 +19,7 @@
 #define WAKEUP_RETRY_MS 2000
 #define WAKEUP_RETRIES 15
 #define ROUTE_BAND_H 15  // level-0 top band carrying the route full name (BAR_H when there is none)
+#define BADGE_GAP 2      // min. white rows between the level-0 band and the route badge
 #define TEST_MARQUEE_END 1000000000  // test hook value: marquee frozen at the end of its scroll
 
 static Window *s_window;
@@ -152,12 +153,17 @@ static int16_t badge_width(const BusItem *it, GFont font, int16_t max_w) {
 }
 
 // Route badge: rounded rect in the route color centred on cy; returns its width (0 when there is no badge).
-static int16_t draw_badge(GContext *ctx, const BusItem *it, GFont font, int16_t x, int16_t cy, int16_t max_w) {
+// The badge never reaches above min_y: when the room above cy is short it shrinks vertically (still centred on cy,
+// never below the glyph height) so it cannot run into the level-0 route band / top bar.
+static int16_t draw_badge(GContext *ctx, const BusItem *it, GFont font, int16_t x, int16_t cy, int16_t max_w,
+                          int16_t min_y) {
   int16_t w = badge_width(it, font, max_w);
   if (!w) return 0;
   FontMetrics fi = font_info(font);
   int16_t pad = fi.cap >= 12 ? 5 : 3;
   int16_t h = fi.cap + 2 * pad + 1;
+  int32_t room = 2 * ((int32_t)cy - min_y);
+  if (h > room) h = room < fi.cap + 3 ? fi.cap + 3 : (int16_t)room;
   graphics_context_set_fill_color(ctx, route_color(it->color));
   graphics_fill_rect(ctx, GRect(x, cy - h / 2, w, h), 4, GCornersAll);
   graphics_context_set_text_color(ctx, badge_text_color(it->color));
@@ -322,7 +328,8 @@ static void draw_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
       graphics_draw_rect(ctx, GRect(x, s->y + 1, w, s->h - 2));
     }
   }
-  draw_badge(ctx, it, badge_font, bx, title_cy, iw / 2);
+  // Keep the selected row's badge BADGE_GAP px clear of its route band / top bar.
+  draw_badge(ctx, it, badge_font, bx, title_cy, iw / 2, s->level == 0 ? top + BADGE_GAP : INT16_MIN);
   if (show_dir) draw_dir(ctx, it->dir, dir_font, bx + (bw ? bw + 4 : 0), title_cy, s->level == 0 ? fg : dim);
   if (mode == 'C') return;
 
