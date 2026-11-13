@@ -1,4 +1,4 @@
-# Bus Watch
+# Deutschebahned
 
 A Pebble watchapp for the buses you actually ride.
 
