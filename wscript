@@ -1,4 +1,5 @@
 import os.path
+import subprocess
 
 top = '.'
 out = 'build'
@@ -12,6 +13,8 @@ def configure(ctx):
     ctx.env.BUNDLE_NAME = 'bus-watch.pbw'
 
 def build(ctx):
+    # src/pkjs/config-page.js is generated from config/ (and not committed); regenerate it before the JS is globbed.
+    subprocess.check_call(['node', os.path.join(ctx.path.abspath(), 'tools', 'build-config.js')])
     ctx.load('pebble_sdk')
     binaries = []
     cached_env = ctx.env

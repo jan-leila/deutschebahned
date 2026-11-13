@@ -442,7 +442,8 @@ It keeps at least 8 items so the wheel has rows above and below the selection.
 
 `tools/build-config.js` inlines `src/common/{geo,settings,ranking,optimize,directions,format}.js` and `src/sources/**` into the page (tiny
 CommonJS shim resolving relative paths, exposing `window.BusWatch = {geo, settings, ranking, optimize, directions, format, registry}` where
-`registry = createRegistry(require('src/sources/all'))`) and writes `src/pkjs/config-page.js` (`module.exports = "<html…"`),
+`registry = createRegistry(require('src/sources/all'))`) and writes `src/pkjs/config-page.js` (`module.exports = "<html…"`; generated, not committed — `pebble build` and
+`tools/run-tests.js` regenerate it),
 keeping a literal `<!--PARAMS-->` marker in `<head>`. Self-contained: no external URLs. Mobile-friendly.
 
 Reads `window.__params` (`{config, samples, learned, return_to}`); missing → defaults. DOM contract (used by the test):

@@ -18,8 +18,7 @@ On the watch the list is a **rotating drum**. The selected row is full size, wit
 ```
 nix-shell                       # pebble.nix pinned with npins (see shell.nix)
 pebble sdk install 4.9.169      # once
-node tools/build-config.js      # regenerate src/pkjs/config-page.js after editing config/
-pebble build                    # -> build/bus-watch.pbw
+pebble build                    # -> build/bus-watch.pbw (also regenerates src/pkjs/config-page.js from config/)
 pebble install --emulator basalt
 ```
 

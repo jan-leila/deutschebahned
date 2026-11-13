@@ -9,6 +9,9 @@ build/
 .waf*
 *.pbw
 
+# Generated from config/config-page.html by tools/build-config.js (run by `pebble build` and the test runner)
+src/pkjs/config-page.js
+
 # Node
 node_modules/
 

@@ -24,7 +24,7 @@ jobs:
           done
           exit 1
       - name: Unit, settings page, C model and integration tests
-        run: nix-shell --run 'node tools/build-config.js && node tools/run-tests.js'
+        run: nix-shell --run 'node tools/run-tests.js'
       - name: Build watch app
         run: |
           nix-shell --run '

@@ -7,6 +7,9 @@ const path = require('path');
 
 const dir = path.join(__dirname, '..', 'test');
 const filters = process.argv.slice(2);
+// src/pkjs/config-page.js is generated (not committed) and required by src/pkjs/index.js: build it first.
+const cfg = spawnSync(process.execPath, [path.join(__dirname, 'build-config.js')], { stdio: 'inherit' });
+if (cfg.status !== 0) process.exit(cfg.status === null ? 1 : cfg.status);
 const files = fs.readdirSync(dir)
   .filter(f => f.endsWith('.test.js'))
   .filter(f => filters.length === 0 || filters.some(x => f.includes(x)))

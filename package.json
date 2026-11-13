@@ -7,7 +7,7 @@
   "dependencies": {},
   "scripts": {
     "test": "node tools/run-tests.js",
-    "test:unit": "node --test test/",
+    "test:unit": "node tools/build-config.js && node --test test/",
     "build:config": "node tools/build-config.js"
   },
   "pebble": {
