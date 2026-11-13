@@ -42,35 +42,46 @@ const MT_TABLE = {
   '/schedule/stoplist/2/1': fx('mt-stoplist-2-1.json'),
   '/schedule/stoplist/2/2': fx('mt-stoplist-2-2.json'),
   '/nextrip/16058': fx('mt-nextrip-stop-16058.json'),
+  '/nextrip/13334': fx('mt-nextrip-stop-13334.json'),
 };
 
+const IMPERIAL = { units: 'imperial', clock24: false, known: true };
+const METRIC = { units: 'metric', clock24: true, known: true };
 const training = { autoTrain: true, learningRate: 0.05, iterations: 100, temperature: 60, regularization: 0.01, maxSamples: 200 };
-const obaConfig = {
-  provider: { type: 'onebusaway', baseUrl: 'https://oba.example/api/where', apiKey: 'abc' },
+// two systems in two cities
+const twoConfig = {
+  version: 2,
+  providers: [
+    { id: 'metrotransit', type: 'metrotransit', name: 'Twin Cities' },
+    { id: 'onebusaway', type: 'onebusaway', name: 'Seattle', baseUrl: 'https://oba.example/api/where', apiKey: 'abc',
+      coverage: { mode: 'manual', lat: 47.6062, lon: -122.3321, radius: 40000 } },
+  ],
   location: { mode: 'gps', lat: 0, lon: 0 },
   stopRadius: 250, routeRadius: 60, recentWindow: 240, lookahead: 45, maxItems: 8,
-  routes: [{ id: '1_100225', name: '44', scale: -1.5, color: '1E88E5' }, { id: '1_100223', name: '43', scale: -1 }],
-  connections: [{ routeId: '1_100225', stopId: '1_29247', name: 'Home', scale: -2 }],
-  stopScales: { '1_10914': -0.5 },
+  routes: [{ providerId: 'metrotransit', id: '2', name: '2', scale: -1, color: '771473' },
+           { providerId: 'onebusaway', id: '1_100225', name: '44', scale: -1.5, color: '1E88E5' }],
+  stops: [{ providerId: 'metrotransit', id: '16058', name: 'Home', lat: 44.989411, lon: -93.245348, walkScale: 0, rideScale: -1.5 },
+          { providerId: 'metrotransit', id: '13334', name: 'Franklin & Lyndale', lat: 44.962618, lon: -93.287936, walkScale: -0.5, rideScale: 0 },
+          { providerId: 'onebusaway', id: '1_10914', name: 'Campus Pkwy', lat: 47.656426, lon: -122.312164, walkScale: -0.5, rideScale: 0 }],
   training,
 };
 // two picks: the user always prefers the sooner bus even when it is farther away
 const samples = [
   { t: 1, lat: 0, lon: 0, chosen: 1, candidates: [
-    { key: 'a', features: { 'stop:1_10914': 50, 'route:1_100223': 900 } },
-    { key: 'b', features: { 'stop:X': 300, 'route:1_100225': 60 } }] },
+    { key: 'a', features: { 'stop:onebusaway/1_10914': 50, 'route:metrotransit/2': 900 } },
+    { key: 'b', features: { 'stop:metrotransit/16058': 300, 'route:onebusaway/1_100225': 60 } }] },
   { t: 2, lat: 0, lon: 0, chosen: 0, candidates: [
-    { key: 'c', features: { 'stop:X': 280, 'route:1_100225': 30 } },
-    { key: 'd', features: { 'stop:1_10914': 20, 'route:1_100223': 1200 } }] },
+    { key: 'c', features: { 'stop:metrotransit/16058': 280, 'route:onebusaway/1_100225': 30 } },
+    { key: 'd', features: { 'stop:onebusaway/1_10914': 20, 'route:metrotransit/2': 1200 } }] },
 ];
 const mtConfig = {
-  provider: { type: 'metrotransit' },
-  routes: [{ id: '2', name: '2', scale: -1, color: '771473' }, { id: '922', name: 'B Line', scale: -0.8, color: 'ED1B2E' }],
-  connections: [{ routeId: '2', stopId: '16058', name: '8th St SE & 5th Ave SE', scale: -1.5 }],
+  version: 2, providers: [{ id: 'metrotransit', type: 'metrotransit' }],
+  routes: [{ providerId: 'metrotransit', id: '2', name: '2', scale: -1, color: '771473' }],
+  stops: [{ providerId: 'metrotransit', id: '16058', name: '8th St SE & 5th Ave SE', lat: 44.989411, lon: -93.245348, rideScale: -1.5 }],
 };
 const tripConfig = {
-  provider: { type: 'mock' }, location: { mode: 'fixed', lat: 44.96, lon: -93.27 },
-  routes: [{ id: 'R1', name: 'One', color: 'E53935' }], units: 'imperial', clock24: false,
+  version: 2, providers: [{ id: 'mock', type: 'mock' }], location: { mode: 'fixed', lat: 44.96, lon: -93.27 },
+  routes: [{ providerId: 'mock', id: 'R1', name: 'One', color: 'E53935' }],
   destinations: [
     { id: 'work', name: 'Work', lat: 44.97, lon: -93.26, arriveBy: '08:45', days: [1, 2, 3, 4, 5], enabled: true },
     { id: 'gym', name: 'Gym', lat: 44.95, lon: -93.29, arriveBy: '18:00', days: [], enabled: false },
@@ -87,31 +98,29 @@ const until = (expr, ms = 3000) => `(async () => { for (let t = 0; t < ${ms}; t 
   await new Promise(r => setTimeout(r, 50)); } throw new Error('timed out waiting for: ' + ${JSON.stringify(expr)}); })()`;
 const set = (sel, v) => `(() => { const el = ${sel}; el.value = ${JSON.stringify(v)};
   el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); })()`;
+const go = name => `showPage(${JSON.stringify(name)})`;
+const indexed = until(`!/Indexing/.test(document.querySelector('#search .search-status').textContent)`);
+const typed = q => [set(`document.querySelector('#search .search-input')`, q), until(`document.querySelectorAll('#search .result').length > 0`)];
 
 // name, window.__params (return_to is added), page actions run in order (each awaited)
 const SCENES = [
-  ['01-defaults', {}, [until(`document.querySelectorAll('#route-options option').length > 0`)]],
-  ['02-saved-onebusaway', { config: obaConfig, samples, learned: { 'stop:1_10914': -0.25 } }, []],
-  ['03-metrotransit', { config: mtConfig, samples: [], learned: {} },
-    [until(`document.querySelectorAll('#route-options option').length > 0`)]],
-  ['04-stop-picker', { config: mtConfig, samples: [], learned: {} }, [
-    until(`document.querySelectorAll('#route-options option').length > 0`),
-    `document.querySelector('#connections .connection-row .pick-stop').click()`,
-    until(`document.querySelectorAll('#stop-picker select[name=direction] option').length === 2`),
-    set(`document.querySelector('#stop-picker select[name=direction]')`, '1'),
-    until(`[...document.querySelectorAll('#stop-picker select[name=stop] option')].some(o => o.value === '16058')`),
-    set(`document.querySelector('#stop-picker select[name=stop]')`, '16058'),
-  ]],
-  ['05-trips', { config: tripConfig, samples: [], learned: {}, plans }, [
-    until(`document.querySelectorAll('#route-options option').length === 1`),
-    `document.querySelectorAll('#sec-destinations details, #sec-training details').forEach(d => { d.open = true; })`,
-  ]],
-  ['06-trained', { config: obaConfig, samples, learned: {} }, [
-    `document.getElementById('train-now').click()`,
-    until(`/\\d/.test(document.getElementById('train-result').textContent)`),
-  ]],
-  ['07-fixed-location', { config: Object.assign({}, obaConfig, { location: { mode: 'fixed', lat: 44.977753, lon: -93.265011 },
-    units: 'imperial', clock24: false }), samples: [], learned: {} }, []],
+  ['01-home', { config: twoConfig, samples, learned: {}, prefs: IMPERIAL }, []],
+  ['02-systems', { config: twoConfig, samples: [], learned: {}, prefs: IMPERIAL }, [go('systems')]],
+  ['03-routes', { config: twoConfig, samples: [], learned: {}, prefs: IMPERIAL }, [go('routes')]],
+  ['04-route-search', { config: mtConfig, samples: [], learned: {}, prefs: IMPERIAL }, [
+    go('routes'), `document.getElementById('add-route').click()`, indexed, ...typed('blue')]],
+  ['05-stops', { config: mtConfig, samples: [], learned: {}, prefs: IMPERIAL }, [
+    go('stops'), `document.getElementById('add-stop').click()`, indexed, `document.querySelector('#search .search-cancel').click()`]],
+  ['06-stop-search', { config: mtConfig, samples: [], learned: {}, prefs: IMPERIAL }, [
+    go('stops'), `document.getElementById('add-stop').click()`, indexed, ...typed('franklin')]],
+  ['07-trips', { config: tripConfig, samples: [], learned: {}, plans, prefs: IMPERIAL }, [
+    go('trips'), `document.querySelectorAll('details').forEach(d => { d.open = true; })`]],
+  ['08-nearby-imperial', { config: Object.assign({}, twoConfig, { location: { mode: 'fixed', lat: 44.977753, lon: -93.265011 } }),
+    samples: [], learned: {}, prefs: IMPERIAL }, [go('nearby')]],
+  ['09-nearby-metric', { config: twoConfig, samples: [], learned: {}, prefs: METRIC }, [go('nearby')]],
+  ['10-trained', { config: twoConfig, samples, learned: {}, prefs: IMPERIAL }, [
+    go('learning'), `document.getElementById('train-now').click()`,
+    until(`/\\d/.test(document.getElementById('train-result').textContent)`)]],
 ];
 
 // --------------------------------------------------------------------------------------------------- page setup

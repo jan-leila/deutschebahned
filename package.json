@@ -48,7 +48,8 @@
       "NOTIFY_BODY",
       "NOTIFY_COLOR",
       "ITEM_ROUTE",
-      "TEST_NOW"
+      "TEST_NOW",
+      "WATCH_PREFS"
     ],
     "capabilities": ["configurable", "location"],
     "resources": {

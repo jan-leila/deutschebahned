@@ -5,7 +5,9 @@ const assert = require('node:assert/strict');
 const settings = require('../src/common/settings');
 const { createSession } = require('../src/common/session');
 const { createRegistry } = require('../src/sources/registry');
-const createProvider = (config, deps) => createRegistry(require('../src/sources/all')).create(config, deps);
+const federation = require('../src/common/federation');
+// the same federated provider src/pkjs/index.js builds: every configured system, ids 'system/id'
+const createProvider = (config, deps) => federation.fromConfig(createRegistry(require('../src/sources/all')), config, deps);
 
 const geo = require("../src/common/geo");
 const CENTER = { lat: 47.6, lon: -122.3 };
@@ -22,10 +24,11 @@ function world(extra, pos) {
   const sent = [];
   const storage = memoryStorage();
   storage.setItem('busWatch.config', JSON.stringify(Object.assign({
-    provider: { type: 'mock' },
+    version: 2,
+    providers: [{ id: 'mock', type: 'mock' }],
     location: { mode: "gps", lat: CENTER.lat, lon: CENTER.lon },
-    routes: [{ id: 'R1', name: 'One' }, { id: 'R2', name: 'Two' }],
-    connections: [{ routeId: 'R1', stopId: 'R1:s12', name: 'Work' }],
+    routes: [{ providerId: 'mock', id: 'R1', name: 'One' }, { providerId: 'mock', id: 'R2', name: 'Two' }],
+    stops: [{ providerId: 'mock', id: 'R1:s12', name: 'Work' }],
   }, extra || {})));
   const session = createSession({
     storage,
@@ -88,14 +91,14 @@ test('pipeline: off the route there is no drop-off, only pickups', async () => {
 });
 
 test('learning: repeatedly picking an item that ranks low moves it to the top', async () => {
-  // The user only cares about route Two's pickups; the prior ranks by raw distance+time so Two is often not first.
+  // The user only cares about route Two's pickups; every scale starts at 0, so only learning can put Two first.
   const w = world({ training: { autoTrain: true, iterations: 200 } });
   let firstHits = 0;
   const rounds = 25;
   for (let r = 0; r < rounds; r++) {
     w.advance(97);
     const items = await refresh(w.session);
-    const want = items.findIndex(i => i.kind === 'pickup' && i.routeId === 'R2');
+    const want = items.findIndex(i => i.kind === 'pickup' && i.routeId === 'mock/R2');
     assert.ok(want >= 0);
     if (r >= rounds - 5 && want === 0) firstHits++;
     const listId = w.session.lastList().listId;
@@ -138,4 +141,21 @@ test('pipeline: riding a bus — the live vehicle next to you gives the drop-off
   const drop = items.find(i => i.kind === 'dropoff');
   assert.ok(drop, 'on the route -> drop-off row');
   assert.equal(drop.times[0], base + 12 * 50, 'drop-off of the bus you are on: its arrival at stop 12');
+});
+
+test('two transit systems: only the one whose coverage area contains you is asked; its stops drop off on its routes', async () => {
+  // 'home' covers the centre (automatic: around its saved stop), 'away' is set to another city
+  const home = { id: 'home', type: 'mock' };
+  const away = { id: 'away', type: 'mock', coverage: { mode: 'manual', lat: 44.97, lon: -93.26, radius: 30000 } };
+  const w = world({ providers: [home, away],
+    routes: [{ providerId: 'home', id: 'R1', name: 'One' }, { providerId: 'away', id: 'R1', name: 'Away One' }],
+    stops: [{ providerId: 'home', id: 'R1:s12', name: 'Work', lat: CENTER.lat + 0.01, lon: CENTER.lon },
+            { providerId: 'away', id: 'R1:s12', name: 'Elsewhere' }] });
+  const items = await refresh(w.session);
+  assert.ok(items.length > 0);
+  assert.ok(items.every(i => i.routeId === 'home/R1'), JSON.stringify(items.map(i => i.key)));
+  const drop = items.find(i => i.kind === 'dropoff');
+  assert.equal(drop.title, 'Work');
+  assert.ok('ride:home/R1:s12' in drop.features);
+  assert.ok(items.some(i => i.kind === 'pickup' && Object.keys(i.features).some(k => k.startsWith('stop:home/'))));
 });

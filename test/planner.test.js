@@ -32,12 +32,20 @@ const routeR = {
 const routeQ = { id: 'Q', shortName: 'Q', color: '', directions: [], stops: {} };
 const arr = (stopId, routeId, tripKey, dt) => ({ stopId, routeId, tripKey, time: NOW + dt, predicted: true, headsign: '' });
 
+// the planner gets a runtime view (view.build): routes [{id, name, scale, color}], connections, scalar fields
 function config(extra) {
-  return settings.normalize(Object.assign({
+  const d = settings.defaults();
+  delete d.providers;
+  delete d.stops;
+  return Object.assign(d, {
     stopRadius: 300, routeRadius: 80, recentWindow: 180, lookahead: 60, dropoffHorizon: 120, maxStops: 4, pickupsPerItem: 3,
     routes: [{ id: 'R', name: 'Red' }, { id: 'Q' }],
     connections: [{ routeId: 'R', stopId: 'R:d', name: 'Home' }],
-  }, extra || {}));
+  }, extra || {}, {
+    routes: ((extra && extra.routes) || [{ id: 'R', name: 'Red' }, { id: 'Q' }]).map(r => Object.assign({ name: r.id, scale: 0, color: '' }, r)),
+    connections: ((extra && extra.connections) || [{ routeId: 'R', stopId: 'R:d', name: 'Home' }])
+      .map(c => Object.assign({ id: c.routeId + '|' + c.stopId, name: c.stopId }, c)),
+  });
 }
 
 // ---- pickHereStop --------------------------------------------------------------------------
@@ -116,7 +124,7 @@ test('dropoff: on-bus (recent) and next bus, matched by tripKey', () => {
   assert.deepEqual(items[0], {
     kind: 'dropoff', key: 'dropoff:R|R:d', badge: 'Red', title: 'Home', color: '0055AA', times: [NOW + 120, NOW + 480, NOW + 300],
     routeId: 'R', stopId: 'R:d', hereStopId: 'R:b', routeLongName: '',
-    features: { 'conn:R|R:d': 20, 'route:R': 120 },
+    features: { 'ride:R:d': 20, 'route:R': 120 },
     bearing: geo.bearing(pos, routeR.stops['R:d']),
     distance: items[0].distance, // checked below
     dir: 'EB', lanes: [],

@@ -132,7 +132,8 @@ test('mock: stopsNear returns nearby stops of all routes sorted by distance', as
   const p = createMock(mockConfig(), () => NOW);
   const stops = await call(p.stopsNear, center, 250);
   const ids = stops.map(s => s.id).sort();
-  assert.deepEqual(ids, ['R1:s7', 'R1:s8', 'R2:s7', 'R2:s8']);
+  // the configured routes, then the demo routes M1..M3 (all lines cross the centre)
+  assert.deepEqual(ids, ['M1:s7', 'M1:s8', 'M2:s7', 'M2:s8', 'M3:s7', 'M3:s8', 'R1:s7', 'R1:s8', 'R2:s7', 'R2:s8']);
   for (let i = 1; i < stops.length; i++) assert.ok(geo.distance(center, stops[i - 1]) <= geo.distance(center, stops[i]));
   assert.deepEqual(stops.find(s => s.id === 'R1:s7').routeIds, ['R1']);
 });
@@ -421,7 +422,8 @@ test('mock catalog: listRoutes, routeInfo, stopInfo from the generated network',
   const p = createMock(mockConfig(), () => NOW);
   const list = await call(p.listRoutes);
   const cfg = mockConfig();
-  assert.deepEqual(list, cfg.routes.map(r => ({ id: r.id, label: r.id + ' ' + (r.name || r.id) })));
+  assert.deepEqual(list, cfg.routes.map(r => ({ id: r.id, label: r.id + ' ' + (r.name || r.id) }))
+    .concat([1, 2, 3].map(n => ({ id: 'M' + n, label: 'M' + n + ' Mock ' + n }))));
   assert.deepEqual(await call(p.routeInfo, 'R1'), await call(p.route, 'R1'));
   const r1 = await call(p.route, 'R1');
   assert.deepEqual(await call(p.stopInfo, 'R1:s3'), r1.stops['R1:s3']);
@@ -439,4 +441,69 @@ test('route longName: Metro Transit route_desc, OBA longName, mock generated', a
   const mock = createMock(mockConfig(), () => NOW);
   const r = await call(mock.route, mockConfig().routes[0].id);
   assert.ok(r.longName.length > r.shortName.length);
+});
+
+// ---------------------------------------------------------------- catalog (search index)
+
+test('mock catalog(): every route and stop of the network, with positions', async () => {
+  const p = createMock(mockConfig(), () => NOW);
+  const progress = [];
+  const cat = await new Promise((resolve, reject) => p.catalog((e, v) => (e ? reject(e) : resolve(v)), (n, t) => progress.push([n, t])));
+  assert.deepEqual(cat.routes.map(r => r.id), ['R1', 'R2', 'M1', 'M2', 'M3']);
+  assert.deepEqual(cat.routes[0], { id: 'R1', shortName: 'One', longName: 'One via Mock Av - Centre - Station R1' });
+  assert.equal(cat.stops.length, 5 * 16);
+  const r1 = await call(p.route, 'R1');
+  assert.deepEqual(cat.stops[3], Object.assign({}, r1.stops['R1:s3'], { routeIds: ['R1'] }));
+  assert.deepEqual(progress, [[5, 5]]);
+});
+
+test('metrotransit catalog(): route list, then each route\'s stop lists; failing routes listed without stops', async () => {
+  const { http, urls } = mtHttp({ [MT + '/nextrip/routes']: 'mt-nextrip-routes.json' });
+  const mt = createMetroTransit({ routeIds: [] }, http, { clock: () => MT_NOW });
+  const progress = [];
+  const cat = await new Promise((resolve, reject) => mt.catalog((e, v) => (e ? reject(e) : resolve(v)), (n, t) => progress.push([n, t])));
+  assert.deepEqual(cat.routes, [
+    { id: '901', shortName: '901', longName: 'METRO Blue Line' },
+    { id: '922', shortName: '922', longName: 'METRO B Line' },
+    { id: '2', shortName: '2', longName: 'Franklin Av - Riverside Av - U of M - 8th St SE' },
+  ]);
+  const listed = new Set([...fixture('mt-stoplist-2-1.json'), ...fixture('mt-stoplist-2-2.json')].map(s => String(s.stop_id)));
+  assert.deepEqual(new Set(cat.stops.map(s => s.id)), listed);
+  const franklin = cat.stops.find(s => s.id === '13337');
+  assert.deepEqual(franklin, { id: '13337', name: 'Franklin Ave and Hennepin Ave', routeIds: ['2'] });
+  assert.deepEqual(progress.map(p => p[1]), [3, 3, 3]);
+  assert.ok(!urls.some(u => /\/nextrip\/\d+$/.test(u)), 'no per-stop coordinate lookups');
+});
+
+test('metrotransit catalog(): a route already built gives its stop positions', async () => {
+  const { http } = mtHttp({ [MT + '/nextrip/routes']: [{ route_id: '2', route_label: 'Route 2' }] });
+  const mem = {};
+  const storage = { getItem: k => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = v; }, removeItem: k => { delete mem[k]; } };
+  const mt = createMetroTransit({ routeIds: ['2'] }, http, { clock: () => MT_NOW, storage });
+  const r = await call(mt.route, '2');
+  const cat = await new Promise((resolve, reject) => mt.catalog((e, v) => (e ? reject(e) : resolve(v))));
+  const any = Object.keys(r.stops)[0];
+  const s = cat.stops.find(x => x.id === any);
+  assert.deepEqual([s.lat, s.lon], [r.stops[any].lat, r.stops[any].lon]);
+  await assert.rejects(new Promise((resolve, reject) =>
+    createMetroTransit({}, mtHttp().http, { clock: () => MT_NOW }).catalog((e, v) => (e ? reject(e) : resolve(v)))));
+});
+
+test('onebusaway catalog(): agencies → routes → stops-for-route without polylines', async () => {
+  const { http, urls } = fakeHttp({ 'agencies-with-coverage': 'oba-agencies-with-coverage.json', 'routes-for-agency/1': 'oba-routes-for-agency-1.json',
+    'stops-for-route/1_100225': 'oba-stops-for-route.json', 'stops-for-route/1_100223': new Error('timeout') });
+  const p = createOneBusAway({ baseUrl: 'https://oba.example/api/where', apiKey: 'K' }, http);
+  const progress = [];
+  const cat = await new Promise((resolve, reject) => p.catalog((e, v) => (e ? reject(e) : resolve(v)), (n, t) => progress.push([n, t])));
+  assert.equal(urls[0], 'https://oba.example/api/where/agencies-with-coverage.json?key=K');
+  assert.equal(urls[1], 'https://oba.example/api/where/routes-for-agency/1.json?key=K');
+  assert.ok(urls.includes('https://oba.example/api/where/stops-for-route/1_100225.json?key=K&includePolylines=false&version=2'));
+  assert.deepEqual(cat.routes, [{ id: '1_100225', shortName: '44', longName: 'Ballard - U District' },
+                                { id: '1_100223', shortName: '43', longName: 'University District - Downtown' }]);
+  const refs = fixture('oba-stops-for-route.json').data.references.stops;
+  assert.equal(cat.stops.length, refs.length);
+  assert.deepEqual(cat.stops[0], { id: refs[0].id, name: refs[0].name, lat: refs[0].lat, lon: refs[0].lon, routeIds: ['1_100225'] });
+  assert.deepEqual(progress.map(x => x[1]), [2, 2]);
+  const bad = createOneBusAway({}, fakeHttp({ 'agencies-with-coverage': 'oba-error.json' }).http);
+  await assert.rejects(new Promise((resolve, reject) => bad.catalog((e, v) => (e ? reject(e) : resolve(v)))));
 });

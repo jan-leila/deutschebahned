@@ -6,6 +6,8 @@ var sessionModule = require('../common/session');
 var schedulerModule = require('../common/scheduler');
 var triggers = require('../common/triggers');
 var tripItems = require('../common/trip-items');
+var federation = require('../common/federation');
+var catalog = require('../common/catalog');
 // Data sources are plug-ins: this composition root is the only place that picks them.
 var sources = require('../sources/registry').createRegistry(require('../sources/all'));
 
@@ -16,6 +18,7 @@ var CONFIG_PAGE = require('./config-page');
 var HTTP_TIMEOUT_MS = 20000;
 var LOCATE_OPTIONS = { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 };
 var RETURN_TO = 'pebblejs://close#';
+var CATALOG_DELAY_MS = 15000;   // let the first refresh finish before indexing routes and stops
 
 function log(msg) {
   console.log('[bus-watch] ' + msg);
@@ -106,21 +109,78 @@ var sender = protocol.createSender(function (dict, onOk, onErr) {
   });
 }, { retries: 2 });
 
-// One provider per source-relevant config, shared by the session and the scheduler.
+var sourceDeps = { http: http, clock: clock, storage: localStorage };
+
+// One federated provider (every configured transit system, ids namespaced 'system/id') per source-relevant config,
+// shared by the session and the scheduler.
 var providerKey = null;
 var providerInstance = null;
 function providerFor(config) {
-  var key = JSON.stringify([config.provider, config.routes, config.connections, config.location]);
+  var key = JSON.stringify([config.providers, config.routes, config.stops, config.location]);
   if (key !== providerKey) {
     providerKey = key;
-    providerInstance = sources.create(config, { http: http, clock: clock, storage: localStorage });
+    providerInstance = federation.fromConfig(sources, config, sourceDeps);
   }
   return providerInstance;
+}
+
+// ---- route / stop search index, one per transit system (built in the background, kept 7 days) ----
+var catalogBusy = false;
+function refreshCatalogs() {
+  if (catalogBusy) return;
+  var config = session.getConfig();
+  var todo = [];
+  for (var i = 0; i < config.providers.length; i++) {
+    if (!catalog.fresh(catalog.loadPacked(localStorage, config.providers[i]), clock())) todo.push(config.providers[i]);
+  }
+  if (!todo.length) return;
+  catalogBusy = true;
+  (function next() {
+    var entry = todo.shift();
+    if (!entry) { catalogBusy = false; return; }
+    var provider;
+    try {
+      provider = sources.createFor(entry, config, sourceDeps);
+    } catch (e) {
+      log('index ' + entry.id + ': ' + (e.message || e));
+      return next();
+    }
+    log('indexing routes and stops of ' + entry.id);
+    catalog.build(provider, entry, clock(), function (err, packed) {
+      if (err) log('index ' + entry.id + ' failed: ' + (err.message || err));
+      else if (!catalog.save(localStorage, entry, packed)) log('index ' + entry.id + ': storage full');
+      else log('indexed ' + entry.id + ': ' + packed.routes.length + ' routes, ' + packed.stops.length + ' stops');
+      next();
+    });
+  })();
+}
+
+// stored indexes of the configured systems (also stale ones; the page rebuilds what is missing), in the text form that
+// stays small in the page's data: URI
+function storedCatalogs(config) {
+  var out = {};
+  for (var i = 0; i < config.providers.length; i++) {
+    var p = catalog.toText(catalog.loadPacked(localStorage, config.providers[i]));
+    if (p) out[config.providers[i].id] = p;
+  }
+  return out;
+}
+
+// (unref: under Node, in tests, a pending index build must not keep the process alive)
+function later(fn, ms) {
+  var t = setTimeout(fn, ms);
+  if (t && typeof t.unref === 'function') t.unref();
+  return t;
+}
+
+function locale() {
+  try { return navigator.language || ''; } catch (e) { return ''; }
 }
 
 var session = sessionModule.createSession({
   storage: localStorage,
   clock: clock,
+  locale: locale(),
   locate: locate,
   createProvider: providerFor,
   send: function (messages) {
@@ -138,7 +198,7 @@ var scheduler = schedulerModule.createScheduler({
   storage: localStorage,
   clock: clock,
   locate: locate,
-  getConfig: function () { return session.getConfig(); },
+  getConfig: function () { return session.runtimeConfig(null); },
   getSource: function () { return providerFor(session.getConfig()); },
   sendWakeups: function (wakeups) {
     log('scheduling ' + wakeups.length + ' wakeups');
@@ -203,6 +263,7 @@ Pebble.addEventListener('ready', function () {
   refresh();
   checkDue();   // also plans destinations that have no plan yet (e.g. after a wakeup launch)
   armTimer();
+  later(refreshCatalogs, CATALOG_DELAY_MS);
 });
 
 Pebble.addEventListener('appmessage', function (e) {
@@ -213,8 +274,8 @@ Pebble.addEventListener('appmessage', function (e) {
 
 Pebble.addEventListener('showConfiguration', function () {
   var p = session.configPageParams();
-  var params = { config: p.config, samples: p.samples, learned: p.learned, plans: scheduler.plans(),
-                 sources: sources.types(), return_to: RETURN_TO };
+  var params = { config: p.config, samples: p.samples, learned: p.learned, prefs: p.prefs, plans: scheduler.plans(),
+                 sources: sources.types(), catalogs: storedCatalogs(p.config), return_to: RETURN_TO };
   var injected = '<script>window.__params = ' +
       JSON.stringify(params).replace(/</g, '\\u003c') + ';</script>';
   // Function replacement so '$' sequences in the JSON are not treated as patterns.
@@ -237,4 +298,5 @@ Pebble.addEventListener('webviewclosed', function (e) {
   session.applySettings(result);
   armTimer();
   replan();
+  later(refreshCatalogs, CATALOG_DELAY_MS);
 });

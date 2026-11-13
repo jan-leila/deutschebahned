@@ -64,7 +64,9 @@ test('router and triggers are independent: only pure helpers', () => {
 test('the scheduler gets the router, triggers and all I/O injected (no transport, no sources, no session)', () => {
   const f = path.join(ROOT, 'src/common/scheduler.js');
   if (!fs.existsSync(f)) return;
-  const allowed = new Set(['src/common/router.js', 'src/common/triggers.js', 'src/common/format.js', 'src/common/settings.js', 'src/sources/registry.js']);
+  // view.js is a pure helper (coverage areas of the runtime config)
+  const allowed = new Set(['src/common/router.js', 'src/common/triggers.js', 'src/common/format.js', 'src/common/settings.js',
+    'src/common/view.js', 'src/sources/registry.js']);
   for (const r of requiresOf(f)) {
     assert.ok(allowed.has(r) && r !== 'src/sources/registry.js', `scheduler.js requires ${r}`);
   }

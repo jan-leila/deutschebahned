@@ -7,7 +7,9 @@
 const https = require('https');
 const { createSession } = require('../src/common/session');
 const { createRegistry } = require('../src/sources/registry');
-const createProvider = (config, deps) => createRegistry(require('../src/sources/all')).create(config, deps);
+const federation = require('../src/common/federation');
+// the provider src/pkjs/index.js builds: every configured system behind one interface, ids 'system/id'
+const createProvider = (config, deps) => federation.fromConfig(createRegistry(require('../src/sources/all')), config, deps);
 
 const [lat, lon] = [Number(process.argv[2] || 44.96265), Number(process.argv[3] || -93.2895)];
 const routes = (process.argv[4] || '2,922').split(',');
@@ -28,11 +30,13 @@ const countingHttp = (url, cb) => { requests++; http(url, cb); };
 const store = new Map();
 const storage = { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) };
 storage.setItem('busWatch.config', JSON.stringify({
-  provider: { type: 'metrotransit' },
+  version: 2,
+  providers: [{ id: 'metrotransit', type: 'metrotransit' }],
   location: { mode: 'fixed', lat, lon },
   stopRadius: 400, routeRadius: 120,
-  routes: routes.map(id => ({ id })),
-  connections: [{ routeId: pinRoute, stopId: pinStop, name: 'Pinned ' + pinStop }],
+  // the pinned stop's route is saved too: a stop gets drop-offs on the saved routes serving it
+  routes: [...new Set(routes.concat([pinRoute]))].map(id => ({ providerId: 'metrotransit', id })),
+  stops: [{ providerId: 'metrotransit', id: pinStop, name: 'Pinned ' + pinStop }],
 }));
 const clock = () => Math.floor(Date.now() / 1000);
 const sent = [];

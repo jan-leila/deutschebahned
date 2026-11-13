@@ -1,4 +1,5 @@
 // Sort order for list items: score = sum of scale * feature value. ES5. See CONTRACTS.md §5.
+// (Learned weights are copied back into a saved config by view.bake.)
 
 function isFiniteNumber(v) { return typeof v === 'number' && isFinite(v); }
 
@@ -16,24 +17,25 @@ function findById(list, id) {
   return null;
 }
 
-function orDefault(v, def) { return isFiniteNumber(v) ? v : (isFiniteNumber(def) ? def : 0); }
+function orZero(v) { return isFiniteNumber(v) ? v : 0; }
 
+// config is a runtime view (view.build): routes and stops carry ref ids
 function weightFor(key, config, learned) {
   if (learned && learned.hasOwnProperty(key) && isFiniteNumber(learned[key])) return learned[key];
   var p = splitKey(key);
   if (!p) return 0;
   var c = config || {};
   if (p.prefix === 'stop') {
-    var ss = c.stopScales || {};
-    return orDefault(ss.hasOwnProperty(p.id) ? ss[p.id] : undefined, c.defaultStopScale);
+    var s = findById(c.stops, p.id);
+    return orZero(s ? s.walkScale : undefined);
+  }
+  if (p.prefix === 'ride') {
+    var rs = findById(c.stops, p.id);
+    return orZero(rs ? rs.rideScale : undefined);
   }
   if (p.prefix === 'route') {
     var r = findById(c.routes, p.id);
-    return orDefault(r ? r.scale : undefined, c.defaultRouteScale);
-  }
-  if (p.prefix === 'conn') {
-    var cn = findById(c.connections, p.id);
-    return orDefault(cn ? cn.scale : undefined, c.defaultConnectionScale);
+    return orZero(r ? r.scale : undefined);
   }
   return 0;
 }
@@ -75,25 +77,4 @@ function rank(items, config, learned) {
   return out;
 }
 
-function bake(config, learned) {
-  var c = JSON.parse(JSON.stringify(config || {}));
-  if (!c.stopScales || typeof c.stopScales !== 'object') c.stopScales = {};
-  if (!learned) return c;
-  for (var key in learned) {
-    if (!learned.hasOwnProperty(key) || !isFiniteNumber(learned[key])) continue;
-    var p = splitKey(key);
-    if (!p) continue;
-    if (p.prefix === 'stop') {
-      c.stopScales[p.id] = learned[key];
-    } else if (p.prefix === 'route') {
-      var r = findById(c.routes, p.id);
-      if (r) r.scale = learned[key];
-    } else if (p.prefix === 'conn') {
-      var cn = findById(c.connections, p.id);
-      if (cn) cn.scale = learned[key];
-    }
-  }
-  return c;
-}
-
-module.exports = { weightFor: weightFor, score: score, rank: rank, bake: bake };
+module.exports = { weightFor: weightFor, score: score, rank: rank };

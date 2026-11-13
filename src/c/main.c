@@ -638,6 +638,30 @@ static void apply_test_hook(int32_t v) {
   s_marquee_start = now_ms();
 }
 
+// ---- Display preferences -> phone ---------------------------------------------
+// The phone formats distances and notification times; it follows the watch's own settings: the 24 h clock style
+// and (where Pebble Health exists) the measurement system. Sent once the phone talks to us, retried until delivered.
+// Flags: bit 0 = 24 h clock, bit 1 = metric, bit 2 = measurement system known.
+static bool s_prefs_sent = false;
+
+static int32_t watch_prefs(void) {
+  int32_t flags = clock_is_24h_style() ? 1 : 0;
+#if defined(PBL_HEALTH)
+  MeasurementSystem ms = health_service_get_measurement_system_for_display(HealthMetricWalkedDistanceMeters);
+  if (ms == MeasurementSystemMetric) flags |= 2 | 4;
+  else if (ms == MeasurementSystemImperial) flags |= 4;
+#endif
+  return flags;
+}
+
+static void try_send_prefs(void) {
+  if (s_prefs_sent) return;
+  DictionaryIterator *out;
+  if (app_message_outbox_begin(&out) != APP_MSG_OK) return;
+  dict_write_int32(out, MESSAGE_KEY_WATCH_PREFS, watch_prefs());
+  app_message_outbox_send();
+}
+
 static void inbox_received(DictionaryIterator *iter, void *context) {
   Tuple *list_id = dict_find(iter, MESSAGE_KEY_LIST_ID);
   Tuple *count = dict_find(iter, MESSAGE_KEY_ITEM_COUNT);
@@ -698,8 +722,9 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
     notify_show(tuple_str(ntitle), tuple_str(dict_find(iter, MESSAGE_KEY_NOTIFY_BODY)),
                 tuple_int_or(dict_find(iter, MESSAGE_KEY_NOTIFY_COLOR), -1));
   }
-  // The phone is talking to us: a wakeup report that failed earlier can go now.
+  // The phone is talking to us: a wakeup report that failed earlier can go now, then our display preferences.
   if (s_wakeup_pending && !s_wakeup_timer) try_send_wakeup_fired();
+  else try_send_prefs();
   redraw();
 }
 
@@ -709,6 +734,7 @@ static void inbox_dropped(AppMessageResult reason, void *context) {
 
 static void outbox_sent(DictionaryIterator *iter, void *context) {
   if (dict_find(iter, MESSAGE_KEY_WAKEUP_FIRED)) s_wakeup_pending = false;
+  if (dict_find(iter, MESSAGE_KEY_WATCH_PREFS)) s_prefs_sent = true;
 }
 
 static void outbox_failed(DictionaryIterator *iter, AppMessageResult reason, void *context) {

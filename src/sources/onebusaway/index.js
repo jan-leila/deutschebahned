@@ -149,8 +149,81 @@ function createOneBusAway(opts, http) {
     }, cb);
   }
 
+  // ---------------------------------------------------------------- catalog (search index)
+  // agencies-with-coverage → routes-for-agency per agency → stops-for-route (no polylines) per route,
+  // CATALOG_IN_FLIGHT requests at a time. Agencies / routes that fail are skipped; no agency list → error.
+  var CATALOG_IN_FLIGHT = 3;
+  function limited(jobs, each, done) {
+    var next = 0, running = 0, finished = 0;
+    if (!jobs.length) return done();
+    function pump() {
+      while (running < CATALOG_IN_FLIGHT && next < jobs.length) {
+        running++;
+        each(jobs[next++], function () {
+          running--;
+          finished++;
+          if (finished === jobs.length) done();
+          else pump();
+        });
+      }
+    }
+    pump();
+  }
+
+  function catalog(cb, onProgress) {
+    var called = false;
+    function finish(err, v) { if (!called) { called = true; cb(err, v); } }
+    get(baseUrl + '/agencies-with-coverage.json?key=' + key, function (data) {
+      var out = [], list = data.list || [];
+      for (var i = 0; i < list.length; i++) if (list[i] && list[i].agencyId != null) out.push(String(list[i].agencyId));
+      return out;
+    }, function (err, agencies) {
+      if (err) return finish(err);
+      var routes = [];
+      limited(agencies, function (agency, next) {
+        get(baseUrl + '/routes-for-agency/' + encodeURIComponent(agency) + '.json?key=' + key, function (data) {
+          var list = data.list || [];
+          for (var i = 0; i < list.length; i++) {
+            var r = list[i];
+            if (!r || r.id == null) continue;
+            routes.push({ id: String(r.id), shortName: String(r.shortName || r.longName || r.id),
+                          longName: String(r.longName || r.description || '') });
+          }
+          return null;
+        }, function () { next(); });
+      }, function () {
+        var stops = {}, order = [], count = 0;
+        limited(routes, function (r, next) {
+          get(baseUrl + '/stops-for-route/' + encodeURIComponent(r.id) + '.json?key=' + key + '&includePolylines=false&version=2',
+            function (data) {
+              var refStops = (data.references && data.references.stops) || [];
+              for (var i = 0; i < refStops.length; i++) {
+                var s = refStops[i];
+                if (!s || s.id == null) continue;
+                var id = String(s.id);
+                if (!stops.hasOwnProperty(id)) {
+                  stops[id] = { id: id, name: s.name || '', lat: +s.lat, lon: +s.lon, routeIds: [] };
+                  order.push(id);
+                }
+                if (stops[id].routeIds.indexOf(r.id) < 0) stops[id].routeIds.push(r.id);
+              }
+              return null;
+            }, function () {
+              count++;
+              if (typeof onProgress === 'function') onProgress(count, routes.length);
+              next();
+            });
+        }, function () {
+          var out = [];
+          for (var i = 0; i < order.length; i++) out.push(stops[order[i]]);
+          finish(null, { routes: routes, stops: out });
+        });
+      });
+    });
+  }
+
   // OBA has no cheap route catalog (no listRoutes); routeInfo is the full route
-  return { stopsNear: stopsNear, arrivals: arrivals, route: route, routeInfo: route, stopInfo: stopInfo };
+  return { stopsNear: stopsNear, arrivals: arrivals, route: route, routeInfo: route, stopInfo: stopInfo, catalog: catalog };
 }
 
 var plugin = {

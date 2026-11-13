@@ -79,6 +79,22 @@ test('pkjs glue: ready -> list, select -> sample, settings page open/close', asy
 
     assert.deepEqual(params.sources.map(s => s.type), ['metrotransit', 'onebusaway', 'mock'], 'source plug-ins listed');
     assert.deepEqual(params.plans, {});
+    assert.equal(params.config.version, 2, 'the stored version 1 config was migrated');
+    assert.deepEqual(params.prefs, { units: 'imperial', clock24: false, known: false }, 'en-US guess until the watch says');
+    assert.deepEqual(params.catalogs, {}, 'nothing indexed yet');
+
+    // the watch reports its display settings; the page gets them, with the stored search index
+    fakes.fire('appmessage', { payload: { WATCH_PREFS: 1 | 2 | 4 } });
+    const catalog = require('../src/common/catalog');
+    const entry = params.config.providers[0];
+    fakes.store.set(catalog.PREFIX + entry.id, JSON.stringify(catalog.pack({ routes: [{ id: 'R1', shortName: 'One' }], stops: [] },
+      { t: Math.floor(Date.now() / 1000), sig: catalog.signature(entry) })));
+    fakes.fire('showConfiguration');
+    const p2 = JSON.parse(decodeURIComponent(fakes.opened[1].slice(fakes.opened[1].indexOf(',') + 1)).match(/window\.__params = (\{.*?\});<\/script>/s)[1]);
+    assert.deepEqual(p2.prefs, { units: 'metric', clock24: true, known: true });
+    assert.deepEqual(Object.keys(p2.catalogs), [entry.id]);
+    assert.deepEqual(catalog.fromText(p2.catalogs[entry.id]).routes, [['R1', 'One', '']], 'sent in the text form');
+    fakes.opened.pop();
 
     // add a destination: the scheduler plans it and schedules wakeups on the watch
     const d = new Date(Date.now() + 3 * 3600 * 1000);

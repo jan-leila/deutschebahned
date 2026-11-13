@@ -127,192 +127,222 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
 .savebar .inner { max-width: 640px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
 .savebar .note { flex: 1; color: var(--muted); font-size: 12.5px; }
 .savebar button { min-width: 8em; padding: 11px 16px; }
+
+/* ---- pages ---- */
+header { display: flex; align-items: center; gap: 10px; }
+header .titles { flex: 1; min-width: 0; }
+#back { width: 38px; height: 38px; padding: 0; border-radius: 50%; font-size: 22px; line-height: 1; flex: none; }
+#back[hidden] { display: none; }
+.page[hidden] { display: none; }
+.nav { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  overflow: hidden; margin: 12px 0; }
+.nav-item { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; width: 100%; text-align: left;
+  border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; padding: 13px 14px; }
+.nav-item:first-child { border-top: 0; }
+.nav-item .nav-title { font-weight: 600; }
+.nav-item .nav-summary { grid-column: 1; color: var(--muted); font-size: 13px; }
+.nav-item::after { content: '›'; grid-column: 2; grid-row: 1 / span 2; color: var(--muted); font-size: 22px; }
+.note-card { color: var(--muted); font-size: 13px; padding: 2px 4px; }
+.note-card b { color: var(--text); font-weight: 600; }
+.warn { color: var(--danger); }
+/* ---- rows ---- */
+.provider-row { grid-template-columns: 1fr 1fr; }
+.provider-row .c-type, .provider-row .c-name, .provider-row .c-baseUrl, .provider-row .c-apiKey { grid-column: 1 / -1; }
+.provider-row .c-coverageMode { grid-column: 1 / -1; }
+.provider-row select { width: 100%; padding: 6px 8px; font-size: 16px; }
+.provider-row .manual[hidden] { display: none; }
+.provider-row .manual { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 8px; }
+.row-head { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; }
+.row-head b { font-size: 15px; }
+.row-head span { color: var(--muted); font-size: 12.5px; }
+.route-row { grid-template-columns: 1fr 6em; }
+.stop-row { grid-template-columns: 1fr 1fr; }
+.stop-row .c-name { grid-column: 1 / -1; }
+.stop-meta { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }
+.stop-meta:empty { display: none; }
+.stop-meta b { color: var(--text); font-weight: 600; }
+.row.flash { outline: 2px solid var(--accent); }
+/* ---- search ---- */
+#search { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--accent); border-radius: 11px; background: var(--card); margin-top: 8px; }
+#search[hidden] { display: none; }
+#search .search-input { width: 100%; }
+.search-results { display: flex; flex-direction: column; gap: 6px; }
+.search-results:empty { display: none; }
+.result { display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; text-align: left; padding: 8px 10px; background: var(--soft); }
+.result .r-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.result .r-id { color: var(--muted); font-size: 12.5px; text-align: right; }
+.result .r-detail { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.result.raw { background: var(--input); }
+.result.raw .r-name { font-weight: 500; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Bus Watch</h1>
-  <p>Nearby pickups and drop-offs on your wrist.</p>
+  <button type="button" id="back" aria-label="Back" hidden>‹</button>
+  <div class="titles">
+    <h1 id="page-title">Bus Watch</h1>
+    <p id="page-sub">Nearby pickups and drop-offs on your wrist.</p>
+  </div>
 </header>
 <main>
 
-<section id="sec-provider">
-  <h2>Transit data</h2>
-  <p class="help"><b>Metro Transit</b> needs no API key. <b>OneBusAway</b> servers use an API key
-    (blank = the public <code>TEST</code> key). <b>Mock</b> serves made-up data for trying the app.</p>
-  <label class="field wide"><span class="name">Provider</span>
-    <select data-field="provider.type"></select></label>
-  <label class="field wide"><span class="name">Base URL <span class="opt">optional</span></span>
-    <input type="url" data-field="provider.baseUrl" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <span class="hint">Blank = the provider's default server.</span></label>
-  <label class="field wide"><span class="name">API key <span class="opt">optional</span></span>
-    <input type="text" data-field="provider.apiKey" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <span class="hint">Blank = the provider's default (Metro Transit needs no key).</span></label>
-  <p class="status" id="source-status" aria-live="polite"></p>
-  <datalist id="route-options"></datalist>
-</section>
-
-<section id="sec-location">
-  <h2>Location</h2>
-  <p class="help"><b>GPS</b> uses the phone's position. <b>Fixed</b> always uses the coordinates below (handy for testing or a demo).</p>
-  <label class="field"><span class="name">Mode</span><span class="hint"></span>
-    <select data-field="location.mode"><option value="gps">GPS</option><option value="fixed">Fixed position</option></select></label>
-  <div id="location-fixed">
-    <label class="field"><span class="name">Latitude</span><span class="hint">degrees, −90…90</span>
-      <input type="number" step="any" data-field="location.lat"></label>
-    <label class="field"><span class="name">Longitude</span><span class="hint">degrees, −180…180</span>
-      <input type="number" step="any" data-field="location.lon"></label>
-    <div class="buttons"><button type="button" id="use-here">Use my current position</button></div>
+<div class="page" data-page="home" data-title="Bus Watch" data-sub="Nearby pickups and drop-offs on your wrist.">
+  <div class="nav">
+    <button type="button" class="nav-item" data-go="systems"><span class="nav-title">Transit systems</span><span class="nav-summary"></span></button>
+    <button type="button" class="nav-item" data-go="routes"><span class="nav-title">Routes</span><span class="nav-summary"></span></button>
+    <button type="button" class="nav-item" data-go="stops"><span class="nav-title">Stops</span><span class="nav-summary"></span></button>
+    <button type="button" class="nav-item" data-go="trips"><span class="nav-title">Trips</span><span class="nav-summary"></span></button>
+    <button type="button" class="nav-item" data-go="nearby"><span class="nav-title">Nearby &amp; timing</span><span class="nav-summary"></span></button>
+    <button type="button" class="nav-item" data-go="learning"><span class="nav-title">Learning</span><span class="nav-summary"></span></button>
   </div>
-</section>
+  <p class="note-card" id="prefs-note"></p>
+</div>
 
-<section id="sec-display">
-  <h2>Display</h2>
-  <label class="field"><span class="name">Units</span><span class="hint">distances on the watch</span>
-    <select data-field="units"><option value="imperial">Miles / feet</option><option value="metric">Kilometers / meters</option></select></label>
-  <label class="field check"><span class="name">24-hour clock</span><span class="hint">times in notifications</span>
-    <input type="checkbox" data-field="clock24"></label>
-</section>
+<div class="page" data-page="systems" data-title="Transit systems" data-sub="Where your bus times come from." hidden>
+  <section>
+    <p class="help">Add every system you ride, for example one per city. Each one is only asked for buses when you're
+      inside its <b>coverage area</b>. <b>Automatic</b> coverage is the area around the stops you've saved for that system.
+      <b>Metro Transit</b> needs no API key. <b>OneBusAway</b> servers use one (blank = the public <code>TEST</code> key).
+      <b>Mock</b> serves made-up data for trying the app.</p>
+    <div id="providers" class="list"></div>
+    <div class="empty">No transit systems yet. Add one to get started.</div>
+    <button type="button" class="add" id="add-provider">+ Add transit system</button>
+  </section>
+</div>
 
-<section id="sec-search">
-  <h2>What to look for</h2>
-  <p class="help">How far to search and how far ahead. Values outside the allowed range are clamped when saving.</p>
-  <label class="field"><span class="name">Stop radius</span><span class="hint">m · stops this close count as nearby</span>
-    <input type="number" step="any" data-field="stopRadius"></label>
-  <label class="field"><span class="name">Route radius</span><span class="hint">m · this close to a route's path means you're on it</span>
-    <input type="number" step="any" data-field="routeRadius"></label>
-  <label class="field"><span class="name">Recent window</span><span class="hint">s · a bus that passed here this recently counts as "here"</span>
-    <input type="number" step="any" data-field="recentWindow"></label>
-  <label class="field"><span class="name">Vehicle radius</span><span class="hint">m · a live bus position reported within this many meters of you (and within the recent window) counts as the bus you're on</span>
-    <input type="number" step="1" data-field="vehicleRadius"></label>
-  <label class="field"><span class="name">Lookahead</span><span class="hint">min · pickups and the next bus here</span>
-    <input type="number" step="any" data-field="lookahead"></label>
-  <label class="field"><span class="name">Drop-off horizon</span><span class="hint">min · how far ahead to look for arrivals at pinned stops</span>
-    <input type="number" step="any" data-field="dropoffHorizon"></label>
-  <label class="field"><span class="name">Nearby stops</span><span class="hint">how many stops to query</span>
-    <input type="number" step="1" data-field="maxStops"></label>
-  <label class="field"><span class="name">Pickups per item</span><span class="hint">times shown on each line</span>
-    <input type="number" step="1" data-field="pickupsPerItem"></label>
-  <label class="field"><span class="name">Max items</span><span class="hint">lines in the watch list</span>
-    <input type="number" step="1" data-field="maxItems"></label>
-  <label class="field"><span class="name">Refresh every</span><span class="hint">s</span>
-    <input type="number" step="1" data-field="refreshInterval"></label>
-</section>
+<div class="page" data-page="routes" data-title="Routes" data-sub="The routes you ride." hidden>
+  <section>
+    <p class="help">Buses of these routes show up when you're near one of their stops. <b>Scale</b> is a weight per second
+      of waiting; <b>0</b> leaves the order to learning, a <b>negative</b> number brings sooner buses of this route up.
+      <b>Color</b> is how the route is drawn on the watch; <b>Auto</b> uses the transit agency's color.</p>
+    <div id="routes" class="list"></div>
+    <div class="empty">No routes yet.</div>
+    <button type="button" class="add" id="add-route">+ Add route</button>
+  </section>
+</div>
 
-<section id="sec-scales">
-  <h2>Sort order</h2>
-  <p class="help">Every line on the watch gets a <b>score = Σ scale × value</b> and the <b>highest score is shown first</b>.
-    <b>Stop scales</b> are weights per <b>meter</b> of distance to the stop; <b>route scales</b> are weights per <b>second</b>
-    until the bus. So a <b>negative</b> scale means <b>nearer / sooner first</b>, and a bigger negative number makes that
-    distance or wait matter more. <code>0</code> ignores it; a positive scale prefers farther / later.</p>
-  <label class="field"><span class="name">Default stop scale</span><span class="hint">per m, for stops without their own scale</span>
-    <input type="number" step="any" data-field="defaultStopScale"></label>
-  <label class="field"><span class="name">Default route scale</span><span class="hint">per s, for routes not listed below</span>
-    <input type="number" step="any" data-field="defaultRouteScale"></label>
-  <label class="field"><span class="name">Default pinned-stop scale</span><span class="hint">per m, for new pinned stops</span>
-    <input type="number" step="any" data-field="defaultConnectionScale"></label>
-</section>
+<div class="page" data-page="stops" data-title="Stops" data-sub="Stops you care about." hidden>
+  <section>
+    <p class="help">Places you walk to or ride to (e.g. Home, Work). When you're on one of your routes that stops here, the
+      watch shows when you'd get there. Two weights per meter, used to order the list:
+      <b>Walking to it</b> for catching a bus here, <b>Riding to it</b> for getting off here.
+      <b>0</b> leaves it to learning; <b>negative</b> brings it up when it's close.</p>
+    <div id="stops" class="list"></div>
+    <div class="empty">No stops yet.</div>
+    <button type="button" class="add" id="add-stop">+ Add stop</button>
+  </section>
+</div>
 
-<section id="sec-routes">
-  <h2>Bus routes</h2>
-  <p class="help">Routes you care about, by provider route id (Metro Transit: the route number, e.g. <code>2</code> or
-    <code>901</code> for the Blue Line; OneBusAway: e.g. <code>1_100225</code>). The name is what the watch shows.
-    Scale is per second of waiting: <b>−2</b> ranks this route's buses ahead of a <b>−1</b> route arriving at the same time.
-    <b>Color</b> is how the route is drawn on the watch; <b>Auto</b> uses the transit agency's color (or a default).</p>
-  <div id="routes" class="list"></div>
-  <div class="empty">No routes yet; every route uses the default route scale.</div>
-  <button type="button" class="add" id="add-route">+ Add route</button>
-</section>
+<div class="page" data-page="trips" data-title="Trips" data-sub="Reminders to leave on time." hidden>
+  <section>
+    <p class="help">Places you need to <b>arrive by</b> a time (e.g. Work by 9:00 on weekdays). The phone plans a trip with your
+      routes and the watch reminds you when to leave. No day selected = every day.</p>
+    <div id="destinations" class="list"></div>
+    <div class="empty">No trips.</div>
+    <button type="button" class="add" id="add-destination">+ Add trip</button>
+    <details>
+      <summary>Trip planning options</summary>
+      <label class="field"><span class="name">Check ahead</span><span class="hint">min · re-check this long before the leave time</span>
+        <input type="number" step="1" data-field="schedule.leadMinutes"></label>
+      <label class="field check"><span class="name">Leave reminder</span><span class="hint">also notify at the leave time</span>
+        <input type="checkbox" data-field="schedule.leaveReminder"></label>
+      <label class="field"><span class="name">Walking speed</span><span class="hint"><span data-unit-label="speed"></span></span>
+        <input type="number" step="any" data-field="schedule.walkSpeed" data-unit="speed"></label>
+      <label class="field"><span class="name">Max walk</span><span class="hint"><span data-unit-label="short"></span> · to the first / from the last stop</span>
+        <input type="number" step="1" data-field="schedule.maxWalk" data-unit="short"></label>
+      <label class="field"><span class="name">Transfer walk</span><span class="hint"><span data-unit-label="short"></span> · between stops when transferring</span>
+        <input type="number" step="1" data-field="schedule.transferWalk" data-unit="short"></label>
+      <label class="field"><span class="name">Max transfers</span><span class="hint"></span>
+        <input type="number" step="1" data-field="schedule.maxTransfers"></label>
+      <label class="field"><span class="name">Transfer slack</span><span class="hint">s · time needed to make a transfer</span>
+        <input type="number" step="1" data-field="schedule.minTransfer"></label>
+      <label class="field"><span class="name">Fallback check</span><span class="hint">min · with no plan yet, re-check this long before arriving</span>
+        <input type="number" step="1" data-field="schedule.fallbackMinutes"></label>
+    </details>
+  </section>
+</div>
 
-<section id="sec-connections">
-  <h2>Pinned stops</h2>
-  <p class="help">Places you ride to: a route and the stop you get off at (e.g. Home, Work). When you're on that route the watch
-    shows the arrival there. Scale is per meter, like stop scales; empty uses the default pinned-stop scale.
-    <span class="needs-routeInfo"><b>Choose stop</b> picks it from the route's stop list.</span></p>
-  <div id="connections" class="list"></div>
-  <div class="empty">No pinned stops.</div>
-  <button type="button" class="add" id="add-connection">+ Add pinned stop</button>
-  <div id="stop-picker" hidden>
-    <div class="picker-title">Choose a stop on route <b class="picker-route"></b></div>
-    <label class="picker-route-choice" hidden>Route<select name="route"></select></label>
-    <label>Direction<select name="direction"></select></label>
-    <label>Stop<select name="stop"></select></label>
-    <p class="status picker-status" aria-live="polite"></p>
-    <div class="buttons"><button type="button" class="use primary" disabled>Use this stop</button><button type="button" class="cancel">Cancel</button></div>
-  </div>
-</section>
+<div class="page" data-page="nearby" data-title="Nearby &amp; timing" data-sub="How far to look and how far ahead." hidden>
+  <section>
+    <h2>Location</h2>
+    <p class="help"><b>GPS</b> uses the phone's position. <b>Fixed</b> always uses the coordinates below (handy for testing or a demo).</p>
+    <label class="field"><span class="name">Mode</span><span class="hint"></span>
+      <select data-field="location.mode"><option value="gps">GPS</option><option value="fixed">Fixed position</option></select></label>
+    <div id="location-fixed">
+      <label class="field"><span class="name">Latitude</span><span class="hint">degrees, −90…90</span>
+        <input type="number" step="any" data-field="location.lat"></label>
+      <label class="field"><span class="name">Longitude</span><span class="hint">degrees, −180…180</span>
+        <input type="number" step="any" data-field="location.lon"></label>
+      <div class="buttons"><button type="button" id="use-here">Use my current position</button></div>
+    </div>
+  </section>
+  <section>
+    <h2>Distances and times</h2>
+    <p class="help">Values outside the allowed range are clamped when saving.</p>
+    <label class="field"><span class="name">Stop radius</span><span class="hint"><span data-unit-label="short"></span> · stops this close count as nearby</span>
+      <input type="number" step="1" data-field="stopRadius" data-unit="short"></label>
+    <label class="field"><span class="name">Route radius</span><span class="hint"><span data-unit-label="short"></span> · this close to a route's path means you're on it</span>
+      <input type="number" step="1" data-field="routeRadius" data-unit="short"></label>
+    <label class="field"><span class="name">Vehicle radius</span><span class="hint"><span data-unit-label="short"></span> · a live bus reported this close to you (within the recent window) is the bus you're on</span>
+      <input type="number" step="1" data-field="vehicleRadius" data-unit="short"></label>
+    <label class="field"><span class="name">Recent window</span><span class="hint">s · a bus that passed here this recently counts as "here"</span>
+      <input type="number" step="any" data-field="recentWindow"></label>
+    <label class="field"><span class="name">Lookahead</span><span class="hint">min · pickups and the next bus here</span>
+      <input type="number" step="any" data-field="lookahead"></label>
+    <label class="field"><span class="name">Drop-off horizon</span><span class="hint">min · how far ahead to look for arrivals at your stops</span>
+      <input type="number" step="any" data-field="dropoffHorizon"></label>
+    <label class="field"><span class="name">Nearby stops</span><span class="hint">how many stops to query</span>
+      <input type="number" step="1" data-field="maxStops"></label>
+    <label class="field"><span class="name">Pickups per item</span><span class="hint">times shown on each line</span>
+      <input type="number" step="1" data-field="pickupsPerItem"></label>
+    <label class="field"><span class="name">Max items</span><span class="hint">lines in the watch list</span>
+      <input type="number" step="1" data-field="maxItems"></label>
+    <label class="field"><span class="name">Refresh every</span><span class="hint">s</span>
+      <input type="number" step="1" data-field="refreshInterval"></label>
+  </section>
+</div>
 
-<section id="sec-destinations">
-  <h2>Trips</h2>
-  <p class="help">Places you need to <b>arrive by</b> a time (e.g. Work by 9:00 on weekdays). The phone plans a trip with your
-    routes and the watch reminds you when to leave. No day selected = every day.
-    <span class="needs-stopInfo"><b>Choose stop</b> uses a stop's position as the destination.</span></p>
-  <div id="destinations" class="list"></div>
-  <div class="empty">No trips.</div>
-  <button type="button" class="add" id="add-destination">+ Add trip</button>
-  <details>
-    <summary>Trip planning options</summary>
-    <label class="field"><span class="name">Check ahead</span><span class="hint">min · re-check this long before the leave time</span>
-      <input type="number" step="1" data-field="schedule.leadMinutes"></label>
-    <label class="field check"><span class="name">Leave reminder</span><span class="hint">also notify at the leave time</span>
-      <input type="checkbox" data-field="schedule.leaveReminder"></label>
-    <label class="field"><span class="name">Walking speed</span><span class="hint">m/s</span>
-      <input type="number" step="any" data-field="schedule.walkSpeed"></label>
-    <label class="field"><span class="name">Max walk</span><span class="hint">m · to the first / from the last stop</span>
-      <input type="number" step="1" data-field="schedule.maxWalk"></label>
-    <label class="field"><span class="name">Transfer walk</span><span class="hint">m · between stops when transferring</span>
-      <input type="number" step="1" data-field="schedule.transferWalk"></label>
-    <label class="field"><span class="name">Max transfers</span><span class="hint"></span>
-      <input type="number" step="1" data-field="schedule.maxTransfers"></label>
-    <label class="field"><span class="name">Transfer slack</span><span class="hint">s · time needed to make a transfer</span>
-      <input type="number" step="1" data-field="schedule.minTransfer"></label>
-    <label class="field"><span class="name">Fallback check</span><span class="hint">min · with no plan yet, re-check this long before arriving</span>
-      <input type="number" step="1" data-field="schedule.fallbackMinutes"></label>
-  </details>
-</section>
+<div class="page" data-page="learning" data-title="Learning" data-sub="The list learns from what you pick." hidden>
+  <section>
+    <p class="help">Each time you press SELECT on a line the watch records what you picked out of what was shown. From these
+      picks the app learns weights that override your route and stop scales, so the lines you tend to pick move to the top.</p>
+    <div class="stats">
+      <div class="stat"><b id="sample-count">0</b><span>recorded picks</span></div>
+      <div class="stat"><b id="learned-count">0</b><span>learned weights</span></div>
+    </div>
+    <div id="train-result" aria-live="polite"></div>
+    <div class="buttons">
+      <button type="button" id="train-now">Train now</button>
+      <button type="button" id="bake-learned">Bake into scales</button>
+      <button type="button" id="reset-learned" class="danger">Reset learned</button>
+      <button type="button" id="clear-samples" class="danger">Clear picks</button>
+    </div>
+    <p class="help"><b>Bake</b> copies the learned weights into your route and stop scales and then clears them.</p>
+    <div class="table-wrap"><table id="learned"></table></div>
+    <details>
+      <summary>Training options</summary>
+      <label class="field check"><span class="name">Train automatically</span><span class="hint">after each pick</span>
+        <input type="checkbox" data-field="training.autoTrain"></label>
+      <label class="field"><span class="name">Learning rate</span><span class="hint">step size</span>
+        <input type="number" step="any" data-field="training.learningRate"></label>
+      <label class="field"><span class="name">Iterations</span><span class="hint">optimizer steps per training</span>
+        <input type="number" step="1" data-field="training.iterations"></label>
+      <label class="field"><span class="name">Temperature</span><span class="hint">score units; larger = softer choices</span>
+        <input type="number" step="any" data-field="training.temperature"></label>
+      <label class="field"><span class="name">Regularization</span><span class="hint">pull toward your scales</span>
+        <input type="number" step="any" data-field="training.regularization"></label>
+      <label class="field"><span class="name">Max picks kept</span><span class="hint">oldest are dropped</span>
+        <input type="number" step="1" data-field="training.maxSamples"></label>
+    </details>
+  </section>
+</div>
 
-<section id="sec-stops">
-  <h2>Stop scales</h2>
-  <p class="help">Per-stop weights per meter of walking. Use a smaller negative number (e.g. <b>−0.5</b>) for a stop you don't
-    mind walking farther to, a bigger one (e.g. <b>−3</b>) for one you only use when it's right there.</p>
-  <div id="stop-scales" class="list"></div>
-  <div class="empty">No per-stop scales; all stops use the default stop scale.</div>
-  <button type="button" class="add" id="add-stop-scale">+ Add stop scale</button>
-</section>
-
-<section id="sec-training">
-  <h2>Learning</h2>
-  <p class="help">Each time you press SELECT on a line the watch records what you picked out of what was shown. From these
-    picks the app learns weights that override the scales above, so the lines you tend to pick move to the top.</p>
-  <div class="stats">
-    <div class="stat"><b id="sample-count">0</b><span>recorded picks</span></div>
-    <div class="stat"><b id="learned-count">0</b><span>learned weights</span></div>
-  </div>
-  <div id="train-result" aria-live="polite"></div>
-  <div class="buttons">
-    <button type="button" id="train-now">Train now</button>
-    <button type="button" id="bake-learned">Bake into scales</button>
-    <button type="button" id="reset-learned" class="danger">Reset learned</button>
-    <button type="button" id="clear-samples" class="danger">Clear picks</button>
-  </div>
-  <p class="help"><b>Bake</b> copies the learned weights into the route, pinned-stop and stop scales above and then clears them.</p>
-  <div class="table-wrap"><table id="learned"></table></div>
-  <details>
-    <summary>Training options</summary>
-    <label class="field check"><span class="name">Train automatically</span><span class="hint">after each pick</span>
-      <input type="checkbox" data-field="training.autoTrain"></label>
-    <label class="field"><span class="name">Learning rate</span><span class="hint">step size</span>
-      <input type="number" step="any" data-field="training.learningRate"></label>
-    <label class="field"><span class="name">Iterations</span><span class="hint">optimizer steps per training</span>
-      <input type="number" step="1" data-field="training.iterations"></label>
-    <label class="field"><span class="name">Temperature</span><span class="hint">score units; larger = softer choices</span>
-      <input type="number" step="any" data-field="training.temperature"></label>
-    <label class="field"><span class="name">Regularization</span><span class="hint">pull toward the scales above</span>
-      <input type="number" step="any" data-field="training.regularization"></label>
-    <label class="field"><span class="name">Max picks kept</span><span class="hint">oldest are dropped</span>
-      <input type="number" step="1" data-field="training.maxSamples"></label>
-  </details>
-</section>
+<div id="search" hidden>
+  <input type="text" class="search-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <div class="search-results" role="listbox"></div>
+  <p class="status search-status" aria-live="polite"></p>
+  <div class="buttons"><button type="button" class="search-cancel">Cancel</button></div>
+</div>
 
 </main>
 <div class="savebar"><div class="inner">
@@ -324,26 +354,31 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
 <script>
 (function () {
   var BW = window.BusWatch;
-  var settings = BW.settings, ranking = BW.ranking, optimize = BW.optimize, format = BW.format, registry = BW.registry;
+  var settings = BW.settings, view = BW.view, catalog = BW.catalog, ranking = BW.ranking, optimize = BW.optimize,
+      format = BW.format, registry = BW.registry, geo = BW.geo;
   var P = window.__params && typeof window.__params === 'object' ? window.__params : {};
 
   function isObj(v) { return v !== null && typeof v === 'object' && !(v instanceof Array); }
 
+  var prefs = view.prefs(P.prefs, navigator.language);
   var state = {
     samples: P.samples instanceof Array ? P.samples : [],
     learned: isObj(P.learned) ? P.learned : null,
     plans: isObj(P.plans) ? P.plans : {},
+    catalogs: isObj(P.catalogs) ? P.catalogs : {},
     learnedChanged: false,
     clearSamples: false,
     returnTo: typeof P.return_to === 'string' && P.return_to ? P.return_to : 'pebblejs://close#'
   };
 
   var MAX_DESTINATIONS = settings.MAX_DESTINATIONS || 8;
+  var MAX_PROVIDERS = settings.MAX_PROVIDERS || 8;
   var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   function $(id) { return document.getElementById(id); }
-  function fields() { return document.querySelectorAll('[data-field]'); }
-  function typeSelect() { return document.querySelector('[data-field="provider.type"]'); }
+  function qs(root, sel) { return root.querySelector(sel); }
+  function qsa(root, sel) { return root.querySelectorAll(sel); }
+  function fields() { return qsa(document, '[data-field]'); }
   function fmt(n) {
     if (typeof n !== 'number' || !isFinite(n)) return '';
     return String(Math.abs(n) >= 100 ? Math.round(n * 100) / 100 : Math.round(n * 10000) / 10000);
@@ -351,8 +386,100 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
   function coord(n) { return String(Math.round(n * 1e6) / 1e6); }
   function trim(s) { return String(s == null ? '' : s).replace(/^\s+|\s+$/g, ''); }
   function errText(e) { return e && e.message ? e.message : String(e || 'unknown error'); }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    if (tag === 'button') e.type = 'button';
+    return e;
+  }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  function setStatus(node, text, isErr) {
+    node.textContent = text || '';
+    node.className = node.className.replace(/\s*\berr\b/g, '') + (isErr ? ' err' : '');
+  }
 
-  // ---- form <-> config ---------------------------------------------------------------
+  // ---- display units: the watch's own setting; everything is stored in meters (and m/s) ----------------------
+  var UNITS = prefs.units === 'metric'
+    ? { short: { f: 1, abbr: 'm', dp: 0 }, long: { f: 0.001, abbr: 'km', dp: 1 }, speed: { f: 3.6, abbr: 'km/h', dp: 1 } }
+    : { short: { f: 3.28084, abbr: 'ft', dp: 0 }, long: { f: 1 / 1609.344, abbr: 'mi', dp: 1 }, speed: { f: 2.236936, abbr: 'mph', dp: 1 } };
+  function roundTo(v, dp) { var k = Math.pow(10, dp); return Math.round(v * k) / k; }
+  function toDisplay(unit, meters) { var u = UNITS[unit]; return roundTo(meters * u.f, u.dp); }
+  function distanceText(meters) { return meters >= 1000 ? toDisplay('long', meters) + ' ' + UNITS.long.abbr : toDisplay('short', meters) + ' ' + UNITS.short.abbr; }
+  // an input showing a metric value in display units; unchanged inputs give back the exact stored value
+  function showMetric(input, meters) {
+    var unit = input.getAttribute('data-unit');
+    input.value = typeof meters === 'number' && isFinite(meters) ? String(toDisplay(unit, meters)) : '';
+    input.setAttribute('data-metric', String(meters));
+    input.setAttribute('data-shown', input.value);
+  }
+  function readMetric(input) {
+    if (input.hasAttribute('data-shown') && input.value === input.getAttribute('data-shown')) return input.getAttribute('data-metric');
+    var n = Number(input.value);
+    if (trim(input.value) === '' || !isFinite(n)) return input.value;
+    return n / UNITS[input.getAttribute('data-unit')].f;
+  }
+  function fillUnitLabels(root) {
+    var ls = qsa(root || document, '[data-unit-label]');
+    for (var i = 0; i < ls.length; i++) ls[i].textContent = UNITS[ls[i].getAttribute('data-unit-label')].abbr;
+  }
+
+  // ---- pages -----------------------------------------------------------------------------------------------
+  var current = '';
+  function showPage(name) {
+    var pages = qsa(document, '.page'), found = null;
+    for (var i = 0; i < pages.length; i++) if (pages[i].getAttribute('data-page') === name) found = pages[i];
+    if (!found) { name = 'home'; found = qs(document, '.page[data-page=home]'); }
+    if (name === current) return;
+    for (i = 0; i < pages.length; i++) pages[i].hidden = pages[i] !== found;
+    current = name;
+    closeSearch();
+    $('page-title').textContent = found.getAttribute('data-title');
+    $('page-sub').textContent = found.getAttribute('data-sub');
+    $('back').hidden = name === 'home';
+    if (name === 'home') renderSummaries();
+    if (name === 'stops') renderStopMeta();
+    if (name === 'systems') renderProviderInfo();
+    if (name === 'learning') renderLearned();
+    window.scrollTo(0, 0);
+  }
+  // pages are hash entries, so the phone's back button goes back a page; showPage runs at once, the hashchange after it
+  // then finds the page already shown
+  function go(name) {
+    showPage(name);
+    var hash = name === 'home' ? '' : '#' + name;
+    if (location.hash !== hash) location.hash = hash;
+  }
+  window.addEventListener('hashchange', function () { showPage(location.hash.replace(/^#/, '') || 'home'); });
+
+  function renderSummaries() {
+    var c = readForm();
+    var names = [];
+    for (var i = 0; i < c.providers.length; i++) names.push(providerLabel(c.providers[i]));
+    var sums = {
+      systems: names.length ? names.join(', ') : 'None yet: add one to get started',
+      routes: c.routes.length ? routeNames(c.routes) : 'None yet',
+      stops: c.stops.length ? stopNames(c.stops) : 'None yet',
+      trips: c.destinations.length ? plural(c.destinations.length, 'trip') : 'None',
+      nearby: 'Stops within ' + distanceText(c.stopRadius) + ' · refresh every ' + c.refreshInterval + ' s',
+      learning: plural(state.samples.length, 'pick') + ' · ' + plural(learnedKeys().length, 'learned weight')
+    };
+    var items = qsa(document, '.nav-item');
+    for (i = 0; i < items.length; i++) {
+      var s = qs(items[i], '.nav-summary');
+      s.textContent = sums[items[i].getAttribute('data-go')] || '';
+      s.className = 'nav-summary' + (items[i].getAttribute('data-go') === 'systems' && !names.length ? ' warn' : '');
+    }
+  }
+  function routeNames(list) {
+    var out = [];
+    for (var i = 0; i < list.length && i < 6; i++) out.push(list[i].name);
+    return out.join(', ') + (list.length > 6 ? ' +' + (list.length - 6) : '');
+  }
+  function stopNames(list) { return routeNames(list); }
+
+  // ---- form <-> config ---------------------------------------------------------------------------------------
   function getPath(obj, path) {
     var parts = path.split('.');
     for (var i = 0; i < parts.length && obj != null; i++) obj = obj[parts[i]];
@@ -367,62 +494,51 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
     obj[parts[parts.length - 1]] = value;
   }
   function rowValue(row, name) {
-    var el = row.querySelector('input[name=' + name + ']');
-    return el ? el.value : '';
+    var e = qs(row, '[name=' + name + ']');
+    if (!e) return '';
+    return e.hasAttribute('data-unit') ? readMetric(e) : e.value;
   }
 
-  // provider.type: the select shows the source in use; a config with '' (default source) or a type this page
-  // doesn't know keeps that value until the user picks another source
-  function readType() {
-    var sel = typeSelect();
-    return sel.hasAttribute('data-keep') ? sel.getAttribute('data-keep') : sel.value;
+  function readProvider(row) {
+    return { id: rowValue(row, 'id'), type: rowValue(row, 'type'), name: rowValue(row, 'name'),
+             baseUrl: rowValue(row, 'baseUrl'), apiKey: rowValue(row, 'apiKey'),
+             coverage: { mode: rowValue(row, 'coverageMode'), lat: rowValue(row, 'lat'), lon: rowValue(row, 'lon'),
+                         radius: rowValue(row, 'radius') } };
   }
-  function fillType(type) {
-    var sel = typeSelect();
-    var known = type !== '' && registry.has(type);
-    var plugin = registry.resolve(type);
-    sel.value = known ? type : (plugin ? plugin.type : '');
-    if (known) sel.removeAttribute('data-keep');
-    else sel.setAttribute('data-keep', type);
-  }
-
   function readDestination(row) {
     var days = [];
-    var boxes = row.querySelectorAll('input[name=day]');
+    var boxes = qsa(row, 'input[name=day]');
     for (var i = 0; i < boxes.length; i++) if (boxes[i].checked) days.push(+boxes[i].value);
-    var en = row.querySelector('input[name=enabled]');
+    var en = qs(row, 'input[name=enabled]');
     return { id: rowValue(row, 'id'), name: rowValue(row, 'name'), lat: rowValue(row, 'lat'), lon: rowValue(row, 'lon'),
              arriveBy: rowValue(row, 'arriveBy'), days: days, enabled: en ? en.checked : true };
   }
 
   function readForm() {
-    var raw = {};
+    var raw = { version: 2 };
     var els = fields();
     for (var i = 0; i < els.length; i++) {
-      var el = els[i];
-      setPath(raw, el.getAttribute('data-field'), el.type === 'checkbox' ? el.checked : el.value);
+      var e = els[i];
+      setPath(raw, e.getAttribute('data-field'), e.type === 'checkbox' ? e.checked : e.hasAttribute('data-unit') ? readMetric(e) : e.value);
     }
-    setPath(raw, 'provider.type', readType());
+    raw.providers = [];
+    var pr = qsa(document, '#providers .provider-row');
+    for (i = 0; i < pr.length; i++) raw.providers.push(readProvider(pr[i]));
     raw.routes = [];
-    var rr = document.querySelectorAll('#routes .route-row');
+    var rr = qsa(document, '#routes .route-row');
     for (i = 0; i < rr.length; i++) {
-      raw.routes.push({ id: rowValue(rr[i], 'id'), name: rowValue(rr[i], 'name'), scale: rowValue(rr[i], 'scale'),
-                        color: rowValue(rr[i], 'color') });
+      raw.routes.push({ providerId: rowValue(rr[i], 'providerId'), id: rowValue(rr[i], 'id'), name: rowValue(rr[i], 'name'),
+                        scale: rowValue(rr[i], 'scale'), color: rowValue(rr[i], 'color') });
     }
-    raw.connections = [];
-    var cr = document.querySelectorAll('#connections .connection-row');
-    for (i = 0; i < cr.length; i++) {
-      raw.connections.push({ routeId: rowValue(cr[i], 'routeId'), stopId: rowValue(cr[i], 'stopId'),
-                             name: rowValue(cr[i], 'name'), scale: rowValue(cr[i], 'scale') });
-    }
-    raw.stopScales = {};
-    var sr = document.querySelectorAll('#stop-scales .stop-scale-row');
+    raw.stops = [];
+    var sr = qsa(document, '#stops .stop-row');
     for (i = 0; i < sr.length; i++) {
-      var id = trim(rowValue(sr[i], 'stopId'));
-      if (id !== '' && !raw.stopScales.hasOwnProperty(id)) raw.stopScales[id] = rowValue(sr[i], 'scale');
+      raw.stops.push({ providerId: rowValue(sr[i], 'providerId'), id: rowValue(sr[i], 'id'), name: rowValue(sr[i], 'name'),
+                       lat: rowValue(sr[i], 'lat'), lon: rowValue(sr[i], 'lon'),
+                       walkScale: rowValue(sr[i], 'walkScale'), rideScale: rowValue(sr[i], 'rideScale') });
     }
     raw.destinations = [];
-    var dr = document.querySelectorAll('#destinations .destination-row');
+    var dr = qsa(document, '#destinations .destination-row');
     for (i = 0; i < dr.length; i++) raw.destinations.push(readDestination(dr[i]));
     return settings.normalize(raw);
   }
@@ -431,33 +547,27 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
     var c = settings.normalize(config);
     var els = fields();
     for (var i = 0; i < els.length; i++) {
-      var el = els[i], v = getPath(c, el.getAttribute('data-field'));
-      if (el.type === 'checkbox') el.checked = !!v;
-      else el.value = typeof v === 'number' ? String(v) : (v == null ? '' : v);
+      var e = els[i], v = getPath(c, e.getAttribute('data-field'));
+      if (e.type === 'checkbox') e.checked = !!v;
+      else if (e.hasAttribute('data-unit')) showMetric(e, v);
+      else e.value = typeof v === 'number' ? String(v) : (v == null ? '' : v);
     }
-    fillType(c.provider.type);
-    closePicker();
+    closeSearch();
+    clear($('providers'));
     clear($('routes'));
-    clear($('connections'));
-    clear($('stop-scales'));
+    clear($('stops'));
     clear($('destinations'));
-    for (i = 0; i < c.routes.length; i++) addRow('route', c.routes[i]);
-    for (i = 0; i < c.connections.length; i++) addRow('connection', c.connections[i]);
-    for (var k in c.stopScales) if (c.stopScales.hasOwnProperty(k)) addRow('stop-scale', { stopId: k, scale: c.stopScales[k] });
+    for (i = 0; i < c.providers.length; i++) addProvider(c.providers[i]);
+    for (i = 0; i < c.routes.length; i++) addRoute(c.routes[i]);
+    for (i = 0; i < c.stops.length; i++) addStop(c.stops[i]);
     for (i = 0; i < c.destinations.length; i++) addDestination(c.destinations[i]);
-    updateDestinationButton();
+    updateButtons();
     updateLocationMode();
     renderLearned();
+    renderSummaries();
   }
 
-  // ---- list rows -----------------------------------------------------------------------
-  var ROWS = {
-    'route': { list: 'routes', cols: [['id', 'Route id', 'text'], ['name', 'Name', 'text'], ['scale', 'Scale /s', 'number']] },
-    'connection': { list: 'connections', cols: [['routeId', 'Route id', 'text'], ['stopId', 'Stop id', 'text'],
-                                                ['name', 'Name', 'text'], ['scale', 'Scale /m', 'number']] },
-    'stop-scale': { list: 'stop-scales', cols: [['stopId', 'Stop id', 'text'], ['scale', 'Scale /m', 'number']] }
-  };
-  function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+  // ---- rows ----------------------------------------------------------------------------------------------
   function labelled(cls, text, input) {
     var label = document.createElement('label');
     label.className = cls;
@@ -474,62 +584,480 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
     input.value = typeof value === 'number' ? String(value) : (value == null ? '' : value);
     return input;
   }
+  function makeSelect(name, items, value) {
+    var s = document.createElement('select');
+    s.name = name;
+    fillSelect(s, items);
+    s.value = value;
+    return s;
+  }
+  function fillSelect(select, items) {
+    clear(select);
+    for (var i = 0; i < items.length; i++) {
+      var o = document.createElement('option');
+      o.value = items[i][0];
+      o.textContent = items[i][1];
+      select.appendChild(o);
+    }
+  }
   function addRemove(row, onRemove) {
     var rm = el('button', 'remove', '×');
     rm.title = 'Remove';
     rm.setAttribute('aria-label', 'Remove');
     rm.onclick = function () {
-      if (picker.row === row) closePicker();
+      if (onRemove && onRemove(row) === false) return;
+      if (search.anchor && row.contains(search.anchor)) closeSearch();
       row.parentNode.removeChild(row);
-      if (onRemove) onRemove();
+      updateButtons();
+      if (state.learned) renderLearned();
     };
     row.appendChild(rm);
   }
-  function addRow(kind, values) {
-    var spec = ROWS[kind];
-    var row = document.createElement('div');
-    row.className = 'row ' + kind + '-row';
-    for (var i = 0; i < spec.cols.length; i++) {
-      var col = spec.cols[i];
-      var input = makeInput(col[0], col[2], values ? values[col[0]] : null);
-      if (col[0] === 'id' && kind === 'route' || col[0] === 'routeId') input.setAttribute('list', 'route-options');
-      row.appendChild(labelled('c-' + col[0], col[1], input));
+  function rowHead(title, detail) {
+    var h = el('div', 'row-head');
+    h.appendChild(el('b', '', title));
+    if (detail) h.appendChild(el('span', '', detail));
+    return h;
+  }
+  function flash(row) {
+    row.className += ' flash';
+    if (row.scrollIntoView) row.scrollIntoView({ block: 'center' });
+    setTimeout(function () { row.className = row.className.replace(/\s*\bflash\b/g, ''); }, 1200);
+  }
+
+  // ---- transit systems ---------------------------------------------------------------------------------------
+  function providerRows() { return qsa(document, '#providers .provider-row'); }
+  function providerById(id) {
+    var rows = providerRows();
+    for (var i = 0; i < rows.length; i++) if (rowValue(rows[i], 'id') === id) return readProvider(rows[i]);
+    return null;
+  }
+  function pluginLabel(type) { var p = registry.resolve(type); return p ? p.label || p.type : type; }
+  function providerLabel(p) { return trim(p && p.name) || pluginLabel(p && p.type); }
+  function providerLabelById(id) { var p = providerById(id); return p ? providerLabel(p) : id; }
+  function usedProviderIds() {
+    var seen = {}, rows = providerRows();
+    for (var i = 0; i < rows.length; i++) seen[rowValue(rows[i], 'id')] = true;
+    return seen;
+  }
+  function hasSaved(pid) {
+    return !!qs(document, '#routes .route-row[data-provider="' + pid + '"], #stops .stop-row[data-provider="' + pid + '"]');
+  }
+
+  function addProvider(values) {
+    if (providerRows().length >= MAX_PROVIDERS) return null;
+    var types = registry.types(), items = [];
+    for (var i = 0; i < types.length; i++) items.push([types[i].type, types[i].label]);
+    if (!values) {
+      var used = {}, rows = providerRows(), type = types.length ? types[0].type : 'mock';
+      for (i = 0; i < rows.length; i++) used[rowValue(rows[i], 'type')] = true;
+      for (i = 0; i < types.length; i++) if (!used[types[i].type]) { type = types[i].type; break; }
+      values = settings.defaultProvider(settings.freeId(type, usedProviderIds()), type);
     }
-    if (kind === 'route') addColorLine(row, values ? values.color : '');
-    if (kind === 'connection') addPickLine(row, 'connection', 'needs-routeInfo');
-    addRemove(row, renderLearned);
-    $(spec.list).appendChild(row);
+    if (!registry.has(values.type)) items.push([values.type, values.type + ' (not available)']);
+    var cv = values.coverage || {};
+    var row = el('div', 'row provider-row');
+    row.appendChild(makeInput('id', 'hidden', values.id));
+    var typeSel = makeSelect('type', items, values.type);
+    row.appendChild(labelled('c-type', 'System', typeSel));
+    var name = makeInput('name', 'text', values.name);
+    name.autocapitalize = 'words';
+    row.appendChild(labelled('c-name', 'Name (optional)', name));
+    var base = makeInput('baseUrl', 'url', values.baseUrl);
+    base.placeholder = "the system's default server";
+    row.appendChild(labelled('c-baseUrl', 'Base URL (optional)', base));
+    var key = makeInput('apiKey', 'text', values.apiKey);
+    key.placeholder = "the system's default";
+    row.appendChild(labelled('c-apiKey', 'API key (optional)', key));
+    var mode = makeSelect('coverageMode', [['auto', 'Automatic (around its saved stops)'], ['manual', 'Around a place I choose']], cv.mode || 'auto');
+    row.appendChild(labelled('c-coverageMode', 'Coverage area', mode));
+    var manual = el('div', 'manual');
+    manual.appendChild(labelled('c-lat', 'Latitude', makeInput('lat', 'number', cv.lat)));
+    manual.appendChild(labelled('c-lon', 'Longitude', makeInput('lon', 'number', cv.lon)));
+    var radius = makeInput('radius', 'number', '');
+    radius.setAttribute('data-unit', 'long');
+    showMetric(radius, typeof cv.radius === 'number' ? cv.radius : 50000);
+    manual.appendChild(labelled('c-radius', 'Radius (' + UNITS.long.abbr + ')', radius));
+    row.appendChild(manual);
+    var line = el('div', 'line');
+    var here = el('button', 'here small', 'Centre on my position');
+    var cstatus = el('span', 'status');
+    here.onclick = function () {
+      locate(cstatus, function (lat, lon) {
+        mode.value = 'manual';
+        qs(row, 'input[name=lat]').value = coord(lat);
+        qs(row, 'input[name=lon]').value = coord(lon);
+        renderProviderInfo();
+      });
+    };
+    line.appendChild(here);
+    line.appendChild(cstatus);
+    row.appendChild(line);
+    row.appendChild(el('div', 'stop-meta coverage-summary'));
+    var iline = el('div', 'line');
+    var istatus = el('span', 'status index-status');
+    var reindex = el('button', 'reindex small', 'Rebuild search index');
+    reindex.onclick = function () { buildIndex(readProvider(row), true); };
+    iline.appendChild(reindex);
+    iline.appendChild(istatus);
+    row.appendChild(iline);
+    addRemove(row, function () {
+      var pid = rowValue(row, 'id');
+      if (hasSaved(pid) && !window.confirm('Remove ' + providerLabel(readProvider(row)) + ' and its saved routes and stops?')) return false;
+      var saved = qsa(document, '[data-provider="' + pid + '"]');
+      for (var k = 0; k < saved.length; k++) saved[k].parentNode.removeChild(saved[k]);
+    });
+    typeSel.onchange = function () {
+      // a system nothing refers to yet takes an id after its new type
+      var pid = rowValue(row, 'id');
+      if (!hasSaved(pid)) {
+        var used = usedProviderIds();
+        delete used[pid];
+        qs(row, 'input[name=id]').value = settings.freeId(typeSel.value, used);
+      }
+      renderProviderInfo();
+    };
+    mode.onchange = renderProviderInfo;
+    $('providers').appendChild(row);
+    renderProviderInfo();
     return row;
   }
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text != null) e.textContent = text;
-    if (tag === 'button') e.type = 'button';
-    return e;
+  function renderProviderInfo() {
+    var c = readForm(), rows = providerRows();
+    for (var i = 0; i < rows.length; i++) {
+      var p = readProvider(rows[i]), pid = rowValue(rows[i], 'id');
+      var manual = qs(rows[i], '.manual'), summary = qs(rows[i], '.coverage-summary');
+      manual.hidden = p.coverage.mode !== 'manual';
+      var area = view.coverage(c, pid);
+      if (!area) summary.textContent = 'Used everywhere: none of its saved stops has a position yet.';
+      else summary.textContent = (p.coverage.mode === 'manual' ? 'Used within ' : 'Used within about ') + distanceText(area.radius) +
+        ' of ' + coord(area.lat) + ', ' + coord(area.lon) + '.';
+      var st = qs(rows[i], '.index-status'), ix = indexState(p);
+      if (ix.building) setStatus(st, 'Indexing routes and stops… ' + (ix.total ? ix.done + '/' + ix.total + ' routes' : ''));
+      else if (ix.error) setStatus(st, "Couldn't index: " + ix.error, true);
+      else if (ix.index) setStatus(st, 'Search index: ' + plural(ix.index.routes.length, 'route') + ', ' + plural(ix.index.stops.length, 'stop') +
+        (ix.index.t ? ' · ' + age(ix.index.t) : ''));
+      else setStatus(st, 'Not indexed yet: searching builds the index.');
+    }
   }
-  function setStatus(node, text, isErr) {
-    node.textContent = text || '';
-    node.className = node.className.replace(/\s*\berr\b/g, '') + (isErr ? ' err' : '');
+  function age(t) {
+    var d = Math.floor((Math.floor(new Date().getTime() / 1000) - t) / 86400);
+    return d <= 0 ? 'updated today' : d === 1 ? 'updated yesterday' : 'updated ' + d + ' days ago';
   }
 
-  // ---- destinations ----------------------------------------------------------------------
-  function destinationRows() { return document.querySelectorAll('#destinations .destination-row'); }
-  function updateDestinationButton() {
+  // ---- data sources and search indexes ---------------------------------------------------------------------------
+  function guardedStorage() {
+    function ls() { try { return window.localStorage || null; } catch (e) { return null; } }
+    return {
+      getItem: function (k) { try { var s = ls(); return s ? s.getItem(k) : null; } catch (e) { return null; } },
+      setItem: function (k, v) { try { var s = ls(); if (s) s.setItem(k, v); } catch (e) { /* full / blocked */ } },
+      removeItem: function (k) { try { var s = ls(); if (s) s.removeItem(k); } catch (e) { /* blocked */ } }
+    };
+  }
+  // GET url → JSON; cb(err, body) is always called once, asynchronously and outside the promise chain
+  function http(url, cb) {
+    var done = false;
+    function finish(err, body) {
+      if (done) return;
+      done = true;
+      setTimeout(function () { cb(err, body); }, 0);
+    }
+    try {
+      if (typeof window.fetch !== 'function') return finish(new Error('no network access'));
+      Promise.resolve(window.fetch(url)).then(function (res) {
+        if (!res) throw new Error('no response');
+        return Promise.resolve(res.json()).then(null, function () { return null; }).then(function (body) {
+          if (!res.ok) {
+            var msg = body && (body.detail || body.title || body.text);
+            throw new Error(msg || 'HTTP ' + res.status);
+          }
+          if (body == null) throw new Error('bad response');
+          finish(null, body);
+        });
+      }).then(null, function (e) { finish(e instanceof Error ? e : new Error(errText(e))); });
+    } catch (e) {
+      finish(e instanceof Error ? e : new Error(errText(e)));
+    }
+  }
+  function nowS() { return Math.floor(new Date().getTime() / 1000); }
+  var deps = { http: http, clock: nowS, storage: guardedStorage() };
+
+  // one source per system settings (type / server / key / saved routes), created like the phone does
+  var sources = {};
+  function sourceFor(pid) {
+    var c = readForm(), entry = null;
+    for (var i = 0; i < c.providers.length; i++) if (c.providers[i].id === pid) entry = c.providers[i];
+    if (!entry) return null;
+    var routes = [];
+    for (i = 0; i < c.routes.length; i++) if (c.routes[i].providerId === pid) routes.push(c.routes[i].id);
+    var k = JSON.stringify([catalog.signature(entry), routes, c.location]);
+    if (!sources.hasOwnProperty(k)) {
+      try { sources[k] = registry.createFor(entry, c, deps); } catch (e) { sources[k] = null; }
+    }
+    return sources[k];
+  }
+
+  // search indexes by signature: from the phone (window.__params.catalogs) or built here
+  var indexes = {};
+  function indexState(entry) {
+    var sig = catalog.signature(entry);
+    if (!indexes.hasOwnProperty(sig)) {
+      var packed = state.catalogs.hasOwnProperty(entry.id) ? catalog.fromText(state.catalogs[entry.id]) : null;
+      var idx = packed && packed.sig === sig ? catalog.unpack(packed) : null;
+      indexes[sig] = { index: idx, building: false, done: 0, total: 0, error: '' };
+    }
+    return indexes[sig];
+  }
+  function buildIndex(entry, force) {
+    var ix = indexState(entry);
+    if (ix.building || (ix.index && !force) || (ix.error && !force)) return ix;
+    var src = sourceFor(entry.id);
+    ix.building = true;
+    ix.error = '';
+    ix.done = 0;
+    ix.total = 0;
+    if (!src) { ix.building = false; ix.error = "the data source didn't start"; renderProviderInfo(); return ix; }
+    catalog.build(src, entry, nowS(), function (err, packed) {
+      ix.building = false;
+      if (err) ix.error = errText(err);
+      else ix.index = catalog.unpack(packed);
+      renderProviderInfo();
+      renderStopMeta();
+      if (search.kind) runSearch();
+    }, function (n, total) {
+      ix.done = n;
+      ix.total = total;
+      if (search.kind) renderSearchStatus();
+      if (current === 'systems') renderProviderInfo();
+    });
+    renderProviderInfo();
+    return ix;
+  }
+  function indexFor(pid) {
+    var p = providerById(pid);
+    return p ? indexState(p).index : null;
+  }
+
+  // ---- type-to-search (routes, stops, trip destinations) ---------------------------------------------------------
+  var search = { kind: '', anchor: null, onPick: null, timer: null };
+  function searchEl(sel) { return qs($('search'), sel); }
+  function openSearch(kind, anchor, onPick) {
+    var panel = $('search');
+    if (!providerRows().length) { go('systems'); return; }
+    search.kind = kind;
+    search.anchor = anchor;
+    search.onPick = onPick;
+    anchor.parentNode.insertBefore(panel, anchor.nextSibling);
+    panel.hidden = false;
+    var input = searchEl('.search-input');
+    input.value = '';
+    input.placeholder = kind === 'route' ? 'Route number or name, e.g. 2 or Blue Line' : 'Stop name or number, e.g. Franklin & Lyndale';
+    var rows = providerRows();
+    for (var i = 0; i < rows.length; i++) buildIndex(readProvider(rows[i]), false);
+    runSearch();
+    try { input.focus(); } catch (e) { /* not focusable */ }
+  }
+  function closeSearch() {
+    var panel = $('search');
+    if (!panel) return;
+    search.kind = '';
+    search.anchor = null;
+    search.onPick = null;
+    panel.hidden = true;
+    clear(searchEl('.search-results'));
+    document.querySelector('main').appendChild(panel);
+  }
+  function renderSearchStatus(found, q) {
+    var c = readForm(), building = [], failed = [];
+    for (var i = 0; i < c.providers.length; i++) {
+      var ix = indexState(c.providers[i]);
+      if (ix.building) building.push(providerLabel(c.providers[i]) + (ix.total ? ' ' + ix.done + '/' + ix.total : ''));
+      else if (ix.error) failed.push(providerLabel(c.providers[i]) + ': ' + ix.error);
+    }
+    var msg = [];
+    if (building.length) msg.push('Indexing ' + building.join(', ') + '…');
+    if (failed.length) msg.push("Couldn't index " + failed.join('; ') + '.');
+    if (!building.length && q && found === 0) msg.push('No matches.');
+    setStatus(searchEl('.search-status'), msg.join(' '), failed.length > 0 && !building.length);
+  }
+  function runSearch() {
+    if (!search.kind) return;
+    var q = trim(searchEl('.search-input').value), c = readForm(), hits = [], i, k;
+    var kind = search.kind === 'route' ? 'route' : 'stop';
+    for (i = 0; i < c.providers.length; i++) {
+      var idx = indexState(c.providers[i]).index;
+      if (!idx) continue;
+      var found = catalog.search(idx, q, { kind: kind, limit: 6 });
+      for (k = 0; k < found.length; k++) { found[k].providerId = c.providers[i].id; hits.push(found[k]); }
+    }
+    hits.sort(function (a, b) { return b.score - a.score; });
+    hits = hits.slice(0, 6);
+    var list = searchEl('.search-results');
+    clear(list);
+    var multi = c.providers.length > 1;
+    for (i = 0; i < hits.length; i++) list.appendChild(resultButton(hits[i], multi));
+    // the typed text as an id, for anything the index doesn't know
+    var exact = false;
+    for (i = 0; i < hits.length; i++) if (hits[i].id === q) exact = true;
+    if (q && !exact && search.kind !== 'destination') {
+      for (i = 0; i < c.providers.length; i++) {
+        list.appendChild(resultButton({ kind: kind, raw: true, providerId: c.providers[i].id, id: q, name: q }, multi));
+      }
+    }
+    renderSearchStatus(hits.length, q);
+  }
+  function resultButton(hit, multi) {
+    var b = el('button', 'result' + (hit.raw ? ' raw' : ''));
+    b.setAttribute('data-provider', hit.providerId);
+    b.setAttribute('data-id', hit.id);
+    var sys = multi ? providerLabelById(hit.providerId) : '';
+    if (hit.raw) {
+      b.appendChild(el('span', 'r-name', 'Use ' + (hit.kind === 'route' ? 'route' : 'stop') + ' id “' + hit.id + '”'));
+      b.appendChild(el('span', 'r-id', sys));
+    } else {
+      b.appendChild(el('span', 'r-name', hit.name));
+      b.appendChild(el('span', 'r-id', (hit.kind === 'stop' ? '#' : '') + hit.id + (sys ? ' · ' + sys : '')));
+      var detail = hit.kind === 'stop' ? (hit.detail ? 'Routes ' + hit.detail : '') : hit.detail;
+      if (detail) b.appendChild(el('span', 'r-detail', detail));
+    }
+    b.onclick = function () {
+      var pick = search.onPick;
+      closeSearch();
+      if (pick) pick(hit);
+    };
+    return b;
+  }
+
+  // ---- routes ------------------------------------------------------------------------------------------------
+  function findRow(list, pid, id) {
+    var rows = qsa(document, '#' + list + ' .row');
+    for (var i = 0; i < rows.length; i++) if (rowValue(rows[i], 'providerId') === pid && rowValue(rows[i], 'id') === id) return rows[i];
+    return null;
+  }
+  function addRoute(values) {
+    var row = el('div', 'row route-row');
+    row.setAttribute('data-provider', values.providerId);
+    row.appendChild(makeInput('providerId', 'hidden', values.providerId));
+    row.appendChild(makeInput('id', 'hidden', values.id));
+    row.appendChild(rowHead('Route ' + values.id, providerLabelById(values.providerId)));
+    var name = makeInput('name', 'text', values.name);
+    name.autocapitalize = 'words';
+    row.appendChild(labelled('c-name', 'Name on the watch', name));
+    row.appendChild(labelled('c-scale', 'Scale /s', makeInput('scale', 'number', values.scale)));
+    addColorLine(row, values.color || '');
+    addRemove(row);
+    $('routes').appendChild(row);
+    return row;
+  }
+  function pickRoute(hit) {
+    var have = findRow('routes', hit.providerId, hit.id);
+    if (have) return flash(have);
+    flash(addRoute({ providerId: hit.providerId, id: hit.id, name: hit.raw ? hit.id : hit.name, scale: 0, color: '' }));
+    renderStopMeta();
+  }
+
+  // ---- stops -------------------------------------------------------------------------------------------------
+  function addStop(values) {
+    var row = el('div', 'row stop-row');
+    row.setAttribute('data-provider', values.providerId);
+    row.appendChild(makeInput('providerId', 'hidden', values.providerId));
+    row.appendChild(makeInput('id', 'hidden', values.id));
+    row.appendChild(makeInput('lat', 'hidden', values.lat == null ? '' : values.lat));
+    row.appendChild(makeInput('lon', 'hidden', values.lon == null ? '' : values.lon));
+    row.appendChild(rowHead('Stop #' + values.id, providerLabelById(values.providerId)));
+    var name = makeInput('name', 'text', values.name);
+    name.autocapitalize = 'words';
+    name.placeholder = 'e.g. Home';
+    row.appendChild(labelled('c-name', 'Name', name));
+    row.appendChild(labelled('c-walkScale', 'Walking to it /m', makeInput('walkScale', 'number', values.walkScale)));
+    row.appendChild(labelled('c-rideScale', 'Riding to it /m', makeInput('rideScale', 'number', values.rideScale)));
+    row.appendChild(el('div', 'stop-meta'));
+    addRemove(row);
+    $('stops').appendChild(row);
+    return row;
+  }
+  // which routes serve each stop (from its system's index) and whether a saved route is among them
+  function renderStopMeta() {
+    var rows = qsa(document, '#stops .stop-row'), c = readForm();
+    for (var i = 0; i < rows.length; i++) {
+      var meta = qs(rows[i], '.stop-meta'), pid = rowValue(rows[i], 'providerId');
+      var idx = indexFor(pid), s = idx ? catalog.stop(idx, rowValue(rows[i], 'id')) : null;
+      clear(meta);
+      if (!s) continue;
+      var names = {}, k;
+      for (k = 0; k < idx.routes.length; k++) names[idx.routes[k].id] = idx.routes[k].shortName || idx.routes[k].id;
+      var saved = {};
+      for (k = 0; k < c.routes.length; k++) if (c.routes[k].providerId === pid) saved[c.routes[k].id] = true;
+      var any = false;
+      meta.appendChild(document.createTextNode(s.routeIds.length ? 'Routes ' : 'No routes listed'));
+      for (k = 0; k < s.routeIds.length; k++) {
+        if (k) meta.appendChild(document.createTextNode(', '));
+        var label = names[s.routeIds[k]] || s.routeIds[k];
+        if (saved[s.routeIds[k]]) { any = true; meta.appendChild(el('b', '', label)); }
+        else meta.appendChild(document.createTextNode(label));
+      }
+      if (!any) {
+        var w = el('div', 'warn', s.routeIds.length ? "None of your saved routes stop here, so there are no drop-off times yet."
+                                                    : '');
+        if (w.textContent) meta.appendChild(w);
+      }
+    }
+  }
+  // the position of a picked stop: from the index, else the system's stopInfo; cb(lat, lon) or cb(null)
+  function stopPosition(hit, status, cb) {
+    if (typeof hit.lat === 'number' && typeof hit.lon === 'number') return cb(hit.lat, hit.lon);
+    var src = sourceFor(hit.providerId);
+    if (!src || typeof src.stopInfo !== 'function') return cb(null);
+    setStatus(status, 'Looking up the stop…');
+    src.stopInfo(hit.id, function (err, info) {
+      if (err || !info || !isFinite(+info.lat) || !isFinite(+info.lon)) {
+        setStatus(status, "Couldn't find where this stop is" + (err ? ': ' + errText(err) : '') + '.', true);
+        return cb(null, info);
+      }
+      setStatus(status, '');
+      cb(+info.lat, +info.lon, info);
+    });
+  }
+  function pickStop(hit) {
+    var have = findRow('stops', hit.providerId, hit.id);
+    if (have) return flash(have);
+    var row = addStop({ providerId: hit.providerId, id: hit.id, name: hit.raw ? '' : hit.name, lat: null, lon: null, walkScale: 0, rideScale: 0 });
+    var status = el('span', 'status');
+    var line = el('div', 'line');
+    line.appendChild(status);
+    row.insertBefore(line, qs(row, '.stop-meta'));
+    stopPosition(hit, status, function (lat, lon, info) {
+      if (lat !== null) {
+        qs(row, 'input[name=lat]').value = coord(lat);
+        qs(row, 'input[name=lon]').value = coord(lon);
+      }
+      var name = qs(row, 'input[name=name]');
+      if (!trim(name.value)) name.value = (info && trim(info.name)) || hit.id;
+    });
+    renderStopMeta();
+    flash(row);
+  }
+
+  // ---- trips -------------------------------------------------------------------------------------------------
+  function destinationRows() { return qsa(document, '#destinations .destination-row'); }
+  function updateButtons() {
     var n = destinationRows().length, btn = $('add-destination');
     btn.disabled = n >= MAX_DESTINATIONS;
     btn.textContent = n >= MAX_DESTINATIONS ? 'At most ' + MAX_DESTINATIONS + ' trips' : '+ Add trip';
+    var p = providerRows().length, pb = $('add-provider');
+    pb.disabled = p >= MAX_PROVIDERS;
+    pb.textContent = p >= MAX_PROVIDERS ? 'At most ' + MAX_PROVIDERS + ' systems' : '+ Add transit system';
   }
   function syncDays(row) {
-    var boxes = row.querySelectorAll('input[name=day]');
+    var boxes = qsa(row, 'input[name=day]');
     for (var i = 0; i < boxes.length; i++) boxes[i].parentNode.className = 'day' + (boxes[i].checked ? ' on' : '');
   }
   function planText(id) {
     var p = id && state.plans.hasOwnProperty(id) ? state.plans[id] : null;
     if (!isObj(p)) return '';
     var text = typeof p.summary === 'string' ? p.summary : '';
-    var leave = isObj(p.plan) && typeof p.plan.leaveAt === 'number' ? format.clock(p.plan.leaveAt, document.querySelector('[data-field="clock24"]').checked) : '';
+    var leave = isObj(p.plan) && typeof p.plan.leaveAt === 'number' ? format.clock(p.plan.leaveAt, prefs.clock24) : '';
     if (leave && text.indexOf(leave) < 0) text += (text ? ' · ' : '') + 'leave ' + leave;
     return text ? 'Planned: ' + text : '';
   }
@@ -537,10 +1065,8 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
   function addDestination(values) {
     if (destinationRows().length >= MAX_DESTINATIONS) return null;
     values = values || { name: '', lat: '', lon: '', arriveBy: '09:00', days: [], enabled: true };
-    var row = document.createElement('div');
-    row.className = 'row destination-row';
-    var id = makeInput('id', 'hidden', values.id || '');
-    row.appendChild(id);
+    var row = el('div', 'row destination-row');
+    row.appendChild(makeInput('id', 'hidden', values.id || ''));
     var name = makeInput('name', 'text', values.name);
     name.autocapitalize = 'words';
     name.placeholder = 'e.g. Work';
@@ -570,14 +1096,23 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
     syncDays(row);
 
     var line = el('div', 'line');
-    var pick = el('button', 'pick-stop small needs-routeInfo needs-stopInfo', 'Choose stop…');
-    pick.onclick = function () { openPicker(row, 'destination'); };
-    var here = el('button', 'here small', 'Use my position');
+    var pick = el('button', 'pick-stop small', 'Choose a stop…');
     var status = el('span', 'status');
+    pick.onclick = function () {
+      openSearch('destination', line, function (hit) {
+        stopPosition(hit, status, function (lat, lon, info) {
+          if (lat === null) return;
+          qs(row, 'input[name=lat]').value = coord(lat);
+          qs(row, 'input[name=lon]').value = coord(lon);
+          if (!trim(name.value)) name.value = (info && trim(info.name)) || hit.name;
+        });
+      });
+    };
+    var here = el('button', 'here small', 'Use my position');
     here.onclick = function () {
       locate(status, function (lat, lon) {
-        row.querySelector('input[name=lat]').value = coord(lat);
-        row.querySelector('input[name=lon]').value = coord(lon);
+        qs(row, 'input[name=lat]').value = coord(lat);
+        qs(row, 'input[name=lon]').value = coord(lon);
       });
     };
     line.appendChild(pick);
@@ -585,13 +1120,13 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
     line.appendChild(status);
     row.appendChild(line);
     row.appendChild(el('div', 'plan-summary', planText(values.id)));
-    addRemove(row, updateDestinationButton);
+    addRemove(row);
     $('destinations').appendChild(row);
-    updateDestinationButton();
+    updateButtons();
     return row;
   }
 
-  // ---- route colors (64 Pebble colors: each channel 00/55/AA/FF) -------------------------
+  // ---- route colors (64 Pebble colors: each channel 00/55/AA/FF) -------------------------------------------------
   var LEVELS = ['00', '55', 'AA', 'FF'];
   var PEBBLE_COLORS = [];
   (function () {
@@ -613,7 +1148,7 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
     var chip = el('span', 'chip'), text = el('span');
     swatch.appendChild(chip);
     swatch.appendChild(text);
-    var load = el('button', 'load-color small needs-routeInfo', 'Official color');
+    var load = el('button', 'load-color small', 'Official color');
     load.title = "Load the route's color from the transit data source";
     var status = el('span', 'status');
     var palette = el('div', 'palette');
@@ -623,7 +1158,7 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
       var v = toHex(input.value);
       chip.style.background = v || '';
       text.textContent = v ? v.toUpperCase() : 'Auto';
-      var bs = palette.querySelectorAll('button[data-color]');
+      var bs = qsa(palette, 'button[data-color]');
       for (var i = 0; i < bs.length; i++) bs[i].className = bs[i].getAttribute('data-color') === v ? 'on' : '';
     }
     function set(v) { input.value = toHex(v); show(); }
@@ -660,257 +1195,22 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
     show();
   }
 
-  function addPickLine(row, mode, cls) {
-    var line = el('div', 'line ' + cls);
-    var pick = el('button', 'pick-stop small', 'Choose stop…');
-    pick.onclick = function () { openPicker(row, mode); };
-    line.appendChild(pick);
-    row.appendChild(line);
-  }
-
-  // ---- source helpers -------------------------------------------------------------------
-  // The current data source, created like the phone does (registry.create) with browser I/O. Each helper is
-  // offered only when the source has the matching catalog method; failures are shown inline, never thrown.
-  function guardedStorage() {
-    function ls() { try { return window.localStorage || null; } catch (e) { return null; } }
-    return {
-      getItem: function (k) { try { var s = ls(); return s ? s.getItem(k) : null; } catch (e) { return null; } },
-      setItem: function (k, v) { try { var s = ls(); if (s) s.setItem(k, v); } catch (e) { /* full / blocked */ } },
-      removeItem: function (k) { try { var s = ls(); if (s) s.removeItem(k); } catch (e) { /* blocked */ } }
-    };
-  }
-  // GET url → JSON; cb(err, body) is always called once, asynchronously and outside the promise chain
-  function http(url, cb) {
-    var done = false;
-    function finish(err, body) {
-      if (done) return;
-      done = true;
-      setTimeout(function () { cb(err, body); }, 0);
-    }
-    try {
-      if (typeof window.fetch !== 'function') return finish(new Error('no network access'));
-      Promise.resolve(window.fetch(url)).then(function (res) {
-        if (!res) throw new Error('no response');
-        return Promise.resolve(res.json()).then(null, function () { return null; }).then(function (body) {
-          if (!res.ok) {
-            var msg = body && (body.detail || body.title || body.text);
-            throw new Error(msg || 'HTTP ' + res.status);
-          }
-          if (body == null) throw new Error('bad response');
-          finish(null, body);
-        });
-      }).then(null, function (e) { finish(e instanceof Error ? e : new Error(errText(e))); });
-    } catch (e) {
-      finish(e instanceof Error ? e : new Error(errText(e)));
-    }
-  }
-  var deps = { http: http, clock: function () { return Math.floor(new Date().getTime() / 1000); }, storage: guardedStorage() };
-  var current = { key: null, source: null, error: null };
-  function sourceKey(c) {
-    var routes = [];
-    for (var i = 0; i < c.routes.length; i++) routes.push([c.routes[i].id, c.routes[i].name]);
-    return JSON.stringify([c.provider, routes, c.location]);
-  }
-  function source() {
-    var c = readForm();
-    var key = sourceKey(c);
-    if (key !== current.key) {
-      current.key = key;
-      try { current.source = registry.create(c, deps); current.error = null; }
-      catch (e) { current.source = null; current.error = e; }
-    }
-    return current.source;
-  }
-  function can(method) { var s = source(); return !!s && typeof s[method] === 'function'; }
-  function sourceLabel() {
-    var p = registry.resolve(readType());
-    return p ? p.label || p.type : 'the data source';
-  }
-  function updateCapabilities() {
-    var methods = ['listRoutes', 'routeInfo', 'stopInfo'];
-    for (var i = 0; i < methods.length; i++) {
-      var on = can(methods[i]);
-      var cls = document.body.className.replace(new RegExp('\\s*\\bhas-' + methods[i] + '\\b', 'g'), '');
-      document.body.className = cls + (on ? ' has-' + methods[i] : '');
-    }
-  }
-
-  var routeListToken = 0;
-  function refreshSource() {
-    var token = ++routeListToken;
-    var dl = $('route-options'), status = $('source-status');
-    closePicker();
-    updateCapabilities();
-    clear(dl);
-    var s = source();
-    if (!s) { setStatus(status, current.error ? "Couldn't start the data source: " + errText(current.error) : '', true); return; }
-    if (typeof s.listRoutes !== 'function') { setStatus(status, ''); return; }
-    setStatus(status, 'Loading ' + sourceLabel() + ' routes…');
-    s.listRoutes(function (err, list) {
-      if (token !== routeListToken) return;
-      if (err) {
-        setStatus(status, "Couldn't load the route list (" + errText(err) + '). You can still type route ids.', true);
-        return;
-      }
-      list = list instanceof Array ? list : [];
-      for (var i = 0; i < list.length; i++) {
-        if (!list[i] || list[i].id == null) continue;
-        var o = document.createElement('option');
-        o.value = String(list[i].id);
-        o.textContent = list[i].label || o.value;
-        dl.appendChild(o);
-      }
-      setStatus(status, list.length + ' ' + sourceLabel() + ' routes available as suggestions for route ids.');
-    });
-  }
-
   function loadRouteColor(row, status) {
-    var id = trim(rowValue(row, 'id'));
-    if (!id) { setStatus(status, 'Enter a route id first.', true); return; }
-    if (!can('routeInfo')) { setStatus(status, sourceLabel() + " can't look up routes.", true); return; }
+    var id = rowValue(row, 'id'), src = sourceFor(rowValue(row, 'providerId'));
+    if (!src || typeof src.routeInfo !== 'function') { setStatus(status, "This system can't look up routes.", true); return; }
     setStatus(status, 'Loading…');
-    source().routeInfo(id, function (err, info) {
+    src.routeInfo(id, function (err, info) {
       if (err) return setStatus(status, "Couldn't load color: " + errText(err), true);
       var c = settings.color(info && info.color);
       if (!c) return setStatus(status, "Couldn't load color: no color for route " + id, true);
       row.setColor('#' + c);
-      var name = row.querySelector('input[name=name]');
-      var short = trim(info.shortName);
-      if (name && !trim(name.value) && short) name.value = short;
       setStatus(status, 'Official color (the watch shows the nearest of its 64 colors).');
     });
   }
 
-  // ---- stop picker (pinned stops and trips) -----------------------------------------------
-  var picker = { row: null, mode: '', routeId: '', info: null, token: 0 };
-  function pickerEl(sel) { return $('stop-picker').querySelector(sel); }
-  function fillSelect(select, items) {
-    clear(select);
-    for (var i = 0; i < items.length; i++) {
-      var o = document.createElement('option');
-      o.value = items[i][0];
-      o.textContent = items[i][1];
-      select.appendChild(o);
-    }
-  }
-  function closePicker() {
-    var p = $('stop-picker');
-    picker.row = null;
-    picker.info = null;
-    picker.token++;
-    p.hidden = true;
-    $('sec-connections').appendChild(p);
-  }
-  // routes to choose from for a trip: the configured ones, then the source's route list
-  function routeChoices() {
-    var c = readForm(), out = [], seen = {}, i;
-    function add(id, label) { if (id && !seen.hasOwnProperty(id)) { seen[id] = true; out.push([id, label || id]); } }
-    for (i = 0; i < c.routes.length; i++) add(c.routes[i].id, c.routes[i].name !== c.routes[i].id ? c.routes[i].id + ' · ' + c.routes[i].name : c.routes[i].id);
-    for (i = 0; i < c.connections.length; i++) add(c.connections[i].routeId);
-    var opts = $('route-options').querySelectorAll('option');
-    for (i = 0; i < opts.length; i++) add(opts[i].value, opts[i].value + ' · ' + opts[i].textContent);
-    return out;
-  }
-  function openPicker(row, mode) {
-    var p = $('stop-picker'), status = pickerEl('.picker-status');
-    picker.row = row;
-    picker.mode = mode;
-    row.parentNode.insertBefore(p, row.nextSibling);
-    p.hidden = false;
-    var choice = pickerEl('.picker-route-choice');
-    choice.hidden = mode !== 'destination';
-    pickerEl('.use').textContent = mode === 'destination' ? 'Use its position' : 'Use this stop';
-    if (mode === 'destination') {
-      var routes = routeChoices();
-      fillSelect(pickerEl('select[name=route]'), routes);
-      if (!routes.length) {
-        picker.token++;
-        resetPickerLists('?');
-        setStatus(status, 'Add a route above first: stops are listed per route.', true);
-        return;
-      }
-      loadPickerRoute(routes[0][0]);
-    } else {
-      loadPickerRoute(trim(rowValue(row, 'routeId')));
-    }
-  }
-  function resetPickerLists(label) {
-    pickerEl('.picker-route').textContent = label;
-    fillSelect(pickerEl('select[name=direction]'), []);
-    fillSelect(pickerEl('select[name=stop]'), []);
-    pickerEl('.use').disabled = true;
-  }
-  function loadPickerRoute(routeId) {
-    var status = pickerEl('.picker-status');
-    var token = ++picker.token;
-    picker.routeId = routeId;
-    picker.info = null;
-    resetPickerLists(routeId || '?');
-    if (!routeId) { setStatus(status, 'Enter the route id first.', true); return; }
-    if (!can('routeInfo')) { setStatus(status, sourceLabel() + " can't list a route's stops.", true); return; }
-    setStatus(status, 'Loading directions…');
-    source().routeInfo(routeId, function (err, info) {
-      if (token !== picker.token) return;
-      var dirs = info && info.directions instanceof Array ? info.directions : [];
-      if (!err && !dirs.length) err = new Error('no directions for route ' + routeId);
-      if (err) return setStatus(status, "Couldn't load directions: " + errText(err), true);
-      picker.info = info;
-      var items = [];
-      for (var i = 0; i < dirs.length; i++) items.push([String(dirs[i].id), dirs[i].name || 'Direction ' + dirs[i].id]);
-      fillSelect(pickerEl('select[name=direction]'), items);
-      setStatus(status, '');
-      loadStops();
-    });
-  }
-  function loadStops() {
-    var status = pickerEl('.picker-status'), info = picker.info;
-    var dirId = pickerEl('select[name=direction]').value, dir = null, i;
-    fillSelect(pickerEl('select[name=stop]'), []);
-    pickerEl('.use').disabled = true;
-    if (!info) return;
-    for (i = 0; i < info.directions.length; i++) if (String(info.directions[i].id) === dirId) dir = info.directions[i];
-    if (!dir) return;
-    var stops = info.stops || {}, items = [];
-    var ids = dir.stopIds instanceof Array ? dir.stopIds : [];
-    for (i = 0; i < ids.length; i++) {
-      var s = stops.hasOwnProperty(ids[i]) ? stops[ids[i]] : null;
-      items.push([String(ids[i]), (s && trim(s.name)) || String(ids[i])]);
-    }
-    fillSelect(pickerEl('select[name=stop]'), items);
-    pickerEl('.use').disabled = items.length === 0;
-    setStatus(status, items.length ? '' : 'No stops listed for this direction.', !items.length);
-  }
-  function useStop() {
-    var s = pickerEl('select[name=stop]'), row = picker.row, status = pickerEl('.picker-status');
-    var opt = s.options[s.selectedIndex];
-    if (!row || !opt) return;
-    if (picker.mode !== 'destination') {
-      row.querySelector('input[name=stopId]').value = opt.value;
-      row.querySelector('input[name=name]').value = opt.textContent;
-      closePicker();
-      if (state.learned) renderLearned();
-      return;
-    }
-    if (!can('stopInfo')) { setStatus(status, sourceLabel() + " can't look up stop positions.", true); return; }
-    var token = ++picker.token, label = opt.textContent;
-    pickerEl('.use').disabled = true;
-    setStatus(status, 'Loading the stop position…');
-    source().stopInfo(opt.value, function (err, info) {
-      if (token !== picker.token) return;
-      pickerEl('.use').disabled = false;
-      if (!err && !(info && isFinite(+info.lat) && isFinite(+info.lon))) err = new Error('no position for stop ' + opt.value);
-      if (err) return setStatus(status, "Couldn't load the stop: " + errText(err), true);
-      row.querySelector('input[name=lat]').value = coord(+info.lat);
-      row.querySelector('input[name=lon]').value = coord(+info.lon);
-      var name = row.querySelector('input[name=name]');
-      if (!trim(name.value)) name.value = trim(info.name) || label;
-      closePicker();
-    });
-  }
-
-  // ---- location ------------------------------------------------------------------------
+  // ---- location ------------------------------------------------------------------------------------------------
   function updateLocationMode() {
-    var fixed = document.querySelector('[data-field="location.mode"]').value === 'fixed';
+    var fixed = qs(document, '[data-field="location.mode"]').value === 'fixed';
     $('location-fixed').className = fixed ? '' : 'off';
   }
   function locate(status, onPos) {
@@ -928,46 +1228,46 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
     if (!navigator.geolocation) { btn.textContent = 'Location not available'; return; }
     btn.textContent = 'Locating…';
     navigator.geolocation.getCurrentPosition(function (p) {
-      document.querySelector('[data-field="location.lat"]').value = coord(p.coords.latitude);
-      document.querySelector('[data-field="location.lon"]').value = coord(p.coords.longitude);
+      qs(document, '[data-field="location.lat"]').value = coord(p.coords.latitude);
+      qs(document, '[data-field="location.lon"]').value = coord(p.coords.longitude);
       btn.textContent = 'Use my current position';
     }, function (e) {
       btn.textContent = 'Could not get position' + (e && e.message ? ': ' + e.message : '');
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
   }
 
-  // ---- learned weights / training ------------------------------------------------------
-  function keyLabel(key, config) {
+  // ---- learned weights / training --------------------------------------------------------------------------------
+  function runtime() { return view.build(readForm(), prefs, null); }
+  function learnedKeys() {
+    var keys = [], learned = state.learned || {};
+    for (var k in learned) if (learned.hasOwnProperty(k)) keys.push(k);
+    keys.sort();
+    return keys;
+  }
+  function keyLabel(key, rt) {
     var i, sep = key.indexOf(':'), kind = key.slice(0, sep), id = key.slice(sep + 1);
-    if (kind === 'route') {
-      for (i = 0; i < config.routes.length; i++) if (config.routes[i].id === id) return 'route ' + config.routes[i].name;
-      return 'route (not listed)';
+    var list = kind === 'route' ? rt.routes : rt.stops;
+    for (i = 0; list && i < list.length; i++) {
+      if (list[i].id !== id) continue;
+      return (kind === 'route' ? 'route ' : kind === 'ride' ? 'riding to ' : 'walking to ') + list[i].name;
     }
-    if (kind === 'conn') {
-      for (i = 0; i < config.connections.length; i++) if (config.connections[i].id === id) return 'pinned ' + config.connections[i].name;
-      return 'pinned (not listed)';
-    }
-    if (kind === 'stop') return config.stopScales.hasOwnProperty(id) ? 'stop' : 'stop (default scale)';
-    return '';
+    return kind === 'route' ? 'route (not saved)' : kind === 'ride' ? 'riding to a stop (not saved)' : kind === 'stop' ? 'walking to a stop (not saved)' : '';
   }
 
   function renderLearned() {
     var table = $('learned');
     clear(table);
     var learned = state.learned || {};
-    var keys = [];
-    for (var k in learned) if (learned.hasOwnProperty(k)) keys.push(k);
-    keys.sort();
+    var keys = learnedKeys();
     $('learned-count').textContent = String(keys.length);
     $('sample-count').textContent = String(state.samples.length);
     if (keys.length === 0) {
-      var tr0 = table.insertRow();
-      var td0 = tr0.insertCell();
+      var td0 = table.insertRow().insertCell();
       td0.className = 'empty';
       td0.textContent = 'No learned weights yet. They appear after training on your picks.';
       return;
     }
-    var config = readForm();
+    var rt = runtime();
     var head = table.createTHead().insertRow();
     var titles = ['Key', 'Scale', 'Learned'];
     for (var h = 0; h < titles.length; h++) {
@@ -983,11 +1283,11 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
       var code = document.createElement('code');
       code.textContent = keys[i];
       td.appendChild(code);
-      var lbl = keyLabel(keys[i], config);
-      if (lbl) { var sm = document.createElement('small'); sm.textContent = lbl; td.appendChild(sm); }
+      var lbl = keyLabel(keys[i], rt);
+      if (lbl) td.appendChild(el('small', '', lbl));
       var prior = tr.insertCell();
       prior.className = 'num';
-      prior.textContent = fmt(ranking.weightFor(keys[i], config, null));
+      prior.textContent = fmt(ranking.weightFor(keys[i], rt, null));
       var val = tr.insertCell();
       val.className = 'num';
       val.textContent = fmt(learned[keys[i]]);
@@ -997,16 +1297,16 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
   function pct(x) { return Math.round(x * 100) + '%'; }
 
   function trainNow() {
-    var config = readForm();
+    var rt = runtime();
     var out = $('train-result');
-    var res = optimize.train(state.samples, function (key) { return ranking.weightFor(key, config, null); }, config.training);
+    var res = optimize.train(state.samples, function (key) { return ranking.weightFor(key, rt, null); }, rt.training);
     if (!res || res.after.n === 0) {
       out.textContent = 'No usable picks to train on yet (0 samples with 2+ choices).';
       return;
     }
     state.learned = res.weights;
     state.learnedChanged = true;
-    out.textContent = 'Trained on ' + res.after.n + ' pick' + (res.after.n === 1 ? '' : 's') +
+    out.textContent = 'Trained on ' + plural(res.after.n, 'pick') +
       ': picked line ranked first ' + pct(res.before.accuracy) + ' → ' + pct(res.after.accuracy) +
       ', loss ' + res.before.loss.toFixed(3) + ' → ' + res.after.loss.toFixed(3) + '.';
     renderLearned();
@@ -1014,17 +1314,17 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
 
   function bakeLearned() {
     if (!state.learned) { $('train-result').textContent = 'Nothing to bake: no learned weights.'; return; }
-    var baked = ranking.bake(readForm(), state.learned);
+    var baked = view.bake(readForm(), state.learned);
     state.learned = null;
     state.learnedChanged = true;
     fillForm(baked);
-    $('train-result').textContent = 'Learned weights copied into the scales above. Save to keep them.';
+    $('train-result').textContent = 'Learned weights copied into your route and stop scales. Save to keep them.';
   }
 
   function resetLearned() {
     state.learned = null;
     state.learnedChanged = true;
-    $('train-result').textContent = 'Learned weights reset; the scales above apply again.';
+    $('train-result').textContent = 'Learned weights reset; your scales apply again.';
     renderLearned();
   }
 
@@ -1035,7 +1335,7 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
     renderLearned();
   }
 
-  // ---- save ------------------------------------------------------------------------------
+  // ---- save ------------------------------------------------------------------------------------------------
   function save() {
     var result = { config: readForm() };
     if (state.learnedChanged) result.learned = state.learned ? state.learned : null;
@@ -1043,60 +1343,72 @@ button.small { padding: 5px 10px; font-size: 13.5px; }
     document.location.href = state.returnTo + encodeURIComponent(JSON.stringify(result));
   }
 
-  // ---- wiring ----------------------------------------------------------------------------
+  // ---- wiring ------------------------------------------------------------------------------------------------
   function rangeHints() {
     var all = [[settings.RANGES, ''], [settings.TRAINING_RANGES || {}, 'training.'], [settings.SCHEDULE_RANGES || {}, 'schedule.']];
     for (var a = 0; a < all.length; a++) {
       for (var f in all[a][0]) {
         if (!all[a][0].hasOwnProperty(f)) continue;
         var r = all[a][0][f];
-        var el = document.querySelector('[data-field="' + all[a][1] + f + '"]');
-        if (!el) continue;
-        el.min = r.min; el.max = r.max;
-        var hint = el.parentNode.querySelector('.hint');
-        if (hint) hint.textContent += (hint.textContent ? ' · ' : '') + r.min + '…' + r.max;
+        var e = qs(document, '[data-field="' + all[a][1] + f + '"]');
+        if (!e) continue;
+        var unit = e.getAttribute('data-unit');
+        var lo = unit ? toDisplay(unit, r.min) : r.min, hi = unit ? toDisplay(unit, r.max) : r.max;
+        e.min = lo; e.max = hi;
+        var hint = e.parentNode.querySelector('.hint');
+        if (hint) hint.appendChild(document.createTextNode((trim(hint.textContent) ? ' · ' : '') + lo + '…' + hi));
       }
     }
   }
+  function prefsNote() {
+    var text = 'Distances in ' + (prefs.units === 'metric' ? 'meters and kilometers' : 'feet and miles') + ', times in the ' +
+      (prefs.clock24 ? '24-hour' : '12-hour') + ' clock';
+    $('prefs-note').textContent = text + (prefs.known ? ', as set on your Pebble.' : ' (from your phone; your Pebble will update this once connected).');
+  }
 
-  (function fillTypes() {
-    var types = registry.types(), items = [];
-    for (var i = 0; i < types.length; i++) items.push([types[i].type, types[i].label]);
-    fillSelect(typeSelect(), items);
-  })();
-
-  document.querySelector('[data-field="location.mode"]').addEventListener('change', updateLocationMode);
+  $('back').onclick = function () { if (location.hash) history.back(); else showPage('home'); };
+  var navs = qsa(document, '.nav-item');
+  for (var n = 0; n < navs.length; n++) {
+    (function (b) { b.onclick = function () { go(b.getAttribute('data-go')); }; })(navs[n]);
+  }
+  qs(document, '[data-field="location.mode"]').addEventListener('change', updateLocationMode);
   $('use-here').onclick = useHere;
-  $('add-route').onclick = function () { addRow('route').querySelector('input').focus(); };
-  $('add-connection').onclick = function () { addRow('connection').querySelector('input').focus(); };
-  $('add-stop-scale').onclick = function () { addRow('stop-scale').querySelector('input').focus(); };
+  $('add-provider').onclick = function () { var row = addProvider(); updateButtons(); if (row) flash(row); };
+  $('add-route').onclick = function () { openSearch('route', $('add-route'), pickRoute); };
+  $('add-stop').onclick = function () { openSearch('stop', $('add-stop'), pickStop); };
   $('add-destination').onclick = function () {
     var row = addDestination();
-    if (row) row.querySelector('input[name=name]').focus();
+    if (row) qs(row, 'input[name=name]').focus();
   };
   $('train-now').onclick = trainNow;
   $('bake-learned').onclick = bakeLearned;
   $('reset-learned').onclick = resetLearned;
   $('clear-samples').onclick = clearSamples;
   $('save').onclick = save;
-  typeSelect().addEventListener('change', function () { typeSelect().removeAttribute('data-keep'); refreshSource(); });
-  document.querySelector('[data-field="provider.baseUrl"]').addEventListener('change', refreshSource);
-  document.querySelector('[data-field="provider.apiKey"]').addEventListener('change', refreshSource);
-  pickerEl('select[name=route]').addEventListener('change', function () { loadPickerRoute(this.value); });
-  pickerEl('select[name=direction]').addEventListener('change', loadStops);
-  pickerEl('select[name=stop]').addEventListener('change', function () { pickerEl('.use').disabled = !this.value; });
-  pickerEl('.use').onclick = useStop;
-  pickerEl('.cancel').onclick = closePicker;
+  searchEl('.search-input').addEventListener('input', function () {
+    clearTimeout(search.timer);
+    search.timer = setTimeout(runSearch, 120);
+  });
+  searchEl('.search-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeSearch();
+    if (e.key === 'Enter') { var first = qs($('search'), '.result'); if (first) first.click(); }
+  });
+  searchEl('.search-cancel').onclick = closeSearch;
+  $('providers').addEventListener('change', function () { renderProviderInfo(); });
+  $('routes').addEventListener('change', function () { if (current === 'stops') renderStopMeta(); });
   // keep the "Scale" column of the learned table in sync with edits
-  document.querySelector('main').addEventListener('change', function () { if (state.learned) renderLearned(); });
+  document.querySelector('main').addEventListener('change', function () { if (state.learned && current === 'learning') renderLearned(); });
 
   window.readForm = readForm;
   window.fillForm = fillForm;
   window.save = save;
+  window.showPage = go;
 
+  fillUnitLabels();
   rangeHints();
+  prefsNote();
   fillForm(P.config);
-  refreshSource();
+  showPage(location.hash.replace(/^#/, '') || 'home');
 })();
 </script>
 </body>

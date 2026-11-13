@@ -3,8 +3,9 @@
 
 var settings = require('./settings');
 var protocol = require('./protocol');
+var view = require('./view');
 
-var STORAGE_KEYS = { config: 'busWatch.config', samples: 'busWatch.samples', learned: 'busWatch.learned' };
+var STORAGE_KEYS = { config: 'busWatch.config', samples: 'busWatch.samples', learned: 'busWatch.learned', prefs: 'busWatch.prefs' };
 
 function isPlainObject(v) {
   return v !== null && typeof v === 'object' && !(v instanceof Array);
@@ -38,12 +39,13 @@ function createSession(deps) {
   function getOptimize() { return optimize || (optimize = require('./optimize')); }
 
   var config = settings.defaults();
+  var prefs = view.prefs(null, deps.locale);   // the watch's display preferences (units, 24 h clock)
   var samples = [];
   var learned = {};
   var provider = null;
   var routeCache = {};
   var listId = 0;
-  var last = null;        // { listId, items, pos, now }
+  var last = null;        // { listId, items, pinned, ranked, pos, now, cfg }
   var running = false;
   var rerun = false;      // a refresh was requested by applySettings while one was running
 
@@ -90,8 +92,29 @@ function createSession(deps) {
 
   function sendList(items, status) {
     listId++;
-    send(protocol.encodeList(listId, items, status, { units: config.units }));
+    send(protocol.encodeList(listId, items, status, { units: prefs.units }));
     return listId;
+  }
+
+  // the runtime config (view.build) at pos; null = every transit system
+  function runtimeConfig(pos) {
+    return view.build(config, prefs, pos || null);
+  }
+
+  // feature keys of a version 1 config's learned weights / samples → version 2 (see settings.migrateKey)
+  function migrateLearning(providerId) {
+    var out = {};
+    for (var k in learned) if (learned.hasOwnProperty(k)) out[settings.migrateKey(k, providerId)] = learned[k];
+    learned = out;
+    for (var i = 0; i < samples.length; i++) {
+      var cands = (samples[i] && samples[i].candidates) || [];
+      for (var j = 0; j < cands.length; j++) {
+        var f = cands[j] && cands[j].features, nf = {};
+        if (!isPlainObject(f)) continue;
+        for (var fk in f) if (f.hasOwnProperty(fk)) nf[settings.migrateKey(fk, providerId)] = f[fk];
+        cands[j].features = nf;
+      }
+    }
   }
 
   function load() {
@@ -101,8 +124,34 @@ function createSession(deps) {
     samples = s instanceof Array ? s : [];
     var l = readJson(STORAGE_KEYS.learned);
     learned = isPlainObject(l) ? l : {};
+    prefs = view.prefs(readJson(STORAGE_KEYS.prefs), deps.locale);
+    if (c !== undefined && settings.isV1(c) && config.providers.length) {
+      migrateLearning(config.providers[0].id);
+      writeJson(STORAGE_KEYS.config, config);
+      writeJson(STORAGE_KEYS.learned, learned);
+      writeJson(STORAGE_KEYS.samples, samples);
+      log('settings migrated to version 2');
+    }
     provider = null;
     routeCache = {};
+  }
+
+  // {clock24, units ('metric'|'imperial'|null = the watch doesn't know)} from the watch. Saved; when the units change
+  // the last list is sent again with distances in the new units. Returns true when something changed.
+  function setPrefs(p) {
+    p = isPlainObject(p) ? p : {};
+    var next = { clock24: p.clock24 === true, units: prefs.units, known: prefs.known };
+    if (p.units === 'metric' || p.units === 'imperial') { next.units = p.units; next.known = true; }
+    var changed = next.units !== prefs.units || next.clock24 !== prefs.clock24 || next.known !== prefs.known;
+    if (!changed) return false;
+    var unitsChanged = next.units !== prefs.units;
+    prefs = next;
+    writeJson(STORAGE_KEYS.prefs, prefs);
+    if (unitsChanged && last && !running) {
+      var id = sendList(last.items, 'Updated ' + clockText(clock()));
+      last.listId = id;
+    }
+    return true;
   }
 
   function locate(cb) {
@@ -145,9 +194,9 @@ function createSession(deps) {
       if (err) return finish(err);
       if (!pos) return finish(new Error('no position'));
       sendStatus('Loading...');
-      var cfg = config;
-      var prov, cache;
+      var prov, cache, cfg;
       try {
+        cfg = runtimeConfig(pos);
         prov = getProvider();
         cache = routeCache;
       } catch (e) {
@@ -165,7 +214,7 @@ function createSession(deps) {
           var list = withPinned(pinned, ranked);
           var status = list.length === 0 ? 'No buses nearby' : 'Updated ' + clockText(clock());
           var id = sendList(list, status);
-          last = { listId: id, items: list, pinned: pinned, ranked: ranked, pos: pos, now: now };
+          last = { listId: id, items: list, pinned: pinned, ranked: ranked, pos: pos, now: now, cfg: cfg };
           ranked = list;
         } catch (e) {
           return finish(e);
@@ -210,8 +259,8 @@ function createSession(deps) {
     if (samples.length > max) samples = samples.slice(samples.length - max);
     writeJson(STORAGE_KEYS.samples, samples);
 
+    var cfg = last.cfg || runtimeConfig(last.pos);
     if (config.training.autoTrain) {
-      var cfg = config;
       try {
         var result = opt.train(samples, function (k) { return rank.weightFor(k, cfg, null); }, cfg.training);
         learned = (result && isPlainObject(result.weights)) ? result.weights : {};
@@ -221,10 +270,10 @@ function createSession(deps) {
       }
     }
 
-    var ranked = rank.rank(candidates, config, learned);
+    var ranked = rank.rank(candidates, cfg, learned);
     var list = withPinned(pinned, ranked);
     var newId = sendList(list, 'Learned (' + samples.length + ' picks)');
-    last = { listId: newId, items: list, pinned: pinned, ranked: ranked, pos: last.pos, now: last.now };
+    last = { listId: newId, items: list, pinned: pinned, ranked: ranked, pos: last.pos, now: last.now, cfg: cfg };
     return true;
   }
 
@@ -236,6 +285,7 @@ function createSession(deps) {
     }
     if (msg.type === 'select') select(msg.listId, msg.index);
     else if (msg.type === 'refresh') refresh();
+    else if (msg.type === 'prefs') setPrefs(msg);
     return msg;   // e.g. {type: 'wakeup'} is routed to the scheduler by the composition root
   }
 
@@ -260,13 +310,16 @@ function createSession(deps) {
   return {
     load: load,
     getConfig: function () { return config; },
+    getPrefs: function () { return prefs; },
+    setPrefs: setPrefs,
+    runtimeConfig: runtimeConfig,
     getSamples: function () { return samples; },
     getLearned: function () { return learned; },
     lastList: function () { return last; },
     refresh: refresh,
     select: select,
     handleWatchMessage: handleWatchMessage,
-    configPageParams: function () { return { config: config, samples: samples, learned: learned }; },
+    configPageParams: function () { return { config: config, samples: samples, learned: learned, prefs: prefs }; },
     applySettings: applySettings
   };
 }

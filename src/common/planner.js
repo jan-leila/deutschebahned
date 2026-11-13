@@ -447,7 +447,7 @@ function buildItems(config, data, pos, now) {
     var pinnedStop = route.stops && Object.prototype.hasOwnProperty.call(route.stops, conn.stopId) ? route.stops[conn.stopId] : null;
     if (!hasCoords(pinnedStop)) pinnedStop = null;
     var f = {};
-    f['conn:' + conn.id] = Math.round(plan.distance);
+    f['ride:' + conn.stopId] = Math.round(plan.distance);
     f['route:' + conn.routeId] = (onDrop ? onDrop : nextDrop) - now;
     items.push({
       kind: 'dropoff',

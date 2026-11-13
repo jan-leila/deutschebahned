@@ -3,6 +3,7 @@
 // modules, resolved lazily so tests and partial builds can inject fakes. ES5.
 
 var format = require('./format');
+var view = require('./view');
 
 var STORAGE_KEYS = { plans: 'busWatch.plans', handled: 'busWatch.handled' };
 var MAX_HANDLED = 100;
@@ -112,16 +113,24 @@ function createScheduler(deps) {
     return src;
   }
 
+  // cfg is a runtime view (view.build): only routes of systems that cover the origin or the destination are used
   function buildRequest(cfg, dest, origin, occurrence, now) {
     var ids = [], seen = {}, names = {}, colors = {};
     var routes = cfg.routes || [], conns = cfg.connections || [];
+    var areas = cfg.coverage || {};
+    function near(pid) {
+      if (pid === undefined || !areas.hasOwnProperty(pid)) return true;
+      return view.inArea(areas[pid], origin) || view.inArea(areas[pid], dest);
+    }
     function add(id) { if (id && !seen.hasOwnProperty(id)) { seen[id] = true; ids.push(id); } }
     for (var i = 0; i < routes.length; i++) {
+      if (!near(routes[i].providerId)) continue;
       add(routes[i].id);
       if (routes[i].name) names[routes[i].id] = routes[i].name;
       if (routes[i].color) colors[routes[i].id] = routes[i].color;
     }
-    for (var j = 0; j < conns.length; j++) add(conns[j].routeId);
+    // a view's connections only pair saved routes; a plain config's may name other routes
+    if (!cfg.coverage) for (var j = 0; j < conns.length; j++) add(conns[j].routeId);
     var s = cfg.schedule || {};
     return {
       origin: { lat: origin.lat, lon: origin.lon },

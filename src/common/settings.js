@@ -1,11 +1,15 @@
 // Configuration model: defaults, validation and (de)serialization. ES5 (runs in PebbleKit JS and the settings page).
 // See CONTRACTS.md §2.
 
-// Data sources are plug-ins (src/sources/); settings only checks the type looks like an id. '' = the default source.
-var PROVIDER_TYPE_RE = /^[a-z0-9_-]{1,32}$/;
-var UNITS = ['imperial', 'metric'];
+// Data sources are plug-ins (src/sources/); settings only checks that types and provider ids look like ids.
+var ID_RE = /^[a-z0-9_-]{1,32}$/;
+var DEFAULT_PROVIDER_TYPE = 'metrotransit';   // what a version 1 config's '' provider type meant
 var MAX_DESTINATIONS = 8;
+var MAX_PROVIDERS = 8;
 var LOCATION_MODES = ['gps', 'fixed'];
+var COVERAGE_MODES = ['auto', 'manual'];
+var COVERAGE_RADIUS = { min: 1000, max: 500000, integer: true };
+var DEFAULT_COVERAGE_RADIUS = 50000;
 
 var RANGES = {
   stopRadius: { min: 10, max: 5000, integer: true },
@@ -17,11 +21,9 @@ var RANGES = {
   pickupsPerItem: { min: 1, max: 3, integer: true },
   maxItems: { min: 1, max: 12, integer: true },
   refreshInterval: { min: 15, max: 3600, integer: true },
-  vehicleRadius: { min: 10, max: 2000, integer: true },
-  defaultStopScale: { min: -1000, max: 1000, integer: false },
-  defaultRouteScale: { min: -1000, max: 1000, integer: false },
-  defaultConnectionScale: { min: -1000, max: 1000, integer: false }
+  vehicleRadius: { min: 10, max: 2000, integer: true }
 };
+var SCALE_RANGE = { min: -1000, max: 1000, integer: false };
 
 var SCHEDULE_RANGES = {
   leadMinutes: { min: 0, max: 120, integer: true },
@@ -43,8 +45,9 @@ var TRAINING_RANGES = {
 
 function defaults() {
   return {
-    version: 1,
-    provider: { type: '', baseUrl: '', apiKey: '' },  // '' type = the default source; empty baseUrl / apiKey = the source's default
+    version: 2,
+    // transit systems; each saved route / stop belongs to one by providerId. Empty baseUrl / apiKey = the source's default.
+    providers: [defaultProvider(DEFAULT_PROVIDER_TYPE, DEFAULT_PROVIDER_TYPE)],
     location: { mode: 'gps', lat: 0, lon: 0 },
     stopRadius: 300,
     routeRadius: 80,
@@ -56,19 +59,18 @@ function defaults() {
     maxItems: 10,
     refreshInterval: 60,
     vehicleRadius: 250,
-    defaultStopScale: -1,
-    defaultRouteScale: -1,
-    defaultConnectionScale: -1,
     routes: [],
-    connections: [],
-    stopScales: {},
-    units: 'imperial',
-    clock24: false,
+    stops: [],
     destinations: [],
     schedule: { leadMinutes: 15, walkSpeed: 1.3, maxWalk: 800, transferWalk: 250, maxTransfers: 1, minTransfer: 120,
                 leaveReminder: true, fallbackMinutes: 60 },
     training: { autoTrain: true, learningRate: 0.05, iterations: 300, temperature: 60, regularization: 0.01, maxSamples: 200 }
   };
+}
+
+function defaultProvider(id, type) {
+  return { id: id, type: type, name: '', baseUrl: '', apiKey: '',
+           coverage: { mode: 'auto', lat: 0, lon: 0, radius: DEFAULT_COVERAGE_RADIUS } };
 }
 
 function isObject(v) { return v !== null && typeof v === 'object' && !(v instanceof Array); }
@@ -144,17 +146,152 @@ function weekdays(v) {
 
 function connectionId(routeId, stopId) { return routeId + '|' + stopId; }
 
+// finite number or null (for optional coordinates)
+function optCoord(v, range) {
+  var n = toNumber(v);
+  if (n === null) return null;
+  return num(n, 0, range);
+}
+
+// a free provider id derived from `base` ('metrotransit', 'metrotransit-2', ...)
+function freeId(base, seen) {
+  base = String(base || 'source').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 28) || 'source';
+  if (!seen.hasOwnProperty(base)) return base;
+  for (var n = 2; ; n++) if (!seen.hasOwnProperty(base + '-' + n)) return base + '-' + n;
+}
+
+function normalizeProviders(list) {
+  var out = [], seen = {};
+  var raw = list instanceof Array ? list : [];
+  for (var i = 0; i < raw.length && out.length < MAX_PROVIDERS; i++) {
+    var p = raw[i];
+    if (!isObject(p)) continue;
+    var type = str(p.type, '');
+    if (!ID_RE.test(type)) continue;
+    var id = str(p.id, '');
+    if (!ID_RE.test(id) || seen.hasOwnProperty(id)) id = freeId(type, seen);
+    seen[id] = true;
+    var cv = isObject(p.coverage) ? p.coverage : {};
+    out.push({
+      id: id, type: type, name: str(p.name, ''),
+      baseUrl: str(p.baseUrl, '').replace(/\/+$/, ''), apiKey: str(p.apiKey, ''),
+      coverage: { mode: oneOf(cv.mode, COVERAGE_MODES, 'auto'),
+                  lat: num(cv.lat, 0, { min: -90, max: 90 }), lon: num(cv.lon, 0, { min: -180, max: 180 }),
+                  radius: num(cv.radius, DEFAULT_COVERAGE_RADIUS, COVERAGE_RADIUS) }
+    });
+  }
+  return out;
+}
+
+function hasProvider(providers, id) {
+  for (var i = 0; i < providers.length; i++) if (providers[i].id === id) return true;
+  return false;
+}
+
+function normalizeRoutes(list, providers) {
+  var out = [], seen = {};
+  var raw = list instanceof Array ? list : [];
+  for (var i = 0; i < raw.length; i++) {
+    var ro = raw[i];
+    if (!isObject(ro)) continue;
+    var pid = str(ro.providerId, ''), id = str(ro.id, '');
+    if (id === '' || !hasProvider(providers, pid)) continue;
+    var key = pid + '/' + id;
+    if (seen.hasOwnProperty(key)) continue;
+    seen[key] = true;
+    var name = str(ro.name, '');
+    out.push({ providerId: pid, id: id, name: name === '' ? id : name, scale: num(ro.scale, 0, SCALE_RANGE), color: color(ro.color) });
+  }
+  return out;
+}
+
+function normalizeStops(list, providers) {
+  var out = [], seen = {};
+  var raw = list instanceof Array ? list : [];
+  for (var i = 0; i < raw.length; i++) {
+    var so = raw[i];
+    if (!isObject(so)) continue;
+    var pid = str(so.providerId, ''), id = str(so.id, '');
+    if (id === '' || !hasProvider(providers, pid)) continue;
+    var key = pid + '/' + id;
+    if (seen.hasOwnProperty(key)) continue;
+    seen[key] = true;
+    var name = str(so.name, '');
+    var lat = optCoord(so.lat, { min: -90, max: 90 }), lon = optCoord(so.lon, { min: -180, max: 180 });
+    if (lat === null || lon === null) { lat = null; lon = null; }
+    out.push({ providerId: pid, id: id, name: name === '' ? id : name, lat: lat, lon: lon,
+               walkScale: num(so.walkScale, 0, SCALE_RANGE), rideScale: num(so.rideScale, 0, SCALE_RANGE) });
+  }
+  return out;
+}
+
+// A version 1 config (one `provider`, `connections` + `stopScales`, default scales) as version 2 lists.
+// Its single source becomes provider `<type>`; a pinned stop's route is saved too, so its drop-offs keep working.
+function migrateV1(r) {
+  var p = isObject(r.provider) ? r.provider : {};
+  var type = str(p.type, '');
+  if (!ID_RE.test(type)) type = DEFAULT_PROVIDER_TYPE;
+  var prov = defaultProvider(type, type);
+  prov.baseUrl = str(p.baseUrl, '');
+  prov.apiKey = str(p.apiKey, '');
+  var routes = [], stops = [], routeAt = {}, stopAt = {}, i;
+  var rawRoutes = r.routes instanceof Array ? r.routes : [];
+  for (i = 0; i < rawRoutes.length; i++) {
+    var ro = rawRoutes[i];
+    if (!isObject(ro)) continue;
+    var rid = str(ro.id, '');
+    if (rid === '' || routeAt.hasOwnProperty(rid)) continue;
+    routeAt[rid] = true;
+    routes.push({ providerId: type, id: rid, name: ro.name, color: ro.color,
+                  scale: toNumber(ro.scale) !== null ? ro.scale : r.defaultRouteScale });
+  }
+  var conns = r.connections instanceof Array ? r.connections : [];
+  for (i = 0; i < conns.length; i++) {
+    var c = conns[i];
+    if (!isObject(c)) continue;
+    var cr = str(c.routeId, ''), cs = str(c.stopId, '');
+    if (cr === '' || cs === '') continue;
+    if (!routeAt.hasOwnProperty(cr)) { routeAt[cr] = true; routes.push({ providerId: type, id: cr, scale: 0 }); }
+    if (stopAt.hasOwnProperty(cs)) continue;
+    stopAt[cs] = stops.length;
+    stops.push({ providerId: type, id: cs, name: c.name,
+                 rideScale: toNumber(c.scale) !== null ? c.scale : r.defaultConnectionScale, walkScale: 0 });
+  }
+  var ss = isObject(r.stopScales) ? r.stopScales : {};
+  for (var k in ss) {
+    if (!ss.hasOwnProperty(k)) continue;
+    var sid = str(k, '');
+    if (sid === '' || toNumber(ss[k]) === null) continue;
+    if (stopAt.hasOwnProperty(sid)) stops[stopAt[sid]].walkScale = ss[k];
+    else { stopAt[sid] = stops.length; stops.push({ providerId: type, id: sid, walkScale: ss[k], rideScale: 0 }); }
+  }
+  return { providers: [prov], routes: routes, stops: stops };
+}
+
+function isV1(r) { return isObject(r) && !(r.providers instanceof Array) && r.version !== 2; }
+
+// Feature / learned-weight key of a version 1 config → version 2 ('stop:S' → 'stop:<pid>/S', 'route:R' → 'route:<pid>/R',
+// 'conn:R|S' → 'ride:<pid>/S'); keys that already name a provider, or that aren't feature keys, are returned unchanged.
+function migrateKey(key, providerId) {
+  if (typeof key !== 'string') return key;
+  var i = key.indexOf(':');
+  if (i <= 0) return key;
+  var kind = key.slice(0, i), id = key.slice(i + 1);
+  if (kind === 'conn') {
+    var bar = id.indexOf('|');
+    return bar < 0 ? key : 'ride:' + providerId + '/' + id.slice(bar + 1);
+  }
+  if ((kind === 'stop' || kind === 'route') && id.indexOf('/') < 0) return kind + ':' + providerId + '/' + id;
+  return key;
+}
+
 function normalize(raw) {
   var d = defaults();
   var r = isObject(raw) ? raw : {};
-  var out = { version: 1 };
+  var out = { version: 2 };
 
-  var p = isObject(r.provider) ? r.provider : {};
-  out.provider = {
-    type: typeof p.type === 'string' && PROVIDER_TYPE_RE.test(str(p.type, '')) ? str(p.type, '') : d.provider.type,
-    baseUrl: str(p.baseUrl, d.provider.baseUrl).replace(/\/+$/, ''),
-    apiKey: str(p.apiKey, d.provider.apiKey)
-  };
+  var lists = isV1(r) ? migrateV1(r) : r;
+  out.providers = lists.providers instanceof Array ? normalizeProviders(lists.providers) : d.providers;
 
   var l = isObject(r.location) ? r.location : {};
   out.location = {
@@ -167,47 +304,8 @@ function normalize(raw) {
     if (RANGES.hasOwnProperty(f)) out[f] = num(r[f], d[f], RANGES[f]);
   }
 
-  var routes = [], seenRoutes = {};
-  var rawRoutes = r.routes instanceof Array ? r.routes : [];
-  for (var i = 0; i < rawRoutes.length; i++) {
-    var ro = rawRoutes[i];
-    if (!isObject(ro)) continue;
-    var id = str(ro.id, '');
-    if (id === '' || seenRoutes.hasOwnProperty(id)) continue;
-    seenRoutes[id] = true;
-    var name = str(ro.name, '');
-    routes.push({ id: id, name: name === '' ? id : name, scale: num(ro.scale, out.defaultRouteScale), color: color(ro.color) });
-  }
-  out.routes = routes;
-
-  var conns = [], seenConns = {};
-  var rawConns = r.connections instanceof Array ? r.connections : [];
-  for (var j = 0; j < rawConns.length; j++) {
-    var c = rawConns[j];
-    if (!isObject(c)) continue;
-    var routeId = str(c.routeId, ''), stopId = str(c.stopId, '');
-    if (routeId === '' || stopId === '') continue;
-    var cid = connectionId(routeId, stopId);
-    if (seenConns.hasOwnProperty(cid)) continue;
-    seenConns[cid] = true;
-    var cname = str(c.name, '');
-    conns.push({ id: cid, routeId: routeId, stopId: stopId, name: cname === '' ? stopId : cname,
-                 scale: num(c.scale, out.defaultConnectionScale) });
-  }
-  out.connections = conns;
-
-  out.stopScales = {};
-  if (isObject(r.stopScales)) {
-    for (var k in r.stopScales) {
-      if (!r.stopScales.hasOwnProperty(k)) continue;
-      var key = str(k, '');
-      var v = toNumber(r.stopScales[k]);
-      if (key !== '' && v !== null) out.stopScales[key] = v;
-    }
-  }
-
-  out.units = oneOf(r.units, UNITS, d.units);
-  out.clock24 = bool(r.clock24, d.clock24);
+  out.routes = normalizeRoutes(lists.routes, out.providers);
+  out.stops = normalizeStops(lists.stops, out.providers);
 
   var dests = [], seenDests = {}, pendingIds = [];
   var rawDests = r.destinations instanceof Array ? r.destinations : [];
@@ -262,10 +360,18 @@ module.exports = {
   RANGES: RANGES,
   TRAINING_RANGES: TRAINING_RANGES,
   SCHEDULE_RANGES: SCHEDULE_RANGES,
-  UNITS: UNITS,
+  SCALE_RANGE: SCALE_RANGE,
+  COVERAGE_RADIUS: COVERAGE_RADIUS,
   MAX_DESTINATIONS: MAX_DESTINATIONS,
+  MAX_PROVIDERS: MAX_PROVIDERS,
+  ID_RE: ID_RE,
+  freeId: freeId,
+  isV1: isV1,
+  migrateKey: migrateKey,
   clockTime: clockTime,
   LOCATION_MODES: LOCATION_MODES,
+  COVERAGE_MODES: COVERAGE_MODES,
+  defaultProvider: defaultProvider,
   defaults: defaults,
   normalize: normalize,
   parse: parse,

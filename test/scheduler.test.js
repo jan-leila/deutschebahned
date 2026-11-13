@@ -20,17 +20,21 @@ function memoryStorage(init) {
   };
 }
 
+// the scheduler gets a runtime view: normalized destinations / schedule / location, plus routes, connections,
+// units and clock24 as given
 function makeConfig(extra) {
-  return settings.normalize(Object.assign({
+  const merged = Object.assign({
     location: { mode: 'fixed', lat: 44.97, lon: -93.26 },
-    routes: [{ id: '21', name: 'A Line', color: 'ff0000' }, { id: '6' }],
+    routes: [{ id: '21', name: 'A Line', color: 'FF0000' }, { id: '6' }],
     connections: [{ routeId: '2', stopId: 's1' }, { routeId: '21', stopId: 's2' }],
     destinations: [
       { id: 'work', name: 'Work', lat: 44.98, lon: -93.27, arriveBy: '08:00' },
       { id: 'gym', name: 'Gym', lat: 44.99, lon: -93.28, arriveBy: '09:00' },
     ],
     schedule: { walkSpeed: 1.5, maxWalk: 600, transferWalk: 200, maxTransfers: 1, minTransfer: 90 },
-  }, extra || {}));
+  }, extra || {});
+  return Object.assign(settings.normalize(merged), { routes: merged.routes.map(r => Object.assign({ name: r.id }, r)), connections: merged.connections,
+    units: merged.units || 'imperial', clock24: !!merged.clock24 });
 }
 
 function busPlan(req, leaveOffset, color) {
@@ -317,4 +321,14 @@ test('cb exactly once even when the router calls back twice or throws', async ()
   assert.equal(n, 1);
   assert.equal(env.scheduler.plans().work.plan, null);
   assert.equal(env.scheduler.plans().gym.plan.leaveAt, OCC_GYM - 1800);
+});
+
+test('replan: with a runtime view, only routes of systems covering the origin or the destination are used', async () => {
+  const cfg = makeConfig({
+    routes: [{ id: 'near/21', providerId: 'near', name: 'A Line' }, { id: 'far/9', providerId: 'far' }, { id: 'any/3', providerId: 'any' }],
+    connections: [{ id: 'far/9|far/s', routeId: 'far/9', stopId: 'far/s' }] });
+  cfg.coverage = { near: { lat: 44.97, lon: -93.26, radius: 20000 }, far: { lat: 47.6, lon: -122.3, radius: 20000 }, any: null };
+  const env = setup({ config: cfg });
+  await env.replan();
+  assert.deepEqual(env.router.calls[0].req.routeIds, ['near/21', 'any/3']);
 });

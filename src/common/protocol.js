@@ -145,7 +145,17 @@ function decodeWatchMessage(payload) {
     return { type: 'select', listId: Number(payload.LIST_ID), index: Number(payload.SELECT_INDEX) };
   }
   if (has(payload, 'REFRESH')) return { type: 'refresh' };
+  if (has(payload, 'WATCH_PREFS')) return decodePrefs(payload.WATCH_PREFS);
   return null;
+}
+
+// WATCH_PREFS flags (sent by the watch once the phone talks to it): bit 0 = 24 h clock, bit 2 = the watch knows the
+// user's measurement system, bit 1 = it is metric. → {type: 'prefs', clock24, units: 'metric'|'imperial'|null}
+var PREFS = { CLOCK24: 1, METRIC: 2, UNITS_KNOWN: 4 };
+function decodePrefs(v) {
+  var n = Number(v) | 0;
+  return { type: 'prefs', clock24: (n & PREFS.CLOCK24) !== 0,
+           units: (n & PREFS.UNITS_KNOWN) ? ((n & PREFS.METRIC) ? 'metric' : 'imperial') : null };
 }
 
 // Sends messages one at a time through sendFn(dict, onOk, onErr) (= Pebble.sendAppMessage).
@@ -242,5 +252,6 @@ module.exports = {
   encodeWakeups: encodeWakeups,
   encodeNotify: encodeNotify,
   decodeWatchMessage: decodeWatchMessage,
+  PREFS: PREFS,
   createSender: createSender
 };

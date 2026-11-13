@@ -7,6 +7,8 @@ const geo = require('../src/common/geo');
 const settings = require('../src/common/settings');
 const protocol = require('../src/common/protocol');
 const { createScheduler } = require('../src/common/scheduler');
+const federation = require('../src/common/federation');
+const view = require('../src/common/view');
 const { createRegistry } = require('../src/sources/registry');
 
 const CENTER = { lat: 44.97, lon: -93.26 };
@@ -23,12 +25,13 @@ function world() {
   let now = Math.floor(new Date(2026, 10, 13, 7, 0, 0).getTime() / 1000);
   // route R1 runs north through the centre (mock: bearing 0); stop 12 is 1800 m north of the start → 1800 m - 3000 m... use its coords
   const registry = createRegistry(require('../src/sources/all'));
-  const base = settings.normalize({ provider: { type: 'mock' }, location: { mode: 'gps', lat: CENTER.lat, lon: CENTER.lon },
-    routes: [{ id: 'R1', name: 'One', color: '#E53935' }] });
-  const probe = registry.create(base, { clock: () => now });
-  return new Promise(resolve => probe.route('R1', (err, route) => {
+  const base = settings.normalize({ version: 2, providers: [{ id: 'mock', type: 'mock' }],
+    location: { mode: 'gps', lat: CENTER.lat, lon: CENTER.lon },
+    routes: [{ providerId: 'mock', id: 'R1', name: 'One', color: '#E53935' }] });
+  const probe = federation.fromConfig(registry, base, { clock: () => now });
+  return new Promise(resolve => probe.route('mock/R1', (err, route) => {
     assert.ifError(err);
-    const work = route.stops['R1:s14'];   // 2600 m north of the centre
+    const work = route.stops['mock/R1:s14'];   // 2600 m north of the centre
     const arriveBy = now + 50 * 60;
     const config = settings.normalize(Object.assign({}, base, {
       destinations: [{ id: 'work', name: 'Work', lat: work.lat, lon: work.lon, arriveBy: hhmm(arriveBy), days: [] }],
@@ -36,9 +39,11 @@ function world() {
     }));
     const out = [];
     const storage = memoryStorage();
-    const source = registry.create(config, { clock: () => now });
+    const source = federation.fromConfig(registry, config, { clock: () => now });
+    // as in src/pkjs/index.js: the scheduler gets the runtime view of every system
+    const runtime = view.build(config, { units: 'imperial', clock24: false, known: true }, null);
     const scheduler = createScheduler({
-      storage, clock: () => now, getConfig: () => config, getSource: () => source,
+      storage, clock: () => now, getConfig: () => runtime, getSource: () => source,
       locate: cb => setTimeout(() => cb(null, CENTER), 0),
       sendWakeups: w => out.push(...protocol.encodeWakeups(w)),
       notify: n => out.push(protocol.encodeNotify(n)),
@@ -58,7 +63,7 @@ test('destination → plan on route R1 → wakeups → re-check notification at 
   assert.equal(entry.occurrence, w.arriveBy);
   const bus = plan.legs.filter(l => l.mode === 'bus');
   assert.equal(bus.length, 1);
-  assert.equal(bus[0].routeId, 'R1');
+  assert.equal(bus[0].routeId, 'mock/R1');
   assert.equal(bus[0].dir, 'NB');
   assert.equal(bus[0].color, 'E53935');
   assert.ok(plan.arriveAt <= w.arriveBy, 'arrives in time');

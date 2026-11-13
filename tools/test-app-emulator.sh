@@ -18,11 +18,11 @@ cd "$ROOT"
 
 fail() { echo "FAIL: $*"; pebble kill >/dev/null 2>&1 || true; exit 1; }
 
-# settings the fake browser "saves": mock network centred on Seattle, two routes, one pinned stop
+# settings the fake browser "saves": mock network centred on Seattle, two routes, one saved stop
 cat > "$STATE/result.json" <<'JSON'
-{"config":{"provider":{"type":"mock"},"location":{"mode":"fixed","lat":47.6,"lon":-122.3},
- "routes":[{"id":"R1","name":"44"},{"id":"R2","name":"E"}],
- "connections":[{"routeId":"R1","stopId":"R1:s12","name":"Home"}]}}
+{"config":{"version":2,"providers":[{"id":"mock","type":"mock"}],"location":{"mode":"fixed","lat":47.6,"lon":-122.3},
+ "routes":[{"providerId":"mock","id":"R1","name":"44"},{"providerId":"mock","id":"R2","name":"E"}],
+ "stops":[{"providerId":"mock","id":"R1:s12","name":"Home"}]}}
 JSON
 # pebble emu-app-config opens $BROWSER with the settings URL; answer it like the page's Save would
 cat > "$STATE/fakebrowser.sh" <<'SH'

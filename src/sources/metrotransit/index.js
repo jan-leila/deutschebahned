@@ -495,8 +495,66 @@ function createMetroTransit(opts, http, deps) {
     });
   }
 
+  // every route and stop (search index): the route list, then each route's details and stop lists (a route already
+  // built and stored also gives its stops' positions). Routes that fail are listed without stops.
+  function catalog(cb, onProgress) {
+    cb = once(cb);
+    listRoutes(function (err, list) {
+      if (err) return cb(err);
+      list = list || [];
+      var total = list.length, count = 0, routes = [], stops = {}, order = [];
+      if (!total) return cb(null, { routes: [], stops: [] });
+      function addStop(id, name, routeId, c) {
+        if (!stops.hasOwnProperty(id)) { stops[id] = { id: id, name: name, routeIds: [] }; order.push(id); }
+        var s = stops[id];
+        if (!s.name && name) s.name = name;
+        if (s.routeIds.indexOf(routeId) < 0) s.routeIds.push(routeId);
+        if (c && typeof c.lat === 'number' && s.lat === undefined) { s.lat = c.lat; s.lon = c.lon; }
+      }
+      function finished() {
+        count++;
+        if (typeof onProgress === 'function') onProgress(count, total);
+        if (count < total) return;
+        var out = [];
+        for (var k = 0; k < order.length; k++) out.push(stops[order[k]]);
+        cb(null, { routes: routes, stops: out });
+      }
+      for (var i = 0; i < list.length; i++) {
+        (function (i, entry) {
+          var id = entry.id;
+          routes[i] = { id: id, shortName: id, longName: entry.label === 'Route ' + id ? '' : entry.label };
+          var built = builtRoutes.done.hasOwnProperty(id) ? builtRoutes.done[id] : cacheGet('route.' + id);
+          if (built) {
+            routes[i] = { id: id, shortName: built.shortName || id, longName: built.longName || routes[i].longName };
+            for (var d = 0; d < built.directions.length; d++) {
+              var ids = built.directions[d].stopIds || [];
+              for (var k = 0; k < ids.length; k++) {
+                var bs = built.stops[ids[k]];
+                if (bs) addStop(ids[k], bs.name, id, bs);
+              }
+            }
+            return setTimeout(finished, 0);
+          }
+          loadDetails(id, function (e, details) {
+            if (!e && details) {
+              routes[i] = { id: id, shortName: details.shortName || id, longName: details.longName || routes[i].longName };
+              for (var d = 0; d < details.lists.length; d++) {
+                var l = details.lists[d] || [];
+                for (var k = 0; k < l.length; k++) {
+                  var c = stopCoords.done.hasOwnProperty(l[k].id) ? stopCoords.done[l[k].id] : null;
+                  addStop(l[k].id, l[k].name, id, c);
+                }
+              }
+            }
+            finished();
+          });
+        })(i, list[i]);
+      }
+    });
+  }
+
   return { stopsNear: stopsNear, arrivals: arrivals, route: route, vehicles: vehicles,
-           listRoutes: listRoutes, routeInfo: routeInfo, stopInfo: stopInfo };
+           listRoutes: listRoutes, routeInfo: routeInfo, stopInfo: stopInfo, catalog: catalog };
 }
 
 var plugin = {

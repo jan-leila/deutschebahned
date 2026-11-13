@@ -6,8 +6,9 @@
 
 function defaultClock() { return Math.floor(new Date().getTime() / 1000); }
 
-// configured route ids, then connection route ids; deduplicated, config order
-function configuredRouteIds(config) {
+// configured route ids (of system providerId when given: routes saved for another system are skipped), then any
+// version 1 connection route ids; deduplicated, config order
+function configuredRouteIds(config, providerId) {
   var out = [];
   var seen = {};
   function add(id) {
@@ -20,25 +21,33 @@ function configuredRouteIds(config) {
   var routes = (config && config.routes) || [];
   var conns = (config && config.connections) || [];
   var i;
-  for (i = 0; i < routes.length; i++) if (routes[i]) add(routes[i].id);
+  for (i = 0; i < routes.length; i++) if (routes[i] && mine(routes[i], providerId)) add(routes[i].id);
   for (i = 0; i < conns.length; i++) if (conns[i]) add(conns[i].routeId);
   return out;
 }
 
-// What a plug-in gets besides its own options: I/O and the bits of the app config a source may need.
-function sourceContext(config, deps) {
+// a saved route / stop belongs to system providerId (entries without a providerId belong to every system)
+function mine(entry, providerId) {
+  return providerId === undefined || entry.providerId === undefined || entry.providerId === providerId;
+}
+
+// What a plug-in gets besides its own options: I/O and the bits of the app config a source may need
+// (only system providerId's routes when given).
+function sourceContext(config, deps, providerId) {
   deps = deps || {};
   var routes = [];
   var cfgRoutes = (config && config.routes) || [];
   for (var i = 0; i < cfgRoutes.length; i++) {
-    if (cfgRoutes[i]) routes.push({ id: String(cfgRoutes[i].id), name: String(cfgRoutes[i].name || cfgRoutes[i].id) });
+    if (cfgRoutes[i] && mine(cfgRoutes[i], providerId)) {
+      routes.push({ id: String(cfgRoutes[i].id), name: String(cfgRoutes[i].name || cfgRoutes[i].id) });
+    }
   }
   var loc = (config && config.location) || {};
   return {
     http: deps.http,
     clock: deps.clock || defaultClock,
     storage: deps.storage,
-    routeIds: configuredRouteIds(config),
+    routeIds: configuredRouteIds(config, providerId),
     routes: routes,
     center: { lat: +loc.lat || 0, lon: +loc.lon || 0 }
   };
@@ -73,7 +82,15 @@ function createRegistry(plugins) {
       for (var i = 0; i < list.length; i++) out.push({ type: list[i].type, label: list[i].label || list[i].type });
       return out;
     },
-    // provider for config.provider.type (see resolve), created with options = config.provider
+    // provider for one configured system entry = {id, type, baseUrl, apiKey} (type resolved as above); its context
+    // holds only that system's saved routes
+    createFor: function (entry, config, deps) {
+      entry = entry || {};
+      var plugin = resolve(entry.type);
+      if (!plugin) throw new Error('no transit data source registered');
+      return plugin.create({ baseUrl: entry.baseUrl || '', apiKey: entry.apiKey || '' }, sourceContext(config, deps, entry.id));
+    },
+    // provider for a single-source config ({provider: {type, baseUrl, apiKey}, routes}); tools and tests
     create: function (config, deps) {
       var opts = (config && config.provider) || {};
       var plugin = resolve(opts.type);

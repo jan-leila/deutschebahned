@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const COMMON = ['geo', 'settings', 'ranking', 'optimize', 'directions', 'format'];
+const COMMON = ['geo', 'settings', 'view', 'catalog', 'federation', 'ranking', 'optimize', 'directions', 'format'];
 const MODULES_MARKER = '<!--BUSWATCH-MODULES-->';
 const PARAMS_MARKER = '<!--PARAMS-->';
 

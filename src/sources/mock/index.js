@@ -10,6 +10,8 @@ var HOP = 50;             // seconds between consecutive stops
 var SPEED = 8;            // m/s, live vehicle positions
 var ON_ROAD = 750;        // seconds a run is reported as a vehicle
 var MOCK_COLORS = ['E53935', '1E88E5', '43A047', 'FB8C00', '8E24AA', '00897B'];
+// demo routes every mock network has after the configured ones, so there is something to search for
+var DEMO_ROUTES = [{ id: 'M1', name: 'Mock 1' }, { id: 'M2', name: 'Mock 2' }, { id: 'M3', name: 'Mock 3' }];
 
 function later(cb, err, value) {
   setTimeout(function () { cb(err, value); }, 0);
@@ -17,7 +19,7 @@ function later(cb, err, value) {
 
 function createMock(config, clock) {
   var center = { lat: +config.location.lat, lon: +config.location.lon };
-  var routesCfg = config.routes || [];
+  var routesCfg = (config.routes || []).concat(DEMO_ROUTES);
   var routes = {};      // routeId -> {id, name, bearing, stops: [{id,name,lat,lon}]}
   var stopIndex = {};   // stopId -> {routeId, k, stop}
   var allStops = [];    // [{id,name,lat,lon,routeId}]
@@ -146,8 +148,23 @@ function createMock(config, clock) {
     later(cb, null, { id: s.id, name: s.name, lat: s.lat, lon: s.lon });
   }
 
+  // every route and stop of the network (search index)
+  function catalog(cb, onProgress) {
+    var routesOut = [], stopsOut = [];
+    for (var i = 0; i < routeOrder.length; i++) {
+      var r = routes[routeOrder[i]];
+      routesOut.push({ id: r.id, shortName: r.name, longName: r.name + ' via Mock Av - Centre - Station ' + r.id });
+      for (var k = 0; k < r.stops.length; k++) {
+        var s = r.stops[k];
+        stopsOut.push({ id: s.id, name: s.name, lat: s.lat, lon: s.lon, routeIds: [r.id] });
+      }
+    }
+    if (typeof onProgress === 'function') onProgress(routeOrder.length, routeOrder.length);
+    later(cb, null, { routes: routesOut, stops: stopsOut });
+  }
+
   return { stopsNear: stopsNear, arrivals: arrivals, route: route, vehicles: vehicles,
-           listRoutes: listRoutes, routeInfo: route, stopInfo: stopInfo };
+           listRoutes: listRoutes, routeInfo: route, stopInfo: stopInfo, catalog: catalog };
 }
 
 var plugin = {

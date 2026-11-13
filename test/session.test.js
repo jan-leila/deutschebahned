@@ -17,7 +17,7 @@ function memoryStorage(init) {
 const NOW = 1_800_000_000;
 const ITEMS = [
   { kind: 'pickup', key: 'p1', title: 'P1', times: [NOW + 60], features: { 'stop:a': 100, 'route:r': 60 } },
-  { kind: 'dropoff', key: 'd1', title: 'D1', times: [0, NOW + 600, NOW + 120], features: { 'conn:r|z': 10, 'route:r': 600 } },
+  { kind: 'dropoff', key: 'd1', title: 'D1', times: [0, NOW + 600, NOW + 120], features: { 'ride:z': 10, 'route:r': 600 } },
 ];
 
 function harness(opts) {
@@ -60,7 +60,8 @@ const refresh = s => new Promise((resolve, reject) => s.refresh((e, items) => (e
 const statuses = sent => sent.filter(m => 'STATUS' in m && !('ITEM_COUNT' in m)).map(m => m.STATUS);
 
 test('storage keys', () => {
-  assert.deepEqual(STORAGE_KEYS, { config: 'busWatch.config', samples: 'busWatch.samples', learned: 'busWatch.learned' });
+  assert.deepEqual(STORAGE_KEYS, { config: 'busWatch.config', samples: 'busWatch.samples', learned: 'busWatch.learned',
+    prefs: 'busWatch.prefs' });
 });
 
 test('load: defaults on empty or corrupt storage', () => {
@@ -74,13 +75,46 @@ test('load: defaults on empty or corrupt storage', () => {
 
 test('load: reads and normalizes stored values', () => {
   const { session } = harness({ storage: {
-    'busWatch.config': JSON.stringify({ maxItems: '5' }),
+    'busWatch.config': JSON.stringify({ version: 2, providers: [{ id: 'p', type: 'mock' }], maxItems: '5' }),
     'busWatch.samples': JSON.stringify([{ chosen: 0, candidates: [] }]),
-    'busWatch.learned': JSON.stringify({ 'stop:a': -2 }) } });
+    'busWatch.learned': JSON.stringify({ 'stop:p/a': -2 }) } });
   session.load();
   assert.equal(session.getConfig().maxItems, 5);
   assert.equal(session.getSamples().length, 1);
-  assert.deepEqual(session.getLearned(), { 'stop:a': -2 });
+  assert.deepEqual(session.getLearned(), { 'stop:p/a': -2 });
+});
+
+test('load: a version 1 config is migrated, with its learned weights and samples', () => {
+  const h = harness({ storage: {
+    'busWatch.config': JSON.stringify({ provider: { type: 'onebusaway', apiKey: 'k' }, routes: [{ id: 'r', scale: -2 }],
+      connections: [{ routeId: 'r', stopId: 'z', name: 'Home', scale: -3 }], stopScales: { a: -1 } }),
+    'busWatch.samples': JSON.stringify([{ chosen: 0, candidates: [{ key: 'x', features: { 'stop:a': 5, 'conn:r|z': 7, 'route:r': 9 } }] }]),
+    'busWatch.learned': JSON.stringify({ 'stop:a': -2, 'conn:r|z': -4, 'route:r': -1, other: 3 }) } });
+  h.session.load();
+  const c = h.session.getConfig();
+  assert.deepEqual(c.providers.map(p => [p.id, p.type, p.apiKey]), [['onebusaway', 'onebusaway', 'k']]);
+  assert.deepEqual(c.routes.map(r => [r.providerId, r.id, r.scale]), [['onebusaway', 'r', -2]]);
+  assert.deepEqual(c.stops.map(s => [s.id, s.name, s.walkScale, s.rideScale]), [['z', 'Home', 0, -3], ['a', 'a', -1, 0]]);
+  assert.deepEqual(h.session.getLearned(), { 'stop:onebusaway/a': -2, 'ride:onebusaway/z': -4, 'route:onebusaway/r': -1, other: 3 });
+  assert.deepEqual(h.session.getSamples()[0].candidates[0].features,
+    { 'stop:onebusaway/a': 5, 'ride:onebusaway/z': 7, 'route:onebusaway/r': 9 });
+  assert.equal(JSON.parse(h.storage.getItem('busWatch.config')).version, 2, 'saved migrated');
+  assert.deepEqual(JSON.parse(h.storage.getItem('busWatch.learned')), h.session.getLearned());
+  // loading again changes nothing
+  h.session.load();
+  assert.deepEqual(h.session.getLearned(), { 'stop:onebusaway/a': -2, 'ride:onebusaway/z': -4, 'route:onebusaway/r': -1, other: 3 });
+});
+
+test('refresh: the planner and ranking get the runtime view at the position', async () => {
+  const h = harness({ storage: { 'busWatch.config': JSON.stringify({ version: 2,
+    providers: [{ id: 'near', type: 'mock' }, { id: 'far', type: 'mock', coverage: { mode: 'manual', lat: -40, lon: 170, radius: 10000 } }],
+    routes: [{ providerId: 'near', id: 'A' }, { providerId: 'far', id: 'B' }] }) } });
+  h.session.load();
+  await refresh(h.session);
+  const cfg = h.calls.lastGather.config;
+  assert.deepEqual(cfg.routes.map(r => r.id), ['near/A']);
+  assert.deepEqual(cfg.providers, ['near']);
+  assert.equal(h.calls.lastGather.provider.config, h.session.getConfig(), 'the provider is built from the saved config');
 });
 
 test('refresh (gps): statuses, then a ranked list with an incrementing list id', async () => {
@@ -200,15 +234,16 @@ test('handleWatchMessage dispatches and returns the decoded message', async () =
   assert.equal(h.sent.length, sent);
 });
 
-test('lists are encoded with the configured units', async () => {
+test("lists are encoded with the watch's units", async () => {
   const items = [{ kind: 'pickup', key: 'p', title: 'P', times: [NOW + 60], distance: 350, bearing: 90, features: {} }];
-  const metric = harness({ items, storage: { 'busWatch.config': JSON.stringify({ units: 'metric' }) } });
+  const metric = harness({ items, storage: { 'busWatch.prefs': JSON.stringify({ units: 'metric', clock24: true, known: true }) } });
   metric.session.load();
   await refresh(metric.session);
   assert.equal(metric.sent.find(m => 'ITEM_INDEX' in m).ITEM_DIST, '350m');
   assert.equal(metric.sent.find(m => 'ITEM_INDEX' in m).ITEM_BEARING, 90);
-  const imperial = harness({ items });
+  const imperial = harness({ items });   // nothing from the watch yet, no locale: metric is the guess
   imperial.session.load();
+  imperial.session.setPrefs({ clock24: false, units: 'imperial' });
   await refresh(imperial.session);
   assert.equal(imperial.sent.find(m => 'ITEM_INDEX' in m).ITEM_DIST, '0.2mi');
   // re-sent lists after select use the units too
@@ -243,10 +278,37 @@ test('applySettings: saves normalized config, learned/clear handling, rebuilds p
   assert.deepEqual(h.session.getLearned(), { 'route:r': -0.3 });
 });
 
+test('watch prefs: saved, re-send the last list when the units change, known once the watch says', async () => {
+  const items = [{ kind: 'pickup', key: 'p', title: 'P', times: [NOW + 60], distance: 350, bearing: 90, features: {} }];
+  const h = harness({ items });
+  h.session.load();
+  assert.deepEqual(h.session.getPrefs(), { units: 'metric', clock24: false, known: false });
+  assert.equal(h.session.setPrefs({ clock24: true, units: 'imperial' }), true, 'before any list: just saved');
+  assert.equal(h.sent.length, 0);
+  await refresh(h.session);
+  h.sent.length = 0;
+  assert.deepEqual(h.session.handleWatchMessage({ WATCH_PREFS: 1 | 2 | 4 }), { type: 'prefs', clock24: true, units: 'metric' });
+  const header = h.sent.find(m => 'ITEM_COUNT' in m);
+  assert.ok(header && header.LIST_ID === 2, 'list re-sent with a new id');
+  assert.equal(h.sent.find(m => 'ITEM_INDEX' in m).ITEM_DIST, '350m');
+  assert.deepEqual(JSON.parse(h.storage.getItem('busWatch.prefs')), { clock24: true, units: 'metric', known: true });
+  h.sent.length = 0;
+  assert.equal(h.session.setPrefs({ clock24: true, units: 'metric' }), false, 'unchanged');
+  assert.equal(h.session.setPrefs({ clock24: false, units: null }), true, 'units unknown: kept');
+  assert.equal(h.session.getPrefs().units, 'metric');
+  assert.equal(h.sent.length, 0, 'clock only: nothing re-sent');
+  assert.equal(h.session.runtimeConfig(null).clock24, false);
+  // a new session reads them back
+  const again = createSession({ storage: h.storage, clock: () => NOW, locate() {}, createProvider() {}, send() {} });
+  again.load();
+  assert.deepEqual(again.getPrefs(), { units: 'metric', clock24: false, known: true });
+});
+
 test('configPageParams', () => {
   const h = harness();
   h.session.load();
   const p = h.session.configPageParams();
-  assert.deepEqual(Object.keys(p).sort(), ['config', 'learned', 'samples']);
+  assert.deepEqual(Object.keys(p).sort(), ['config', 'learned', 'prefs', 'samples']);
   assert.deepEqual(p.config, settings.defaults());
+  assert.deepEqual(p.prefs, h.session.getPrefs());
 });
