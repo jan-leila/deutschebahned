@@ -1,0 +1,100 @@
+name: Release
+
+# Every push to the `release` branch builds the watch app and publishes it as a
+# GitHub release tagged v<version> (version comes from package.json). If that
+# release already exists the run stops without building. After a successful
+# release, main gets a commit bumping the version for the next release.
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Check for an existing release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::warning title=Release exists::$TAG is already released; bump the version in package.json on release to publish a new one. Stopping."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: cachix/install-nix-action@v31
+        if: steps.check.outputs.exists == 'false'
+
+      - name: Cache Pebble SDK
+        if: steps.check.outputs.exists == 'false'
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pebble-sdk
+          key: pebble-sdk-4.9.169
+
+      - name: Build Pebble environment
+        if: steps.check.outputs.exists == 'false'
+        # python3.13-rsa's test suite is flaky (random keys; test_sign_different_key
+        # occasionally overflows), which fails the whole nix-shell build. Retry.
+        run: |
+          for attempt in 1 2 3; do
+            nix-shell --run true && exit 0
+            echo "::warning::nix-shell build failed (attempt $attempt), retrying"
+          done
+          exit 1
+
+      - name: Build
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          nix-shell --run '
+            set -e
+            [ -e ~/.local/share/pebble-sdk/SDKs/4.9.169 ] || pebble sdk install 4.9.169
+            pebble build
+          '
+          ls build/bus-watch.pbw
+
+      - name: Publish release
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.version }}
+        run: |
+          cp build/bus-watch.pbw "bus-watch-$TAG.pbw"  # bundle name is pinned in wscript
+          gh release create "$TAG" "bus-watch-$TAG.pbw" \
+            --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+
+      - name: Bump version on main
+        if: steps.check.outputs.exists == 'false'
+        env:
+          RELEASED: ${{ steps.version.outputs.version }}
+        run: |
+          git fetch origin main
+          git checkout -B main origin/main
+          current=$(jq -r .version package.json)
+          # If main isn't at the released version (already bumped by hand), leave it alone.
+          if [ "$current" != "$RELEASED" ]; then
+            echo "main is at $current, released $RELEASED; nothing to bump."
+            exit 0
+          fi
+          next=$(node tools/bump-version.js package.json)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Bump version to $next after releasing $RELEASED"
+          git push origin main
