@@ -1,0 +1,16 @@
+{"code":200,"currentTime":1762992000000,"text":"OK","version":2,"data":{"entry":{"routeId":"1_100225",
+"polylines":[{"length":3,"levels":"","points":"_p~iF~ps|U_ulLnnqC_mqNvxq`@"}],
+"stopIds":["1_A","1_B","1_C","1_D"],
+"stopGroupings":[{"type":"direction","ordered":true,"stopGroups":[
+  {"id":"0","name":{"name":"Ballard","names":["Ballard"],"type":"destination"},"stopIds":["1_A","1_B","1_C"],
+   "polylines":[{"length":2,"levels":"","points":"_p~iF~ps|U_ulLnnqC"}]},
+  {"id":"1","name":{"name":"U District","names":["U District"],"type":"destination"},"stopIds":["1_C","1_D"],
+   "polylines":[{"length":2,"levels":"","points":"_flwFjhwaV_mqNvxq`@"}]}
+]}]},
+"references":{"agencies":[],"situations":[],"stopTimes":[],"trips":[],
+ "routes":[{"id":"1_100225","shortName":"44","longName":"Ballard - U District","agencyId":"1"},{"id":"1_999","shortName":"","longName":"Other"}],
+ "stops":[
+  {"id":"1_A","lat":38.5,"lon":-120.2,"name":"Stop A","routeIds":["1_100225"]},
+  {"id":"1_B","lat":40.7,"lon":-120.95,"name":"Stop B","routeIds":["1_100225"]},
+  {"id":"1_C","lat":43.252,"lon":-126.453,"name":"Stop C","routeIds":["1_100225"]},
+  {"id":"1_D","lat":40.0,"lon":-130.0,"name":"Stop D","routeIds":["1_100225"]}]}}}

@@ -1,0 +1,19 @@
+[
+  {
+    "stop_id": 13337,
+    "stop_name": "Franklin Ave and Hennepin Ave",
+    "timepoint": true
+  },
+  {
+    "stop_id": 13334,
+    "stop_name": "Franklin Ave W & Lyndale Ave S"
+  },
+  {
+    "stop_id": 103,
+    "stop_name": "Lyndale Ave S & 22nd St W"
+  },
+  {
+    "stop_id": 80802,
+    "stop_name": "24th St W & Lyndale Ave"
+  }
+]

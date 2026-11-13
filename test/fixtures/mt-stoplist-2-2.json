@@ -1,0 +1,20 @@
+[
+  {
+    "stop_id": 57618,
+    "stop_name": "2nd Ave SE and 7th St",
+    "timepoint": true
+  },
+  {
+    "stop_id": 57302,
+    "stop_name": "8th St SE & 2nd Ave SE"
+  },
+  {
+    "stop_id": 56302,
+    "stop_name": "8th St and E Hennepin Ave",
+    "timepoint": true
+  },
+  {
+    "stop_id": 16058,
+    "stop_name": "8th St SE & 5th Ave SE"
+  }
+]

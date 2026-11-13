@@ -1,0 +1,4 @@
+{"code":200,"currentTime":1762992000000,"text":"OK","version":2,"data":{"entry":{"routeId":"1_999",
+"polylines":[{"length":2,"levels":"","points":"_p~iF~ps|U_ulLnnqC"}],"stopIds":["1_A","1_B"],"stopGroupings":[]},
+"references":{"routes":[{"id":"1_999","shortName":"","longName":"Night Owl"}],
+ "stops":[{"id":"1_A","lat":38.5,"lon":-120.2,"name":"Stop A"},{"id":"1_B","lat":40.7,"lon":-120.95,"name":"Stop B"}]}}}

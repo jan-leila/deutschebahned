@@ -1,0 +1,9 @@
+{"code":200,"currentTime":1762992000000,"text":"OK","version":2,"data":{"entry":{"stopId":"1_10914","nearbyStopIds":[],"situationIds":[],
+"arrivalsAndDepartures":[
+ {"routeId":"1_100223","tripId":"1_604670535","serviceDate":1762934400000,"stopId":"1_10914","stopSequence":12,
+  "predictedArrivalTime":0,"scheduledArrivalTime":1762992600000,"predictedDepartureTime":0,"scheduledDepartureTime":1762992600000,
+  "predicted":false,"routeShortName":"43","tripHeadsign":"Downtown","status":"default"},
+ {"routeId":"1_100225","tripId":"1_604670999","serviceDate":1762934400000,"stopId":"1_10914","stopSequence":7,
+  "predictedArrivalTime":1762992240400,"scheduledArrivalTime":1762992180000,"predictedDepartureTime":1762992250000,"scheduledDepartureTime":1762992180000,
+  "predicted":true,"routeShortName":"44","status":"default"}
+]},"references":{"agencies":[],"routes":[],"situations":[],"stopTimes":[],"stops":[],"trips":[]}}}

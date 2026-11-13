@@ -1,0 +1,6 @@
+{"code":200,"currentTime":1762992000000,"text":"OK","version":2,"data":{"limitExceeded":false,"outOfRange":false,
+"list":[
+ {"code":"10914","direction":"S","id":"1_10914","lat":47.656426,"locationType":0,"lon":-122.312164,"name":"15th Ave NE & NE Campus Pkwy","routeIds":["1_100223","1_100225"],"wheelchairBoarding":"UNKNOWN"},
+ {"code":"10917","direction":"N","id":"1_10917","lat":47.65512,"locationType":0,"lon":-122.31261,"name":"15th Ave NE & NE 40th St","routeIds":["1_100225"],"wheelchairBoarding":"UNKNOWN"}
+],
+"references":{"agencies":[],"routes":[],"situations":[],"stopTimes":[],"stops":[],"trips":[]}}}

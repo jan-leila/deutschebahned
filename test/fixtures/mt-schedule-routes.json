@@ -1,0 +1,26 @@
+[
+  {
+    "route_id": "901",
+    "route_short_name": "Blue",
+    "agency_id": 0,
+    "route_label": "METRO Blue Line",
+    "description": "Blue Line - Mpls - Airport - MOA",
+    "route_url_param": "blue"
+  },
+  {
+    "route_id": "922",
+    "route_short_name": "B Line",
+    "agency_id": 0,
+    "route_label": "METRO B Line",
+    "description": "B Line - Lake St - Selby Av - Union Depot",
+    "route_url_param": "bline"
+  },
+  {
+    "route_id": "2",
+    "route_short_name": "2",
+    "agency_id": 0,
+    "route_label": "Route 2",
+    "description": "Franklin Av - Riverside Av - U of M - 8th St SE",
+    "route_url_param": "2"
+  }
+]
