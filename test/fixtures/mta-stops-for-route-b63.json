@@ -1,0 +1,15 @@
+{"code":200,"currentTime":1762992000000,"text":"OK","version":2,"data":{"entry":{"routeId":"MTA NYCT_B63",
+"polylines":[{"length":3,"levels":"","points":"_p~iF~ps|U_ulLnnqC_mqNvxq`@"}],
+"stopIds":["MTA_308209","MTA_308214","MTA_305423"],
+"stopGroupings":[{"type":"direction","ordered":true,"stopGroups":[
+  {"id":"0","name":{"name":"BAY RIDGE 95 ST STA","names":["BAY RIDGE 95 ST STA"],"type":"destination"},"stopIds":["MTA_308209","MTA_308214"],
+   "polylines":[{"length":2,"levels":"","points":"_p~iF~ps|U_ulLnnqC"}]},
+  {"id":"1","name":{"name":"COBBLE HILL COLUMBIA ST via 5 AV","names":["COBBLE HILL COLUMBIA ST via 5 AV"],"type":"destination"},"stopIds":["MTA_305423"],
+   "polylines":[{"length":2,"levels":"","points":"_flwFjhwaV_mqNvxq`@"}]}
+]}]},
+"references":{"agencies":[],"situations":[],"stopTimes":[],"trips":[],
+ "routes":[{"id":"MTA NYCT_B63","shortName":"B63","longName":"Cobble Hill - Bay Ridge","description":"via 5th Av / Atlantic Av","color":"00AEEF","agencyId":"MTA NYCT","type":3}],
+ "stops":[
+  {"id":"MTA_308209","code":"308209","direction":"S","lat":40.67685,"lon":-73.983,"name":"5 AV/UNION ST","routeIds":["MTA NYCT_B63"]},
+  {"id":"MTA_308214","code":"308214","direction":"S","lat":40.6745,"lon":-73.9858,"name":"5 AV/3 ST","routeIds":["MTA NYCT_B63"]},
+  {"id":"MTA_305423","code":"305423","direction":"N","lat":40.6767,"lon":-73.9834,"name":"5 AV/PRESIDENT ST","routeIds":["MTA NYCT_B63"]}]}}}

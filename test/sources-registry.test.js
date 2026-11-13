@@ -13,9 +13,9 @@ function fake(type, label) {
 }
 
 test('registry: shipped plug-ins, default first', () => {
-  assert.deepEqual(all.map(p => p.type), ['metrotransit', 'onebusaway', 'mock']);
+  assert.deepEqual(all.map(p => p.type), ['metrotransit', 'onebusaway', 'bvg', 'wmata', 'mta', 'bay511', 'mbta', 'cta', 'rtc', 'mock']);
   const reg = createRegistry(all);
-  assert.deepEqual(reg.types().map(t => t.type), ['metrotransit', 'onebusaway', 'mock']);
+  assert.deepEqual(reg.types().map(t => t.type), ['metrotransit', 'onebusaway', 'bvg', 'wmata', 'mta', 'bay511', 'mbta', 'cta', 'rtc', 'mock']);
   for (const t of reg.types()) assert.equal(typeof t.label, 'string');
   assert.ok(reg.types()[0].label.length > 0);
 });
@@ -103,4 +103,27 @@ test('sources require only src/sources/** and src/common/geo.js', () => {
       assert.ok(target.startsWith(dir + path.sep) || target === geo, path.relative(dir, file) + ' requires ' + m[1]);
     }
   }
+});
+
+test('registry: types() carries optional plug-in metadata (home area, key needed, key URL)', () => {
+  const reg = createRegistry([
+    { type: 'a', label: 'A', area: { lat: 1, lon: 2, radius: 3000 }, needsKey: true, keyUrl: 'https://keys.example', create() { return {}; } },
+    { type: 'b', create() { return {}; } }, { type: 'c', area: { lat: 'x' }, create() { return {}; } }]);
+  assert.deepEqual(reg.types(), [
+    { type: 'a', label: 'A', area: { lat: 1, lon: 2, radius: 3000 }, needsKey: true, keyUrl: 'https://keys.example' },
+    { type: 'b', label: 'b' }, { type: 'c', label: 'c' }]);
+  const shipped = createRegistry(require('../src/sources/all')).types();
+  for (const t of shipped) if (t.type !== 'mock') assert.ok(t.area, t.type + ' has a home area');
+  assert.deepEqual(shipped.filter(t => t.needsKey).map(t => t.type), ['wmata', 'mta', 'bay511', 'cta', 'rtc']);
+  for (const t of shipped.filter(t => t.needsKey)) assert.match(t.keyUrl, /^https:\/\//, t.type);
+});
+
+test('registry: createFor centres a system on the fixed location, else its coverage centre, else its home area', () => {
+  const seen = [];
+  const reg = createRegistry([{ type: 'h', area: { lat: 52.5, lon: 13.4, radius: 60000 }, create(o, ctx) { seen.push(ctx.center); return {}; } }]);
+  const gps = { location: { mode: 'gps', lat: 0, lon: 0 } };
+  reg.createFor({ id: 'h', type: 'h', coverage: { mode: 'auto', lat: 0, lon: 0 } }, gps, {});
+  reg.createFor({ id: 'h', type: 'h', coverage: { mode: 'manual', lat: 52.4, lon: 13.1 } }, gps, {});
+  reg.createFor({ id: 'h', type: 'h', coverage: { lat: 52.4, lon: 13.1 } }, { location: { mode: 'fixed', lat: 52.6, lon: 13.5 } }, {});
+  assert.deepEqual(seen, [{ lat: 52.5, lon: 13.4 }, { lat: 52.4, lon: 13.1 }, { lat: 52.6, lon: 13.5 }]);
 });

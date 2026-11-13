@@ -1,0 +1,48 @@
+{
+  "success": true,
+  "route": "/info/las-vegas-rtc/routes GET",
+  "data": {
+    "agencyKey": "las-vegas-rtc",
+    "routes": [
+      {
+        "id": "10109",
+        "longName": "Maryland Parkway",
+        "name": "109 - Maryland Parkway",
+        "shortName": "109",
+        "type": "3",
+        "directions": [
+          {
+            "id": "0",
+            "title": "To South Strip Transfer Terminal",
+            "headsigns": ["South Strip Transfer Terminal"],
+            "stops": [
+              { "id": "1640", "code": 11640, "lat": 36.129, "lon": -115.1361, "name": "Maryland Pkwy @ Desert Inn Rd" },
+              { "id": "1650", "code": 11650, "lat": 36.1148, "lon": -115.1361, "name": "Maryland Pkwy @ Flamingo Rd" },
+              { "id": "1660", "code": 11660, "lat": 36.1, "lon": -115.1361, "name": "Maryland Pkwy @ Tropicana Ave" }
+            ]
+          },
+          {
+            "id": "1",
+            "title": "To Bonneville Transit Center",
+            "headsigns": ["Bonneville Transit Center"],
+            "stops": [
+              { "id": "1661", "code": 11661, "lat": 36.1, "lon": -115.1357, "name": "Maryland Pkwy @ Tropicana Ave" },
+              { "id": "1651", "code": 11651, "lat": 36.1148, "lon": -115.1357, "name": "Maryland Pkwy @ Flamingo Rd" },
+              { "id": "1641", "code": 11641, "lat": 36.129, "lon": -115.1357, "name": "Maryland Pkwy @ Desert Inn Rd" }
+            ]
+          }
+        ],
+        "shapes": [
+          { "tripPatternId": "shape_109_0_a", "shapeId": "1090001", "directionId": "0", "headsign": "South Strip Transfer Terminal",
+            "locs": [ { "lat": 36.129, "lon": -115.1361 }, { "lat": 36.1219, "lon": -115.1361 }, { "lat": 36.1219, "lon": -115.1361 },
+                      { "lat": 36.1148, "lon": -115.1361 }, { "lat": 36.1, "lon": -115.136123456 } ] },
+          { "tripPatternId": "shape_109_0_b", "shapeId": "1090001", "directionId": "0", "headsign": "South Strip Transfer Terminal",
+            "locs": [ { "lat": 36.129, "lon": -115.1361 }, { "lat": 36.1, "lon": -115.1361 } ] },
+          { "tripPatternId": "shape_109_1_a", "shapeId": "1090002", "directionId": "1", "headsign": "Bonneville Transit Center",
+            "locs": [ { "lat": 36.1, "lon": -115.1357 }, { "lat": 36.1148, "lon": -115.1357 }, { "lat": 36.129, "lon": -115.1357 } ] }
+        ],
+        "extent": { "minLat": 36.1, "minLon": -115.1361, "maxLat": 36.129, "maxLon": -115.1357 }
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "bustime-response": {
+    "routes": [
+      { "rt": "9", "rtnm": "Ashland", "rtclr": "#cc3300", "rtdd": "9" },
+      { "rt": "20", "rtnm": "Madison", "rtclr": "#ff3399", "rtdd": "20" },
+      { "rt": "X9", "rtnm": "Ashland Express", "rtclr": "not-a-color", "rtdd": "X9" }
+    ]
+  }
+}

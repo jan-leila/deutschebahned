@@ -33,7 +33,9 @@ function mine(entry, providerId) {
 
 // What a plug-in gets besides its own options: I/O and the bits of the app config a source may need
 // (only system providerId's routes when given).
-function sourceContext(config, deps, providerId) {
+// center = the fixed location when one is set, else `home` (the system's coverage centre or its plug-in's home area, from
+// createFor), else the location as configured.
+function sourceContext(config, deps, providerId, home) {
   deps = deps || {};
   var routes = [];
   var cfgRoutes = (config && config.routes) || [];
@@ -49,7 +51,7 @@ function sourceContext(config, deps, providerId) {
     storage: deps.storage,
     routeIds: configuredRouteIds(config, providerId),
     routes: routes,
-    center: { lat: +loc.lat || 0, lon: +loc.lon || 0 }
+    center: (loc.mode === 'fixed' && (+loc.lat || +loc.lon)) || !home ? { lat: +loc.lat || 0, lon: +loc.lon || 0 } : home
   };
 }
 
@@ -79,7 +81,16 @@ function createRegistry(plugins) {
     has: function (type) { return byType.hasOwnProperty(type); },
     types: function () {
       var out = [];
-      for (var i = 0; i < list.length; i++) out.push({ type: list[i].type, label: list[i].label || list[i].type });
+      for (var i = 0; i < list.length; i++) {
+        var p = list[i], t = { type: p.type, label: p.label || p.type };
+        // optional plug-in metadata for the settings page: home area {lat, lon, radius} (m), API key needed, where to get one
+        if (p.area && typeof p.area.lat === 'number' && typeof p.area.lon === 'number') {
+          t.area = { lat: p.area.lat, lon: p.area.lon, radius: +p.area.radius || 50000 };
+        }
+        if (p.needsKey) t.needsKey = true;
+        if (p.keyUrl) t.keyUrl = String(p.keyUrl);
+        out.push(t);
+      }
       return out;
     },
     // provider for one configured system entry = {id, type, baseUrl, apiKey} (type resolved as above); its context
@@ -88,7 +99,10 @@ function createRegistry(plugins) {
       entry = entry || {};
       var plugin = resolve(entry.type);
       if (!plugin) throw new Error('no transit data source registered');
-      return plugin.create({ baseUrl: entry.baseUrl || '', apiKey: entry.apiKey || '' }, sourceContext(config, deps, entry.id));
+      var cv = entry.coverage || {}, home = null;
+      if (+cv.lat || +cv.lon) home = { lat: +cv.lat, lon: +cv.lon };
+      else if (plugin.area && typeof plugin.area.lat === 'number') home = { lat: plugin.area.lat, lon: plugin.area.lon };
+      return plugin.create({ baseUrl: entry.baseUrl || '', apiKey: entry.apiKey || '' }, sourceContext(config, deps, entry.id, home));
     },
     // provider for a single-source config ({provider: {type, baseUrl, apiKey}, routes}); tools and tests
     create: function (config, deps) {

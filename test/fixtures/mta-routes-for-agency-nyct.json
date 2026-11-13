@@ -1,0 +1,4 @@
+{"code":200,"currentTime":1762992000000,"text":"OK","version":2,"data":{"limitExceeded":false,"list":[
+ {"agencyId":"MTA NYCT","color":"00AEEF","description":"via 5th Av / Atlantic Av","id":"MTA NYCT_B63","longName":"Cobble Hill - Bay Ridge","shortName":"B63","textColor":"FFFFFF","type":3,"url":""},
+ {"agencyId":"MTA NYCT","color":"B933AD","description":"via 1st Av / 2nd Av","id":"MTA NYCT_M15+","longName":"","shortName":"M15-SBS","textColor":"FFFFFF","type":3,"url":""}],
+ "references":{"agencies":[],"routes":[],"situations":[],"stopTimes":[],"stops":[],"trips":[]}}}

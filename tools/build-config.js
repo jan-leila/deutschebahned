@@ -57,8 +57,17 @@ for (const f of files) {
 // code inside a <script> element must not close it or open an HTML comment
 const scriptSafe = js => js.replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--');
 
+// The page travels as a percent-encoded data: URI, where every space and newline costs 3 bytes: drop indentation, blank lines
+// and whole-line // comments of the bundled modules (safe for this ES5 code: no template strings or line continuations,
+// which the check below enforces). Trailing comments stay (a // can be part of a string, e.g. a URL).
+function slim(src, f) {
+  const code = src.replace(/(^|\s)\/\/.*$/gm, '$1');   // comments (rough: a ' //' inside a string is cut too, fine here)
+  if (/`|\\\r?\n/.test(code)) fail(f + ': template string or line continuation; the bundler strips indentation');
+  return src.split(/\r?\n/).map(l => l.replace(/^\s+/, '')).filter(l => l !== '' && !l.startsWith('//')).join('\n');
+}
+
 const defs = files.map(f => {
-  const src = fs.readFileSync(path.join(root, f), 'utf8');
+  const src = slim(fs.readFileSync(path.join(root, f), 'utf8'), f);
   return 'defs[' + JSON.stringify(f.replace(/\.js$/, '')) + '] = function (module, exports, require) {\n' + src + '\n};';
 }).join('\n');
 

@@ -1,0 +1,423 @@
+{
+ "trips": [
+  {
+   "id": "1|70465|3|86|13112026",
+   "origin": {
+    "type": "stop",
+    "id": "900152007",
+    "name": "Falkenberg (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900152007",
+     "latitude": 52.570212,
+     "longitude": 13.526815
+    }
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   },
+   "direction": null,
+   "plannedDeparture": "2026-11-13T22:11:00+01:00",
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "33813",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   }
+  },
+  {
+   "id": "1|70465|4|86|13112026",
+   "origin": {
+    "type": "stop",
+    "id": "900152007",
+    "name": "Falkenberg (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900152007",
+     "latitude": 52.570212,
+     "longitude": 13.526815
+    }
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   },
+   "direction": null,
+   "plannedDeparture": "2026-11-13T22:31:00+01:00",
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "33818",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   }
+  },
+  {
+   "id": "1|70501|4|86|13112026",
+   "origin": {
+    "type": "stop",
+    "id": "900151003",
+    "name": "Zingster Str. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900151003",
+     "latitude": 52.57236,
+     "longitude": 13.495164
+    }
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   },
+   "direction": null,
+   "plannedDeparture": "2026-11-13T22:25:00+01:00",
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "33444",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   }
+  },
+  {
+   "id": "1|70501|5|86|13112026",
+   "origin": {
+    "type": "stop",
+    "id": "900151003",
+    "name": "Zingster Str. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900151003",
+     "latitude": 52.57236,
+     "longitude": 13.495164
+    }
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   },
+   "direction": null,
+   "plannedDeparture": "2026-11-13T22:45:00+01:00",
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "33446",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   }
+  },
+  {
+   "id": "1|70502|3|86|13112026",
+   "origin": {
+    "type": "stop",
+    "id": "900151003",
+    "name": "Zingster Str. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900151003",
+     "latitude": 52.57236,
+     "longitude": 13.495164
+    }
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   },
+   "direction": null,
+   "plannedDeparture": "2026-11-13T22:18:00+01:00",
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "33443",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   }
+  },
+  {
+   "id": "1|70502|4|86|13112026",
+   "origin": {
+    "type": "stop",
+    "id": "900151003",
+    "name": "Zingster Str. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900151003",
+     "latitude": 52.57236,
+     "longitude": 13.495164
+    }
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   },
+   "direction": null,
+   "plannedDeparture": "2026-11-13T22:38:00+01:00",
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "33445",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   }
+  },
+  {
+   "id": "1|70566|4|86|13112026",
+   "origin": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900152007",
+    "name": "Falkenberg (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900152007",
+     "latitude": 52.570212,
+     "longitude": 13.526815
+    }
+   },
+   "direction": null,
+   "plannedDeparture": "2026-11-13T22:22:00+01:00",
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "33222",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   }
+  },
+  {
+   "id": "1|70566|5|86|13112026",
+   "origin": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900152007",
+    "name": "Falkenberg (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900152007",
+     "latitude": 52.570212,
+     "longitude": 13.526815
+    }
+   },
+   "direction": null,
+   "plannedDeparture": "2026-11-13T22:42:00+01:00",
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "33223",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   }
+  },
+  {
+   "id": "1|70619|4|86|13112026",
+   "origin": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900151003",
+    "name": "Zingster Str. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900151003",
+     "latitude": 52.57236,
+     "longitude": 13.495164
+    }
+   },
+   "direction": null,
+   "plannedDeparture": "2026-11-13T22:29:00+01:00",
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "32972",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   }
+  },
+  {
+   "id": "1|70620|3|86|13112026",
+   "origin": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900151003",
+    "name": "Zingster Str. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900151003",
+     "latitude": 52.57236,
+     "longitude": 13.495164
+    }
+   },
+   "direction": null,
+   "plannedDeparture": "2026-11-13T22:16:00+01:00",
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "32956",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   }
+  },
+  {
+   "id": "1|70620|4|86|13112026",
+   "origin": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900151003",
+    "name": "Zingster Str. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900151003",
+     "latitude": 52.57236,
+     "longitude": 13.495164
+    }
+   },
+   "direction": null,
+   "plannedDeparture": "2026-11-13T22:36:00+01:00",
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "32973",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   }
+  }
+ ],
+ "realtimeDataUpdatedAt": 1794606398
+}

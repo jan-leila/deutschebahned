@@ -1,0 +1,4 @@
+{"content":[
+  {"Id":"Yellow-S","Name":"Antioch to SFIA/Millbrae","TransportMode":"rail","PublicCode":"Yellow-S","SiriLineRef":"Yellow-S","Monitored":"true","OperatorRef":"BA"},
+  {"Id":"Red-N","Name":"Millbrae/Daly City to Richmond","TransportMode":"rail","PublicCode":"Red-N","SiriLineRef":"Red-N","Monitored":"true","OperatorRef":"BA"}
+]}

@@ -1,0 +1,14 @@
+{"Siri":{"ServiceDelivery":{"ResponseTimestamp":"2025-11-12T19:00:00.123-05:00","VehicleMonitoringDelivery":[{"VehicleActivity":[
+ {"MonitoredVehicleJourney":{"LineRef":"MTA NYCT_B63","DirectionRef":"0",
+   "FramedVehicleJourneyRef":{"DataFrameRef":"2025-11-12","DatedVehicleJourneyRef":"MTA NYCT_JG_D5-Weekday-SDon-111400_B63_604"},
+   "DestinationName":["BAY RIDGE 95 ST STA"],"VehicleLocation":{"Longitude":-73.98,"Latitude":40.68},"Bearing":230.5,"VehicleRef":"MTA NYCT_4511"},
+  "RecordedAtTime":"2025-11-12T18:59:50.000-05:00"},
+ {"MonitoredVehicleJourney":{"LineRef":"MTA NYCT_B63","DirectionRef":"1",
+   "FramedVehicleJourneyRef":{"DataFrameRef":"2025-11-12","DatedVehicleJourneyRef":"MTA NYCT_JG_NOPOS"},
+   "VehicleLocation":{"Longitude":0,"Latitude":0}},
+  "RecordedAtTime":"2025-11-12T18:59:50.000-05:00"},
+ {"MonitoredVehicleJourney":{"LineRef":"MTA NYCT_B63","DirectionRef":"1",
+   "FramedVehicleJourneyRef":{"DataFrameRef":"2025-11-12","DatedVehicleJourneyRef":"MTA NYCT_JG_D5-Weekday-SDon-110000_B63_620"},
+   "VehicleLocation":{"Longitude":"-73.995","Latitude":"40.655"}},
+  "RecordedAtTime":"2025-11-12T18:58:00-05:00"}
+],"ResponseTimestamp":"2025-11-12T19:00:00.123-05:00"}]}}}

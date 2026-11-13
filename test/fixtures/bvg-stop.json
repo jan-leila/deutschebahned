@@ -1,0 +1,403 @@
+{
+ "type": "station",
+ "id": "900100026",
+ "name": "S+U Alexanderplatz Bhf/Gontardstr. (Berlin)",
+ "location": {
+  "type": "location",
+  "id": "900100026",
+  "latitude": 52.52105,
+  "longitude": 13.411285
+ },
+ "lines": [
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-s-bahn-s3-s3-b",
+   "fahrtNr": null,
+   "name": "S3",
+   "public": true,
+   "productName": "S",
+   "mode": "train",
+   "product": "suburban"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-s-bahn-s3-s3-bi",
+   "fahrtNr": null,
+   "name": "S3",
+   "public": true,
+   "productName": "S",
+   "mode": "train",
+   "product": "suburban"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-s-bahn-s3-s3-bii",
+   "fahrtNr": null,
+   "name": "S3",
+   "public": true,
+   "productName": "S",
+   "mode": "train",
+   "product": "suburban"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-s-bahn-s3-s3-si",
+   "fahrtNr": null,
+   "name": "S3",
+   "public": true,
+   "productName": "S",
+   "mode": "train",
+   "product": "suburban"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-s-bahn-s5-s5-e",
+   "fahrtNr": null,
+   "name": "S5",
+   "public": true,
+   "productName": "S",
+   "mode": "train",
+   "product": "suburban"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-s-bahn-s5-s5-ei",
+   "fahrtNr": null,
+   "name": "S5",
+   "public": true,
+   "productName": "S",
+   "mode": "train",
+   "product": "suburban"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-s-bahn-s7-s7-o",
+   "fahrtNr": null,
+   "name": "S7",
+   "public": true,
+   "productName": "S",
+   "mode": "train",
+   "product": "suburban"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-s-bahn-s7-s7-oi",
+   "fahrtNr": null,
+   "name": "S7",
+   "public": true,
+   "productName": "S",
+   "mode": "train",
+   "product": "suburban"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-s-bahn-s9-s9-c",
+   "fahrtNr": null,
+   "name": "S9",
+   "public": true,
+   "productName": "S",
+   "mode": "train",
+   "product": "suburban"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-u-bahn-u2",
+   "fahrtNr": null,
+   "name": "U2",
+   "public": true,
+   "productName": "U",
+   "mode": "train",
+   "product": "subway"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-u-bahn-u5",
+   "fahrtNr": null,
+   "name": "U5",
+   "public": true,
+   "productName": "U",
+   "mode": "train",
+   "product": "subway"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-u-bahn-u8",
+   "fahrtNr": null,
+   "name": "U8",
+   "public": true,
+   "productName": "U",
+   "mode": "train",
+   "product": "subway"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-tram-12",
+   "fahrtNr": null,
+   "name": "12",
+   "public": true,
+   "productName": "Tram",
+   "mode": "train",
+   "product": "tram"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-tram-m2",
+   "fahrtNr": null,
+   "name": "M2",
+   "public": true,
+   "productName": "Tram",
+   "mode": "train",
+   "product": "tram"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-tram-m4",
+   "fahrtNr": null,
+   "name": "M4",
+   "public": true,
+   "productName": "Tram",
+   "mode": "train",
+   "product": "tram"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-tram-m5",
+   "fahrtNr": null,
+   "name": "M5",
+   "public": true,
+   "productName": "Tram",
+   "mode": "train",
+   "product": "tram"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-tram-m6",
+   "fahrtNr": null,
+   "name": "M6",
+   "public": true,
+   "productName": "Tram",
+   "mode": "train",
+   "product": "tram"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-bus-100",
+   "fahrtNr": null,
+   "name": "100",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-bus-200",
+   "fahrtNr": null,
+   "name": "200",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-bus-248",
+   "fahrtNr": null,
+   "name": "248",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-bus-300",
+   "fahrtNr": null,
+   "name": "300",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-tram-m1-bus-m1-ev1",
+   "fahrtNr": null,
+   "name": "M1",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-tram-m2-bus-m2-ev1",
+   "fahrtNr": null,
+   "name": "M2",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-tram-m4-bus-m4-ev1",
+   "fahrtNr": null,
+   "name": "M4",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-bus-n2",
+   "fahrtNr": null,
+   "name": "N2",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-bus-n5",
+   "fahrtNr": null,
+   "name": "N5",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-bus-n8",
+   "fahrtNr": null,
+   "name": "N8",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-bus-n40",
+   "fahrtNr": null,
+   "name": "N40",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-bus-n42",
+   "fahrtNr": null,
+   "name": "N42",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-bus-n60",
+   "fahrtNr": null,
+   "name": "N60",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-bus-n65",
+   "fahrtNr": null,
+   "name": "N65",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-12069632-r-bahn-rb37-bus-rb37-ev1",
+   "fahrtNr": null,
+   "name": "RE1",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-u-bahn-u2-bus-u2-ev1",
+   "fahrtNr": null,
+   "name": "U2",
+   "public": true,
+   "productName": "Bus",
+   "mode": "bus",
+   "product": "bus"
+  },
+  {
+   "type": "line",
+   "id": "rsmd-hbx",
+   "fahrtNr": null,
+   "name": "HBX",
+   "public": true,
+   "productName": "RE",
+   "mode": "train",
+   "product": "regional"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-r-bahn-rb14",
+   "fahrtNr": null,
+   "name": "RB14",
+   "public": true,
+   "productName": "RB",
+   "mode": "train",
+   "product": "regional"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-12054000-r-bahn-rb23",
+   "fahrtNr": null,
+   "name": "RB23",
+   "public": true,
+   "productName": "RB",
+   "mode": "train",
+   "product": "regional"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-12052000-r-bahn-re1",
+   "fahrtNr": null,
+   "name": "RE1",
+   "public": true,
+   "productName": "RE",
+   "mode": "train",
+   "product": "regional"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-11000000-r-bahn-re2-db",
+   "fahrtNr": null,
+   "name": "RE2",
+   "public": true,
+   "productName": "RE",
+   "mode": "train",
+   "product": "regional"
+  },
+  {
+   "type": "line",
+   "id": "de-vbb-12072477-r-bahn-re7",
+   "fahrtNr": null,
+   "name": "RE7",
+   "public": true,
+   "productName": "RE",
+   "mode": "train",
+   "product": "regional"
+  }
+ ]
+}

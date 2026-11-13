@@ -1,0 +1,7 @@
+{
+  "bustime-response": {
+    "stops": [
+      { "stpid": "1577", "stpnm": "1509 S Michigan", "lat": 41.861706666665, "lon": -87.623969999999 }
+    ]
+  }
+}

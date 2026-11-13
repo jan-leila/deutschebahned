@@ -1,0 +1,29 @@
+{"directions":[{"DirectionId":"IB","Name":"Inbound"},{"DirectionId":"OB","Name":"Outbound"}],
+ "journeyPatterns":[
+  {"serviceJourneyPatternRef":"351021","LineRef":"14","Name":"Downtown","DirectionRef":"IB","DestinationDisplayView":{"FontText":"Downtown"},"TripCount":"10",
+   "PointsInSequence":{"StopPointInJourneyPattern":[],"TimingPointInJourneyPattern":[
+     {"TimingPointInJourneyPatternId":"9100001","Order":"1","ScheduledStopPointRef":"15565","Name":"Mission St & 18th St"},
+     {"TimingPointInJourneyPatternId":"9100002","Order":"2","ScheduledStopPointRef":"15563","Name":"Mission St & 16th St"}]},
+   "LinksInSequence":{"ServiceLinkInJourneyPattern":""}},
+  {"serviceJourneyPatternRef":"351020","LineRef":"14","Name":"Downtown","DirectionRef":"IB","DestinationDisplayView":{"FontText":"Ferry Plaza"},"TripCount":"142",
+   "PointsInSequence":{
+     "StopPointInJourneyPattern":[
+       {"StopPointInJourneyPatternId":"9000002","Order":"2","ScheduledStopPointRef":"15567","Name":"Mission St & 20th St"},
+       {"StopPointInJourneyPatternId":"9000003","Order":"3","ScheduledStopPointRef":"15565","Name":"Mission St & 18th St"}],
+     "TimingPointInJourneyPattern":[
+       {"TimingPointInJourneyPatternId":"9000001","Order":"1","ScheduledStopPointRef":"15571","Name":"Mission St & 24th St"},
+       {"TimingPointInJourneyPatternId":"9000004","Order":"4","ScheduledStopPointRef":"15563","Name":"Mission St & 16th St"}]},
+   "LinksInSequence":{"ServiceLinkInJourneyPattern":[
+     {"ServiceLinkInJourneyPatternId":"1","Order":"1","projections":{"LinkSequenceProjection":{"id":"88001","LineString":{"srsName":"WGS84","id":"88001","pos":["37.75236 -122.41827","37.7588 -122.41891"]}}}},
+     {"ServiceLinkInJourneyPatternId":"2","Order":"2","projections":{"LinkSequenceProjection":{"id":"88002","LineString":{"srsName":"WGS84","id":"88002","pos":["37.7588 -122.41891","37.76172 -122.41918","37.76504 -122.41963"]}}}}]}},
+  {"serviceJourneyPatternRef":"351030","LineRef":"14","Name":"Daly City","DirectionRef":"OB","DestinationDisplayView":{"FontText":""},"TripCount":"140",
+   "PointsInSequence":{
+     "StopPointInJourneyPattern":[
+       {"StopPointInJourneyPatternId":"9000012","Order":"1","ScheduledStopPointRef":"15552","Name":"Mission St & 16th St"},
+       {"StopPointInJourneyPatternId":"9000013","Order":"2","ScheduledStopPointRef":"15554","Name":"Mission St & 18th St"},
+       {"StopPointInJourneyPatternId":"9000014","Order":"3","ScheduledStopPointRef":"15556","Name":"Mission St & 20th St"},
+       {"StopPointInJourneyPatternId":"9000015","Order":"4","ScheduledStopPointRef":"15558","Name":"Mission St & 24th St"}],
+     "TimingPointInJourneyPattern":[
+       {"TimingPointInJourneyPatternId":"9000011","Order":"1","ScheduledStopPointRef":"15552","Name":"Mission St & 16th St"}]},
+   "LinksInSequence":{"ServiceLinkInJourneyPattern":""}}
+ ]}

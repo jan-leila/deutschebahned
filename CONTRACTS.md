@@ -96,8 +96,7 @@ times follow the **watch's** settings (§2a `prefs`).
 Numeric rules: values may arrive as numeric strings (`"120"`); non-finite/unparseable → default;
 out of range → clamped; `integer` fields rounded. Range checks apply to the training fields too.
 
-**Providers** (transit systems): `type` must match `/^[a-z0-9_-]{1,32}$/` (a source plug-in id; shipped: `metrotransit`, `onebusaway`,
-`mock`), else the entry is dropped. `id` (same pattern) is kept unless invalid or taken, then `freeId(type)`. `name` (shown instead of the
+**Providers** (transit systems): `type` must match `/^[a-z0-9_-]{1,32}$/` (a source plug-in id; shipped: see §3), else the entry is dropped. `id` (same pattern) is kept unless invalid or taken, then `freeId(type)`. `name` (shown instead of the
 plug-in label, `''` = the label), `baseUrl` (trailing `/` stripped; `''` = the source's default), `apiKey` (`''` = the source's default).
 `coverage = {mode: 'auto'|'manual' (default auto), lat, lon (clamped, default 0), radius (COVERAGE_RADIUS, default 50000)}`.
 
@@ -144,8 +143,24 @@ planner drops pairs whose route doesn't serve the stop: "a saved stop gets drop-
 ## 3. Data sources — plug-ins (`src/sources/`)
 
 A **data source** is a self-contained plug-in. `src/sources/<type>/index.js` exports `plugin = {type, label, create(options, ctx) → provider}`
-(plus its own factory for tests). `src/sources/all.js` lists the shipped plug-ins, default first: metrotransit, onebusaway, mock.
+(plus its own factory for tests). `src/sources/all.js` lists the shipped plug-ins, default first: metrotransit, onebusaway, bvg (Berlin),
+wmata (Washington DC), mta (New York), bay511 (Bay Area), mbta (Boston), cta (Chicago), rtc (Las Vegas), mock.
 Sources may require only `src/sources/util.js` (`color(v)` → `'RRGGBB'`|`''`) and `src/common/geo.js`.
+
+Optional plug-in metadata, passed on by `registry.types()` for the settings page: `area = {lat, lon, radius}` (the system's home area:
+a new system's automatic coverage until stops are saved, and the source's `ctx.center`, see below), `needsKey: true`, `keyUrl` (where to
+get a key). `registry.createFor` gives the source `ctx.center` = the fixed location when one is set, else the system's coverage centre
+(when not 0,0), else the plug-in's `area` centre, else the location.
+
+| type | city | key | real time from | notes |
+|---|---|---|---|---|
+| `bvg` | Berlin (BVG / VBB: U, S, tram, bus) | none | v6.bvg.transport.rest (HAFAS) | catalog bounded to ~3 500 stops around the centre |
+| `wmata` | Washington DC (Metrobus + Metrorail) | required | api.wmata.com | rail trip keys only consistent within one snapshot |
+| `mta` | New York (MTA Bus Time; no subway) | required | SIRI (static data: OneBusAway) | no CORS: search index built on the phone only |
+| `bay511` | SF Bay Area (511.org, any operators) | required | SIRI | 60 requests/hour per key: rationed (token bucket) |
+| `mbta` | Boston (subway, bus, commuter rail, ferry) | optional | api-v3.mbta.com | 20 req/min without a key |
+| `cta` | Chicago (buses; no 'L' trains) | required | Bus Tracker v3 | no CORS: search index built on the phone only |
+| `rtc` | Las Vegas (RTC Southern Nevada) | required (Swiftly) | api.goswift.ly | any Swiftly agency via the base URL |
 
 `src/sources/registry.js`:
 
@@ -162,7 +177,8 @@ registry.create(config, deps)    // → provider for a single-source config {pro
 configuredRouteIds(config, providerId?) // configured route ids (of that system), then any v1 connection route ids; deduplicated
 ```
 
-`deps = {http, clock, storage}`. Only composition roots (`src/pkjs/index.js`, the settings page bundle, tools, integration tests) build
+`deps = {http, clock, storage}`; `http(url, cb, headers?)` performs a GET and calls `cb(err, parsedJsonBody)` once (`headers` = optional
+request headers, e.g. a source's API key sent as a header). Only composition roots (`src/pkjs/index.js`, the settings page bundle, tools, integration tests) build
 a registry; every other module receives a provider object (the app: a federation, §3a).
 
 Every provider implements:
@@ -256,6 +272,129 @@ Route directions from `data.entry.stopGroupings[*].stopGroups[*]` (`id`, `name.n
 `color = settings.color(route.color)` from the same reference entry (`''` if none). Empty `baseUrl` → `https://api.pugetsound.onebusaway.org/api/where`;
 empty `apiKey` → `TEST`. OBA has no `vehicles`.
 Fixtures: `test/fixtures/oba-*.json`.
+
+### `sources/bvg/index.js` — `createBvg({baseUrl, center}, http, deps)` (Berlin / Brandenburg, BVG + VBB)
+
+Exports `{createBvg, DEFAULT_BASE_URL, routeKey, parseTime, plugin}`; `DEFAULT_BASE_URL = 'https://v6.bvg.transport.rest'` (the public
+hafas-rest-api; empty `baseUrl` → default, trailing `/` stripped). No API key; CORS open (`*`, also for `Origin: null`); ≈ 100 requests/min,
+so at most **3 requests in flight**. `center` = `ctx.center` (catalog / listRoutes). An error body (`message` + `isHafasError` / `code`) →
+`Error(message)`; a wrong shape → `Error('bad response')`. Fixtures `test/fixtures/bvg-*.json` (real, trimmed). Tests: `test/bvg.test.js`.
+
+Ids: stops = HAFAS ids (`'900100026'`); routes = `routeKey(line)` = `<scope>:<product>:<name>` (`'11000000:tram:M4'`), scope = the region
+code of `de-vbb-<code>-…` line ids, else the line id's first segment (merges the variants HAFAS lists as separate lines; rail-replacement
+buses are their own route). `tripKey = tripId`. Names drop a trailing ` (Berlin)`.
+
+- `stopsNear(pos, r)`: `/locations/nearby?latitude=&longitude=&distance={r}&results=100&stops=true&poi=false&linesOfStops=true` (position
+  rounded to 4 decimals, answer reused 5 min) → stops with a location, `routeIds` = their lines' route ids, within `r`, nearest first.
+- `arrivals(stopId, b, a)`: `/stops/{id}/departures?when={now-b*60}&duration={ceil(b+a)}&linesOfStops=false&remarks=false` → only departures
+  whose `stop.id` is `stopId` (the API adds the station's other stops), not `cancelled`: `{routeId: routeKey(line), tripKey: tripId,
+  time: when || plannedWhen, predicted: typeof delay === 'number', headsign: direction}`, in the window, ascending.
+- `route(id)`: `/trips?lineName={name}&fromWhen={now}&untilWhen={now+1800}&stopovers=false` (none → once more from the next 11:00 UTC) →
+  trips of that route grouped by origin → destination; the 6 most frequent patterns each fetch `/trips/{tripId}?stopovers=true&polyline=true`.
+  Direction `{id: origin + '>' + destination, name: trip.direction without a leading 'S ' / 'U ' / 'S+U ', stopIds, paths: [polyline, else
+  stop positions]}`; patterns contained in a longer one are dropped. `shortName = line.name`, `longName = '<product>: <origin> - <destination>'`,
+  `color` = a built-in VBB table (U1–U9, S-Bahn; Berlin trams `BE1414`, buses `A5027D`; else `''`). Complete routes stored under
+  `busWatch.bvg.route.<id>` for **7 days**.
+- `vehicles(id)`: the route's bounding box + 0.01° → `/radar?…&results=256&duration=30&frames=1&polylines=false` → that route's movements.
+- `routeInfo = route`; `stopInfo`: a stop already seen, else `/stops/{id}`; `listRoutes`: lines of the catalog tile around `center`.
+- `catalog`: no line list exists (`/lines` is 404), ≈ 13 000 stops, so it is **bounded**: 7 tiles `/locations/nearby?…&distance=15000&results=1000`
+  (the centre and 6 points 12 km around it) → ≈ 3 500 stops / 430 routes, 7 requests; failing tiles skipped; no centre → error.
+
+### `sources/wmata/index.js` — `createWmata({baseUrl, apiKey}, http, deps)` (Washington DC: Metrobus + Metrorail)
+
+Exports `{createWmata, DEFAULT_BASE_URL, RAIL_LINES, easternEpoch, plugin}`; `DEFAULT_BASE_URL = 'https://api.wmata.com'`. A free key from
+developer.wmata.com is required, sent as the `api_key` **header**; empty key → every method `Error('WMATA needs an API key: get one at
+developer.wmata.com')` (async, no request). CORS `*` (preflight allows `api_key`). At most 3 requests in flight; a gateway 429 is retried
+once after 1.1 s. Errors: gateway `{statusCode, message}` (401 → `'WMATA rejected the API key (…)'`), service `{Message}` (HTTP 400).
+Fixtures `test/fixtures/wmata-*.json` are real responses (public demo key). Tests: `test/wmata.test.js`.
+
+Ids: bus route `RouteID` (`'D80'`), bus stop `StopID`; rail route = line code (`RD OR SV BL YL GR`), rail stop = the platform's station
+code (`'A01'`). `/^[A-Z]\d\d$/` ids are stations, the six line codes are rail lines, everything else is bus. Rail colours built in; bus `''`.
+Cached in `storage` under `busWatch.wmata.` for **7 days** (`routes`, `stations`, `lines`, `path.<line>`, `route.<id>`).
+
+- `stopsNear`: `/Bus.svc/json/jStops?Lat&Lon&Radius` + stations of `/Rail.svc/json/jStations` within `r`; nearest first.
+- `arrivals` (bus): `/NextBusService.svc/json/jPredictions?StopID=` → `{routeId: RouteID, tripKey: TripID, time: now + Minutes*60,
+  predicted: true, headsign: DirectionText}`. (rail): `/StationPrediction.svc/json/GetPrediction/All` (one snapshot, kept 30 s); predictions
+  carry no train id, so the **tripKey** is chained along the line within one snapshot (same destination, time ≈ previous station + run time).
+- `route` (bus): `/Bus.svc/json/jRouteDetails?RouteID=` → `Direction0/1` (stops in order, `Shape` as the path); (rail): jLines + `jPath` +
+  jStations (straight lines between stations; the Silver Line start is corrected to N12, Ashburn).
+- `vehicles` (bus): `/Bus.svc/json/jBusPositions?RouteID=` (`DateTime` is Washington local time → `easternEpoch`); rail → `[]`.
+- `listRoutes`, `stopInfo` (`jStopSchedule` / jStations), `catalog`: 4 requests (jRoutes, all jStops ≈ 7 500 stops, jLines, jStations).
+
+### `sources/mta/index.js` — `createMta({baseUrl, apiKey}, http, deps)` (New York City: MTA NYCT + MTA Bus)
+
+Exports `{createMta, DEFAULT_BASE_URL, KEY_URL, parseIso, monitoringRef}`; `DEFAULT_BASE_URL = 'https://bustime-classic.mta.info'`. One key
+for both APIs (`KEY_URL = 'https://register.developer.obanyc.com'`); empty key → every method `Error('MTA Bus Time needs an API key: …')`.
+Static data from MTA's OneBusAway "where" API (`{base}/api/where/…`, which has **no real-time data**), real time from SIRI JSON
+(`{base}/api/siri/…`). No CORS headers (the settings page cannot build its search index; the phone does). Buses only (subway real time is
+GTFS-RT protobuf). Fixtures `test/fixtures/mta-*.json` hand-built from MTA's docs (SIRI JSON nesting inferred from the XML docs, parsed
+tolerantly). Tests: `test/mta.test.js`.
+
+Ids: stops `MTA_308209` (SIRI `MonitoringRef` gets the bare `308209`), routes `MTA NYCT_B63` / `MTABC_Q53+` (= SIRI `LineRef`), `tripKey` =
+`FramedVehicleJourneyRef.DatedVehicleJourneyRef`.
+
+- `stopsNear`: `stops-for-location.json?lat&lon&latSpan&lonSpan` → filtered to `r`, nearest first.
+- `arrivals`: `stop-monitoring.json?key&version=2&OperatorRef=MTA&MonitoringRef={bare}&MaximumStopVisits=30` → `MonitoredVehicleJourney`:
+  `time` = expected arrival / departure (`predicted`), else aimed; `headsign = DestinationName`; upcoming only.
+- `vehicles`: `vehicle-monitoring.json?…&LineRef=` (never without a LineRef: MTA revokes keys polling every vehicle).
+- `route = routeInfo`: `stops-for-route/{route}.json?includePolylines=true&version=2` (as OneBusAway), stored 7 days.
+- `stopInfo`: `stop/{id}.json`; `listRoutes`: `routes-for-agency/{MTA NYCT|MTABC}`; `catalog`: as OneBusAway (~335 requests, 3 at a time).
+
+### `sources/bay511/index.js` — `createBay511({baseUrl, apiKey, routeIds}, http, deps)` (San Francisco Bay Area, 511.org)
+
+Exports `{createBay511, DEFAULT_BASE_URL, KEY_URL, parseIso, parseOptions, plugin}`. Key required (`KEY_URL = 'https://511.org/open-data/token'`).
+**Operators** are named in the Base URL field: `''` → `https://api.511.org/transit` + `SF` (Muni); `'SF, BA'` → default server + those;
+`'https://host/path?operators=SF,BA'` (or `#SF,BA`) → that server. **All ids are `OP:id`** (stop `SF:15696`, route `SF:14`). APIs:
+`lines`, `stops`, `patterns`, `StopMonitoring`, `VehicleMonitoring` (`?api_key=…&format=json`, at most 3 in flight). SIRI `Status: false` →
+its error description; a leading UTF-8 BOM is stripped. Fixtures hand-built from the 511 specification. Tests: `test/bay511.test.js`.
+
+- `route`: patterns grouped by `DirectionRef`, the main pattern (most trips) per direction; shapes from `LinksInSequence`; stop positions from
+  the operator's `stops`; names from `lines`. `arrivals`: `MonitoredStopVisit[]` (expected, else aimed times; `tripKey =
+  OP:DatedVehicleJourneyRef@DataFrameRef`). `vehicles`: `VehicleActivity[]` of the line. `stopsNear`: stops of the saved routes (as Metro
+  Transit). `catalog`: lines + stops per operator (2 requests each; stops get `routeIds` only from routes already built).
+- **Rate limit** (60 requests / hour / key by default): a token bucket per key in `storage` (10 burst, 55 / hour); static data cached 7 days;
+  a stop's predictions reused for 55 s, the stalest stops refreshed first, others shown from their last predictions (≤ 30 min); rail / ferry
+  operators answer several stops with one request. In practice: BART-only ≈ 1 request per refresh; 4 Muni stops → each every ~4–5 min.
+
+### `sources/mbta/index.js` — `createMbta({baseUrl, apiKey, routeIds}, http, deps)` (Boston: subway, bus, commuter rail, ferry)
+
+Exports `{createMbta, DEFAULT_BASE_URL, plugin, parseIso, easternOffset, serviceWindow}`; `DEFAULT_BASE_URL = 'https://api-v3.mbta.com'`
+(JSON:API, CORS `*`). Key optional (`&api_key=`; without one 20 requests/min per IP, with one 1000/min). JSON:API `errors` → `Error('MBTA: …')`.
+At most 4 requests in flight. Fixtures real (recorded). Tests: `test/mbta.test.js`.
+
+Stop ids are GTFS `location_type` 0 stops (platforms such as `70042`, bus / ferry stops); parent stations (`place-…`) work in `arrivals` and
+`stopInfo`. `tripKey` = trip id.
+
+- `arrivals`: calls of one tick batched (≤ 20 stops) into `/predictions?filter[stop]=…&include=trip` + `/schedules?…` for the service window;
+  predictions win, schedules fill in after the last prediction; cancelled / skipped visits hidden.
+- `route`: calls batched (≤ 6 routes) into `/route_patterns?filter[route]=…&include=route,representative_trip.shape,representative_trip.stops`;
+  typicality-1 patterns per direction, decoded shapes; stored 7 days. `stopsNear`: stops of the saved routes. `vehicles`: `/vehicles?filter[route]=`.
+- `listRoutes`: `/routes`; `stopInfo`: `/stops/{id}`; `catalog`: 2 requests (`/routes` and every route pattern with its stops, ~4 MB).
+
+### `sources/cta/index.js` — `createCta({baseUrl, apiKey, routeIds}, http, deps)` (Chicago, CTA buses)
+
+Exports `{createCta, chicagoTime, DEFAULT_BASE_URL, plugin}`; `DEFAULT_BASE_URL = 'https://www.ctabustracker.com/bustime/api/v3'`
+(`{base}/{fn}?key={K}&format=json&…`). Key required. Buses only ('L' trains are the separate Train Tracker API with its own key and no
+geometry). No CORS headers. Times: `chicagoTime` (Chicago wall time with US DST rules, independent of the phone's zone). Fixtures hand-built
+from the v3 documentation. Tests: `test/cta.test.js`.
+
+- `arrivals`: batched across stops (≤ 10 per request) into `getpredictions?stpid=…`; `tripKey = rt + '/' + tatripid + '@' + stsd`; canceled
+  trips dropped; reused 20 s. `route`: `getroutes` (colours `rtclr`) + `getpatterns?rt=` (directions by `rtdir`, one path per pattern), stored
+  3 days. `stopsNear`: stops of the saved routes. `vehicles`: batched `getvehicles?rt=…`. `catalog`: `getroutes` + `getpatterns` per route
+  (~126 requests). Budget: 100 000 requests / day per key; a refresh costs ⌈stops/10⌉ + ⌈vehicle routes/10⌉.
+
+### `sources/rtc/index.js` — `createRtc({baseUrl, apiKey, routeIds}, http, deps)` (Las Vegas, RTC Southern Nevada, via Swiftly)
+
+Exports `{createRtc, parseBase, DEFAULT_HOST, DEFAULT_AGENCY, plugin}`. RTC's real-time data is only published through the Swiftly API (JSON,
+CORS `*`). The key is sent as the `Authorization` header; empty key → `Error('RTC (Las Vegas) needs a Swiftly API key: …')`. `parseBase`:
+`''` → `https://api.goswift.ly` + agency `las-vegas-rtc`; `https://host/<agencyKey>` → another Swiftly agency. Errors `{errorCode,
+errorMessage}` → `Error('Swiftly: …')`. Route ids are GTFS `route_id`s; Swiftly's `route=` takes the short name (mapped through the route
+list). At most 3 in flight. Fixtures hand-built from Swiftly's OpenAPI spec. Tests: `test/rtc.test.js`.
+
+- `listRoutes`: `/info/{agency}/routes`; `route = routeInfo`: `/info/{agency}/routes?route={short}&verbose=true` (directions, shapes), stored
+  7 days; `arrivals`: `/real-time/{agency}/predictions?stop=&number=` (`tripKey = tripId`); `vehicles`: `/real-time/{agency}/vehicles?route=&verbose=true`;
+  `stopsNear`: stops of the saved routes; `stopInfo`: from a built route, else via the stop's predictions; `catalog`: the route list + every
+  route (~40 requests).
 
 ### `sources/mock/index.js` — `createMock({location, routes}, clock)` (plug-in passes `ctx.center` / `ctx.routes`)
 
@@ -559,7 +698,9 @@ It keeps at least 8 items so the wheel has rows above and below the selection.
 into the page (tiny CommonJS shim resolving relative paths, exposing `window.BusWatch = {geo, settings, view, catalog, federation, ranking,
 optimize, directions, format, registry}` where `registry = createRegistry(require('src/sources/all'))`) and writes `src/pkjs/config-page.js`
 (`module.exports = "<html…"`; generated, not committed — `pebble build` and `tools/run-tests.js` regenerate it), keeping a literal
-`<!--PARAMS-->` marker in `<head>`. Self-contained: no external URLs. Mobile-friendly.
+`<!--PARAMS-->` marker in `<head>`. Self-contained: no external URLs. Mobile-friendly. The page is opened as a percent-encoded `data:`
+URI, so the bundled modules are slimmed (indentation, blank lines and whole-line `//` comments removed; the build fails on a template
+string or line continuation, which that would break): ≈ 480 KB encoded with every source.
 
 Reads `window.__params` (`{config, samples, learned, prefs, plans, catalogs, return_to}`); missing → defaults (prefs: `view.prefs(null,
 navigator.language)`). DOM contract (used by the test):

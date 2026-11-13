@@ -1,0 +1,46 @@
+{
+  "success": true,
+  "route": "/real-time/las-vegas-rtc/predictions GET",
+  "data": {
+    "agencyKey": "las-vegas-rtc",
+    "predictionsData": [
+      {
+        "destinations": [
+          {
+            "directionId": "0",
+            "headsign": "South Strip Transfer Terminal",
+            "predictions": [
+              { "min": 4, "sec": 270, "time": 1762992270, "tripId": "2410933", "vehicleId": "1415" },
+              { "min": 19, "sec": 1170, "time": 1762993170, "tripId": "2410934", "vehicleId": "1422" },
+              { "min": 95, "sec": 5700, "time": 1762997700, "tripId": "2410939", "vehicleId": "1430" }
+            ]
+          }
+        ],
+        "routeId": "10109",
+        "routeName": "109 - Maryland Parkway",
+        "routeShortName": "109",
+        "stopCode": 11650,
+        "stopId": "1650",
+        "stopName": "Maryland Pkwy @ Flamingo Rd"
+      },
+      {
+        "destinations": [
+          {
+            "directionId": "1",
+            "headsign": " UNLV ",
+            "predictions": [
+              { "min": 9, "sec": 570, "time": 1762992570, "tripId": "2520411", "vehicleId": "" },
+              { "min": 1, "sec": 60, "time": 1762992060, "tripId": "2520410", "vehicleId": "2210" }
+            ]
+          }
+        ],
+        "routeId": "10202",
+        "routeName": "202 - Flamingo",
+        "routeShortName": "202",
+        "stopCode": 11650,
+        "stopId": "1650",
+        "stopName": "Maryland Pkwy @ Flamingo Rd"
+      }
+    ]
+  }
+}

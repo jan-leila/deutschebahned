@@ -1,0 +1,1 @@
+{"errors":[{"code":"rate_limited","status":"429","source":{"parameter":"api_key"},"detail":"You have exceeded your allowed usage rate. Visit https://api-v3.mbta.com/ to register or to increase your limit."}],"jsonapi":{"version":"1.0"}}

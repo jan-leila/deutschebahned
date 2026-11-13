@@ -2,10 +2,12 @@
 // Used by the planner (tile titles) and the router (trip descriptions).
 var geo = require('./geo');
 
-// 'Northbound', 'north', 'NB', 'N' ... → 'NB' (same for S/E/W); anything else → ''
+// 'Northbound', 'north', 'NB', 'N' ... → 'NB' (same for S/E/W); anything else → ''. A single letter counts only as the
+// whole name ('S' → 'SB', but 'S Hackescher Markt', with Berlin's S-Bahn prefix, → '').
 function abbreviate(name) {
   if (typeof name !== 'string') return '';
-  var m = name.replace(/^\s+/, '').match(/^(north|south|east|west|nb|sb|eb|wb|n|s|e|w)(bound|\b)/i);
+  var t = name.replace(/^\s+|\s+$/g, '');
+  var m = t.match(/^(north|south|east|west|nb|sb|eb|wb)(bound|\b)/i) || t.match(/^([nsew])\.?$/i);
   return m ? m[1].charAt(0).toUpperCase() + 'B' : '';
 }
 

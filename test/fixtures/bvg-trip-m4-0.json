@@ -1,0 +1,1033 @@
+{
+ "trip": {
+  "id": "1|70501|4|86|13112026",
+  "origin": {
+   "type": "stop",
+   "id": "900151003",
+   "name": "Zingster Str. (Berlin)",
+   "location": {
+    "type": "location",
+    "id": "900151003",
+    "latitude": 52.57236,
+    "longitude": 13.495164
+   }
+  },
+  "destination": {
+   "type": "stop",
+   "id": "900100002",
+   "name": "S Hackescher Markt (Berlin)",
+   "location": {
+    "type": "location",
+    "id": "900100002",
+    "latitude": 52.522605,
+    "longitude": 13.402359
+   }
+  },
+  "direction": "S Hackescher Markt",
+  "line": {
+   "type": "line",
+   "id": "de-vbb-11000000-tram-m4",
+   "fahrtNr": "33444",
+   "name": "M4",
+   "public": true,
+   "adminCode": "BVT---",
+   "productName": "Tram",
+   "mode": "train",
+   "product": "tram"
+  },
+  "stopovers": [
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900151003",
+     "name": "Zingster Str. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900151003",
+      "latitude": 52.57236,
+      "longitude": 13.495164
+     }
+    },
+    "plannedArrival": null,
+    "plannedDeparture": "2026-11-13T22:25:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900151004",
+     "name": "Zingster Str./Ribnitzer Str. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900151004",
+      "latitude": 52.570275,
+      "longitude": 13.497384
+     }
+    },
+    "plannedArrival": "2026-11-13T22:26:00+01:00",
+    "plannedDeparture": "2026-11-13T22:26:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900151501",
+     "name": "Ahrenshooper Str. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900151501",
+      "latitude": 52.566212,
+      "longitude": 13.501888
+     }
+    },
+    "plannedArrival": "2026-11-13T22:27:00+01:00",
+    "plannedDeparture": "2026-11-13T22:27:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900151006",
+     "name": "Prerower Platz (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900151006",
+      "latitude": 52.563218,
+      "longitude": 13.505061
+     }
+    },
+    "plannedArrival": "2026-11-13T22:29:00+01:00",
+    "plannedDeparture": "2026-11-13T22:29:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900150002",
+     "name": "Hansastr./Malchower Weg (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900150002",
+      "latitude": 52.561052,
+      "longitude": 13.500683
+     }
+    },
+    "plannedArrival": "2026-11-13T22:30:00+01:00",
+    "plannedDeparture": "2026-11-13T22:30:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900150501",
+     "name": "Feldtmannstr. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900150501",
+      "latitude": 52.559829,
+      "longitude": 13.495326
+     }
+    },
+    "plannedArrival": "2026-11-13T22:31:00+01:00",
+    "plannedDeparture": "2026-11-13T22:31:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900140517",
+     "name": "Stadion Buschallee/Hansastr. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900140517",
+      "latitude": 52.556908,
+      "longitude": 13.485986
+     }
+    },
+    "plannedArrival": "2026-11-13T22:32:00+01:00",
+    "plannedDeparture": "2026-11-13T22:32:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900140014",
+     "name": "Giersstr. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900140014",
+      "latitude": 52.55458,
+      "longitude": 13.482426
+     }
+    },
+    "plannedArrival": "2026-11-13T22:33:00+01:00",
+    "plannedDeparture": "2026-11-13T22:33:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900140518",
+     "name": "Sulzfelder Str. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900140518",
+      "latitude": 52.553312,
+      "longitude": 13.475765
+     }
+    },
+    "plannedArrival": "2026-11-13T22:35:00+01:00",
+    "plannedDeparture": "2026-11-13T22:35:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900140519",
+     "name": "Buschallee (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900140519",
+      "latitude": 52.553672,
+      "longitude": 13.469347
+     }
+    },
+    "plannedArrival": "2026-11-13T22:36:00+01:00",
+    "plannedDeparture": "2026-11-13T22:36:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900140006",
+     "name": "Weißer See (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900140006",
+      "latitude": 52.551883,
+      "longitude": 13.465481
+     }
+    },
+    "plannedArrival": "2026-11-13T22:37:00+01:00",
+    "plannedDeparture": "2026-11-13T22:37:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900140005",
+     "name": "Albertinenstr. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900140005",
+      "latitude": 52.549788,
+      "longitude": 13.457778
+     }
+    },
+    "plannedArrival": "2026-11-13T22:39:00+01:00",
+    "plannedDeparture": "2026-11-13T22:39:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900140011",
+     "name": "Antonplatz (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900140011",
+      "latitude": 52.548287,
+      "longitude": 13.450856
+     }
+    },
+    "plannedArrival": "2026-11-13T22:40:00+01:00",
+    "plannedDeparture": "2026-11-13T22:40:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900110016",
+     "name": "Greifswalder Str./Ostseestr. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900110016",
+      "latitude": 52.545473,
+      "longitude": 13.444617
+     }
+    },
+    "plannedArrival": "2026-11-13T22:42:00+01:00",
+    "plannedDeparture": "2026-11-13T22:42:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900110515",
+     "name": "Thomas-Mann-Str. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900110515",
+      "latitude": 52.54337,
+      "longitude": 13.441435
+     }
+    },
+    "plannedArrival": "2026-11-13T22:43:00+01:00",
+    "plannedDeparture": "2026-11-13T22:43:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900110003",
+     "name": "S Greifswalder Str. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900110003",
+      "latitude": 52.540727,
+      "longitude": 13.438352
+     }
+    },
+    "plannedArrival": "2026-11-13T22:44:00+01:00",
+    "plannedDeparture": "2026-11-13T22:44:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900110020",
+     "name": "Greifswalder Str./Danziger Str. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900110020",
+      "latitude": 52.535999,
+      "longitude": 13.433462
+     }
+    },
+    "plannedArrival": "2026-11-13T22:46:00+01:00",
+    "plannedDeparture": "2026-11-13T22:46:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900110521",
+     "name": "Hufelandstr. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900110521",
+      "latitude": 52.53252,
+      "longitude": 13.428787
+     }
+    },
+    "plannedArrival": "2026-11-13T22:47:00+01:00",
+    "plannedDeparture": "2026-11-13T22:47:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900110019",
+     "name": "Am Friedrichshain (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900110019",
+      "latitude": 52.528016,
+      "longitude": 13.425138
+     }
+    },
+    "plannedArrival": "2026-11-13T22:48:00+01:00",
+    "plannedDeparture": "2026-11-13T22:48:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900100040",
+     "name": "Mollstr./Otto-Braun-Str. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900100040",
+      "latitude": 52.525185,
+      "longitude": 13.419942
+     }
+    },
+    "plannedArrival": "2026-11-13T22:50:00+01:00",
+    "plannedDeparture": "2026-11-13T22:50:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900100005",
+     "name": "U Alexanderplatz (Berlin) [Tram]",
+     "location": {
+      "type": "location",
+      "id": "900100005",
+      "latitude": 52.522083,
+      "longitude": 13.414593
+     }
+    },
+    "plannedArrival": "2026-11-13T22:53:00+01:00",
+    "plannedDeparture": "2026-11-13T22:53:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900100026",
+     "name": "S+U Alexanderplatz Bhf/Gontardstr. (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900100026",
+      "latitude": 52.52105,
+      "longitude": 13.411285
+     }
+    },
+    "plannedArrival": "2026-11-13T22:55:00+01:00",
+    "plannedDeparture": "2026-11-13T22:55:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900100515",
+     "name": "Spandauer Str./Marienkirche (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900100515",
+      "latitude": 52.520025,
+      "longitude": 13.404822
+     }
+    },
+    "plannedArrival": "2026-11-13T22:57:00+01:00",
+    "plannedDeparture": "2026-11-13T22:57:00+01:00"
+   },
+   {
+    "stop": {
+     "type": "stop",
+     "id": "900100002",
+     "name": "S Hackescher Markt (Berlin)",
+     "location": {
+      "type": "location",
+      "id": "900100002",
+      "latitude": 52.522605,
+      "longitude": 13.402359
+     }
+    },
+    "plannedArrival": "2026-11-13T22:58:00+01:00",
+    "plannedDeparture": null
+   }
+  ],
+  "polyline": {
+   "type": "FeatureCollection",
+   "features": [
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.49444,
+       52.57265
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.49476,
+       52.57217
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.49668,
+       52.57048
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.50129,
+       52.56644
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.50285,
+       52.56532
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.50496,
+       52.56346
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.50494,
+       52.56324
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.50402,
+       52.56289
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.49975,
+       52.56133
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.49552,
+       52.55982
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.48752,
+       52.55692
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.48614,
+       52.55637
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.48515,
+       52.55566
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.48268,
+       52.55457
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.47998,
+       52.55349
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.47897,
+       52.55326
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.47523,
+       52.55338
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.46955,
+       52.55375
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.46775,
+       52.55387
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.46754,
+       52.55382
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.46732,
+       52.5537
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.46664,
+       52.55262
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.46587,
+       52.55216
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.46359,
+       52.55113
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.45665,
+       52.54955
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.45166,
+       52.54847
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.45069,
+       52.54823
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.44496,
+       52.54571
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.44342,
+       52.54504
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.44277,
+       52.54464
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.4415,
+       52.54353
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.43842,
+       52.54086
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.43352,
+       52.5366
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.42961,
+       52.53334
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.4287,
+       52.53246
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.42585,
+       52.53011
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.42544,
+       52.52962
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.42436,
+       52.52869
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.42039,
+       52.52565
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.41884,
+       52.52432
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.4185,
+       52.52427
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.41776,
+       52.52446
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.41737,
+       52.52434
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.41458,
+       52.52211
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.41405,
+       52.52172
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.4121,
+       52.52076
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.41178,
+       52.52077
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.41134,
+       52.52103
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.40955,
+       52.52218
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.40921,
+       52.52222
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.40551,
+       52.52041
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.40499,
+       52.52017
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.40465,
+       52.52019
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.40293,
+       52.52147
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.4023,
+       52.52221
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.40248,
+       52.52236
+      ]
+     }
+    },
+    {
+     "type": "Feature",
+     "properties": {},
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       13.40302,
+       52.52252
+      ]
+     }
+    }
+   ]
+  }
+ }
+}

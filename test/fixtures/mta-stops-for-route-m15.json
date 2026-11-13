@@ -1,0 +1,7 @@
+{"code":200,"currentTime":1762992000000,"text":"OK","version":2,"data":{"entry":{"routeId":"MTA NYCT_M15+","polylines":[],
+"stopIds":["MTA_401906","MTA_308209"],"stopGroupings":[]},
+"references":{"agencies":[],"situations":[],"stopTimes":[],"trips":[],
+ "routes":[{"id":"MTA NYCT_M15+","shortName":"M15-SBS","longName":"","description":"via 1st Av / 2nd Av","color":"B933AD","agencyId":"MTA NYCT","type":3}],
+ "stops":[
+  {"id":"MTA_401906","code":"401906","direction":"N","lat":40.7036,"lon":-74.0087,"name":"SOUTH ST/WALL ST","routeIds":["MTA NYCT_M15+"]},
+  {"id":"MTA_308209","code":"308209","direction":"S","lat":40.67685,"lon":-73.983,"name":"5 AV/UNION ST","routeIds":["MTA NYCT_B63"]}]}}}

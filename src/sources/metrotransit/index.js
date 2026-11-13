@@ -560,6 +560,7 @@ function createMetroTransit(opts, http, deps) {
 var plugin = {
   type: 'metrotransit',
   label: 'Metro Transit (Minneapolis–St Paul)',
+  area: { lat: 44.9778, lon: -93.265, radius: 60000 },   // home area: automatic coverage until stops are saved
   create: function (options, ctx) {
     return createMetroTransit({ baseUrl: options.baseUrl, routeIds: ctx.routeIds }, ctx.http,
       { clock: ctx.clock, storage: ctx.storage });

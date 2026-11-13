@@ -229,6 +229,7 @@ function createOneBusAway(opts, http) {
 var plugin = {
   type: 'onebusaway',
   label: 'OneBusAway',
+  area: { lat: 47.6062, lon: -122.3321, radius: 80000 },  // the default server (Puget Sound); another server: set coverage
   create: function (options, ctx) {
     return createOneBusAway({ baseUrl: options.baseUrl, apiKey: options.apiKey }, ctx.http);
   }

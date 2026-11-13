@@ -84,3 +84,12 @@ test('bake: learned route / walk / ride weights into the saved scales; unknown k
   assert.equal(baked.routes.length, 3);
   assert.deepEqual(view.bake(twoCities(), null), twoCities());
 });
+
+test('coverage auto: no positioned stop → the stored home area when it has a centre, else everywhere', () => {
+  const c = settings.normalize({ providers: [{ id: 'a', type: 'mock', coverage: { mode: 'auto', lat: 44.97, lon: -93.26, radius: 60000 } },
+    { id: 'b', type: 'mock' }], stops: [{ providerId: 'a', id: 's' }] });
+  assert.deepEqual(view.coverage(c, 'a'), { lat: 44.97, lon: -93.26, radius: 60000 });
+  assert.equal(view.coverage(c, 'b'), null);
+  c.stops.push({ providerId: 'a', id: 't', lat: 45.1, lon: -93.1, walkScale: 0, rideScale: 0 });
+  assert.deepEqual(view.coverage(c, 'a'), { lat: 45.1, lon: -93.1, radius: view.AUTO_MARGIN }, 'saved stops win');
+});

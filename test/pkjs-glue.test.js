@@ -77,7 +77,7 @@ test('pkjs glue: ready -> list, select -> sample, settings page open/close', asy
     assert.deepEqual(JSON.parse(fakes.store.get('busWatch.samples')), []);
     assert.equal(fakes.messages.filter(m => 'ITEM_COUNT' in m).pop().ITEM_COUNT <= 3, true);
 
-    assert.deepEqual(params.sources.map(s => s.type), ['metrotransit', 'onebusaway', 'mock'], 'source plug-ins listed');
+    assert.deepEqual(params.sources.map(s => s.type), ['metrotransit', 'onebusaway', 'bvg', 'wmata', 'mta', 'bay511', 'mbta', 'cta', 'rtc', 'mock'], 'source plug-ins listed');
     assert.deepEqual(params.plans, {});
     assert.equal(params.config.version, 2, 'the stored version 1 config was migrated');
     assert.deepEqual(params.prefs, { units: 'imperial', clock24: false, known: false }, 'en-US guess until the watch says');

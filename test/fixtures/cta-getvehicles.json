@@ -1,0 +1,15 @@
+{
+  "bustime-response": {
+    "vehicle": [
+      { "vid": "8184", "tmstmp": "20260113 13:59:42", "lat": "41.88193", "lon": "-87.66032", "hdg": "270", "pid": 3937, "rt": "20",
+        "des": "Austin", "pdist": 1200, "dly": false, "spd": 14, "tatripid": "1040713", "tablockid": "20 -803",
+        "origtatripno": "262522629", "zone": "", "mode": 1, "psgld": "N/A", "stst": 49800, "stsd": "2026-01-13" },
+      { "vid": "1234", "tmstmp": "20260113 13:59:50", "lat": "41.8829", "lon": "-87.66689", "hdg": "180", "pid": 5001, "rt": "9",
+        "des": "95th Street", "pdist": 300, "dly": false, "spd": 9, "tatripid": "88001", "tablockid": "9 -712",
+        "origtatripno": "262599001", "zone": "", "mode": 1, "psgld": "N/A", "stst": 50100, "stsd": "2026-01-13" },
+      { "vid": "7777", "tmstmp": "20260113 13:58:00", "lat": "0", "lon": "0", "hdg": "0", "pid": 3936, "rt": "20",
+        "des": "Michigan", "pdist": 0, "dly": false, "spd": 0, "tatripid": "1040790", "tablockid": "20 -870",
+        "origtatripno": "262522690", "zone": "", "mode": 1, "psgld": "N/A", "stst": 49000, "stsd": "2026-01-13" }
+    ]
+  }
+}

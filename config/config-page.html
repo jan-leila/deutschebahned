@@ -155,6 +155,9 @@ header .titles { flex: 1; min-width: 0; }
 .provider-row .c-coverageMode { grid-column: 1 / -1; }
 .provider-row select { width: 100%; padding: 6px 8px; font-size: 16px; }
 .provider-row .manual[hidden] { display: none; }
+.key-hint { font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+.key-hint.warn { color: var(--danger); }
+.key-hint:empty { display: none; }
 .provider-row .manual { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 8px; }
 .row-head { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; }
 .row-head b { font-size: 15px; }
@@ -206,7 +209,8 @@ header .titles { flex: 1; min-width: 0; }
   <section>
     <p class="help">Add every system you ride, for example one per city. Each one is only asked for buses when you're
       inside its <b>coverage area</b>. <b>Automatic</b> coverage is the area around the stops you've saved for that system.
-      <b>Metro Transit</b> needs no API key. <b>OneBusAway</b> servers use one (blank = the public <code>TEST</code> key).
+      Some systems need a free <b>API key</b>; the key field says where to get one. A new system starts out covering its home
+      city. <b>OneBusAway</b> works with any OneBusAway server (blank = Puget Sound with the public <code>TEST</code> key).
       <b>Mock</b> serves made-up data for trying the app.</p>
     <div id="providers" class="list"></div>
     <div class="empty">No transit systems yet. Add one to get started.</div>
@@ -715,6 +719,19 @@ header .titles { flex: 1; min-width: 0; }
     return !!qs(document, '#routes .route-row[data-provider="' + pid + '"], #stops .stop-row[data-provider="' + pid + '"]');
   }
 
+  // registry.types() entry of a plug-in type (label, optional home area / key needs), or null
+  function typeInfo(type) {
+    var types = registry.types();
+    for (var i = 0; i < types.length; i++) if (types[i].type === type) return types[i];
+    return null;
+  }
+  // a new system's automatic coverage starts as its plug-in's home area (until stops are saved)
+  function withHomeArea(values) {
+    var info = typeInfo(values.type);
+    if (info && info.area) values.coverage = { mode: 'auto', lat: info.area.lat, lon: info.area.lon, radius: info.area.radius };
+    return values;
+  }
+
   function addProvider(values) {
     if (providerRows().length >= MAX_PROVIDERS) return null;
     var types = registry.types(), items = [];
@@ -723,7 +740,7 @@ header .titles { flex: 1; min-width: 0; }
       var used = {}, rows = providerRows(), type = types.length ? types[0].type : 'mock';
       for (i = 0; i < rows.length; i++) used[rowValue(rows[i], 'type')] = true;
       for (i = 0; i < types.length; i++) if (!used[types[i].type]) { type = types[i].type; break; }
-      values = settings.defaultProvider(settings.freeId(type, usedProviderIds()), type);
+      values = withHomeArea(settings.defaultProvider(settings.freeId(type, usedProviderIds()), type));
     }
     if (!registry.has(values.type)) items.push([values.type, values.type + ' (not available)']);
     var cv = values.coverage || {};
@@ -739,7 +756,9 @@ header .titles { flex: 1; min-width: 0; }
     row.appendChild(labelled('c-baseUrl', 'Base URL (optional)', base));
     var key = makeInput('apiKey', 'text', values.apiKey);
     key.placeholder = "the system's default";
-    row.appendChild(labelled('c-apiKey', 'API key (optional)', key));
+    var keyLabel = labelled('c-apiKey', 'API key', key);
+    keyLabel.appendChild(el('span', 'key-hint'));
+    row.appendChild(keyLabel);
     var mode = makeSelect('coverageMode', [['auto', 'Automatic (around its saved stops)'], ['manual', 'Around a place I choose']], cv.mode || 'auto');
     row.appendChild(labelled('c-coverageMode', 'Coverage area', mode));
     var manual = el('div', 'manual');
@@ -785,6 +804,13 @@ header .titles { flex: 1; min-width: 0; }
         var used = usedProviderIds();
         delete used[pid];
         qs(row, 'input[name=id]').value = settings.freeId(typeSel.value, used);
+        // ...and, with automatic coverage, the new type's home area
+        var info = typeInfo(typeSel.value);
+        if (mode.value === 'auto') {
+          qs(row, 'input[name=lat]').value = info && info.area ? coord(info.area.lat) : '0';
+          qs(row, 'input[name=lon]').value = info && info.area ? coord(info.area.lon) : '0';
+          showMetric(qs(row, 'input[name=radius]'), info && info.area ? info.area.radius : 50000);
+        }
       }
       renderProviderInfo();
     };
@@ -801,9 +827,18 @@ header .titles { flex: 1; min-width: 0; }
       var manual = qs(rows[i], '.manual'), summary = qs(rows[i], '.coverage-summary');
       manual.hidden = p.coverage.mode !== 'manual';
       var area = view.coverage(c, pid);
+      var fromStops = false;
+      for (var k = 0; k < c.stops.length; k++) if (c.stops[k].providerId === pid && c.stops[k].lat !== null) fromStops = true;
       if (!area) summary.textContent = 'Used everywhere: none of its saved stops has a position yet.';
       else summary.textContent = (p.coverage.mode === 'manual' ? 'Used within ' : 'Used within about ') + distanceText(area.radius) +
-        ' of ' + coord(area.lat) + ', ' + coord(area.lon) + '.';
+        ' of ' + coord(area.lat) + ', ' + coord(area.lon) +
+        (p.coverage.mode !== 'manual' && !fromStops ? ' (its home area, until you save stops).' : '.');
+      var info = typeInfo(p.type), hint = qs(rows[i], '.key-hint');
+      if (hint) {
+        hint.textContent = info && info.needsKey ? (trim(p.apiKey) ? '' : 'Needs a free API key' + (info.keyUrl ? ': ' + info.keyUrl : '') + '.')
+          : 'Optional: blank = the default.';
+        hint.className = 'key-hint' + (info && info.needsKey && !trim(p.apiKey) ? ' warn' : '');
+      }
       var st = qs(rows[i], '.index-status'), ix = indexState(p);
       if (ix.building) setStatus(st, 'Indexing routes and stops… ' + (ix.total ? ix.done + '/' + ix.total + ' routes' : ''));
       else if (ix.error) setStatus(st, "Couldn't index: " + ix.error, true);
@@ -827,7 +862,7 @@ header .titles { flex: 1; min-width: 0; }
     };
   }
   // GET url → JSON; cb(err, body) is always called once, asynchronously and outside the promise chain
-  function http(url, cb) {
+  function http(url, cb, headers) {
     var done = false;
     function finish(err, body) {
       if (done) return;
@@ -836,7 +871,7 @@ header .titles { flex: 1; min-width: 0; }
     }
     try {
       if (typeof window.fetch !== 'function') return finish(new Error('no network access'));
-      Promise.resolve(window.fetch(url)).then(function (res) {
+      Promise.resolve(window.fetch(url, headers ? { headers: headers } : undefined)).then(function (res) {
         if (!res) throw new Error('no response');
         return Promise.resolve(res.json()).then(null, function () { return null; }).then(function (body) {
           if (!res.ok) {

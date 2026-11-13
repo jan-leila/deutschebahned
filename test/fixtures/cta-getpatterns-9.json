@@ -1,0 +1,21 @@
+{
+  "bustime-response": {
+    "ptr": [
+      {
+        "pid": 5000, "ln": 2640.0, "rtdir": "Northbound",
+        "pt": [
+          { "seq": 1, "lat": 41.8801, "lon": -87.6668, "typ": "S", "stpid": "1700", "stpnm": "Ashland & Monroe", "pdist": 0.0 },
+          { "seq": 2, "lat": 41.882, "lon": -87.6667, "typ": "S", "stpid": "1702", "stpnm": "Ashland & Madison", "pdist": 700.0 },
+          { "seq": 3, "lat": 41.8833, "lon": -87.66675, "typ": "S", "stpid": "1704", "stpnm": "Ashland & Washington", "pdist": 1400.0 }
+        ]
+      },
+      {
+        "pid": 5001, "ln": 2640.0, "rtdir": "Southbound", "dtrid": "BFC46F62-990F-4AB4-A85C-3AF84574EC99",
+        "pt": [
+          { "seq": 1, "lat": 41.88335, "lon": -87.6669, "typ": "S", "stpid": "1705", "stpnm": "Ashland & Washington", "pdist": 0.0 },
+          { "seq": 2, "lat": 41.8819, "lon": -87.6669, "typ": "S", "stpid": "457", "stpnm": "Madison & Ashland", "pdist": 700.0 }
+        ]
+      }
+    ]
+  }
+}

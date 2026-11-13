@@ -1,0 +1,306 @@
+{
+ "departures": [
+  {
+   "tripId": "1|70465|3|86|13112026",
+   "when": "2026-11-13T22:45:00+01:00",
+   "plannedWhen": "2026-11-13T22:41:00+01:00",
+   "delay": 240,
+   "platform": "Pos. 15",
+   "plannedPlatform": "Pos. 15",
+   "prognosisType": "prognosed",
+   "direction": "S Hackescher Markt",
+   "stop": {
+    "type": "stop",
+    "id": "900100026",
+    "name": "S+U Alexanderplatz Bhf/Gontardstr. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100026",
+     "latitude": 52.52105,
+     "longitude": 13.411285
+    }
+   },
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "33813",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   }
+  },
+  {
+   "tripId": "1|70566|5|86|13112026",
+   "when": "2026-11-13T22:45:00+01:00",
+   "plannedWhen": "2026-11-13T22:45:00+01:00",
+   "delay": 0,
+   "platform": "Pos. 16",
+   "plannedPlatform": "Pos. 16",
+   "prognosisType": "prognosed",
+   "direction": "Falkenberg",
+   "stop": {
+    "type": "stop",
+    "id": "900100026",
+    "name": "S+U Alexanderplatz Bhf/Gontardstr. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100026",
+     "latitude": 52.52105,
+     "longitude": 13.411285
+    }
+   },
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "33223",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900152007",
+    "name": "Falkenberg (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900152007",
+     "latitude": 52.570212,
+     "longitude": 13.526815
+    }
+   }
+  },
+  {
+   "tripId": "1|71451|3|86|13112026",
+   "when": "2026-11-13T22:47:00+01:00",
+   "plannedWhen": "2026-11-13T22:40:00+01:00",
+   "delay": 420,
+   "platform": "Pos. 15",
+   "plannedPlatform": "Pos. 15",
+   "prognosisType": "prognosed",
+   "direction": "S Hackescher Markt",
+   "stop": {
+    "type": "stop",
+    "id": "900100026",
+    "name": "S+U Alexanderplatz Bhf/Gontardstr. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100026",
+     "latitude": 52.52105,
+     "longitude": 13.411285
+    }
+   },
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m6",
+    "fahrtNr": "35430",
+    "name": "M6",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   }
+  },
+  {
+   "tripId": "1|71497|4|86|13112026",
+   "when": "2026-11-13T22:47:00+01:00",
+   "plannedWhen": "2026-11-13T22:47:00+01:00",
+   "delay": 0,
+   "platform": "Pos. 16",
+   "plannedPlatform": "Pos. 16",
+   "prognosisType": "prognosed",
+   "direction": "Hellersdorf, Riesaer Str.",
+   "stop": {
+    "type": "stop",
+    "id": "900100026",
+    "name": "S+U Alexanderplatz Bhf/Gontardstr. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100026",
+     "latitude": 52.52105,
+     "longitude": 13.411285
+    }
+   },
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m6",
+    "fahrtNr": "35015",
+    "name": "M6",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900175013",
+    "name": "Riesaer Str. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900175013",
+     "latitude": 52.529401,
+     "longitude": 13.624186
+    }
+   }
+  },
+  {
+   "tripId": "1|70502|3|86|13112026",
+   "when": "2026-11-13T22:49:00+01:00",
+   "plannedWhen": "2026-11-13T22:48:00+01:00",
+   "delay": 60,
+   "platform": "Pos. 15",
+   "plannedPlatform": "Pos. 15",
+   "prognosisType": "prognosed",
+   "direction": "S Hackescher Markt",
+   "stop": {
+    "type": "stop",
+    "id": "900100026",
+    "name": "S+U Alexanderplatz Bhf/Gontardstr. (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100026",
+     "latitude": 52.52105,
+     "longitude": 13.411285
+    }
+   },
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-tram-m4",
+    "fahrtNr": "33443",
+    "name": "M4",
+    "public": true,
+    "adminCode": "BVT---",
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900100002",
+    "name": "S Hackescher Markt (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100002",
+     "latitude": 52.522605,
+     "longitude": 13.402359
+    }
+   }
+  },
+  {
+   "tripId": "1|72120|0|86|13112026",
+   "when": "2026-11-13T22:45:00+01:00",
+   "plannedWhen": "2026-11-13T22:45:00+01:00",
+   "delay": 0,
+   "platform": "1 (U2)",
+   "plannedPlatform": "1 (U2)",
+   "prognosisType": "prognosed",
+   "direction": "Olympia-Stadion",
+   "stop": {
+    "type": "stop",
+    "id": "900100003",
+    "name": "S+U Alexanderplatz Bhf (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100003",
+     "latitude": 52.521508,
+     "longitude": 13.411267
+    }
+   },
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-u-bahn-u2",
+    "fahrtNr": "14336",
+    "name": "U2",
+    "public": true,
+    "adminCode": "BVU---",
+    "productName": "U",
+    "mode": "train",
+    "product": "subway"
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900025203",
+    "name": "U Olympia-Stadion (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900025203",
+     "latitude": 52.51705,
+     "longitude": 13.250504
+    }
+   }
+  },
+  {
+   "tripId": "1|3994|0|86|13112026",
+   "when": "2026-11-13T22:46:00+01:00",
+   "plannedWhen": "2026-11-13T22:45:00+01:00",
+   "delay": 60,
+   "platform": "3",
+   "plannedPlatform": "3",
+   "prognosisType": "prognosed",
+   "direction": "S Ahrensfelde Bhf (Berlin)",
+   "stop": {
+    "type": "stop",
+    "id": "900100003",
+    "name": "S+U Alexanderplatz Bhf (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900100003",
+     "latitude": 52.521508,
+     "longitude": 13.411267
+    }
+   },
+   "line": {
+    "type": "line",
+    "id": "de-vbb-11000000-s-bahn-s7-s7-o",
+    "fahrtNr": "31690",
+    "name": "S7",
+    "public": true,
+    "adminCode": "DBS---",
+    "productName": "S",
+    "mode": "train",
+    "product": "suburban"
+   },
+   "destination": {
+    "type": "stop",
+    "id": "900170004",
+    "name": "S Ahrensfelde Bhf (Berlin)",
+    "location": {
+     "type": "location",
+     "id": "900170004",
+     "latitude": 52.571335,
+     "longitude": 13.565648
+    }
+   }
+  }
+ ],
+ "realtimeDataUpdatedAt": 1794606398
+}

@@ -1,0 +1,12 @@
+{
+  "success": true,
+  "route": "/info/las-vegas-rtc/routes GET",
+  "data": {
+    "agencyKey": "las-vegas-rtc",
+    "routes": [
+      { "id": "10109", "longName": "Maryland Parkway", "name": "109 - Maryland Parkway", "shortName": "109", "type": "3" },
+      { "id": "10202", "longName": "Flamingo", "name": "202 - Flamingo", "shortName": "202", "type": "3" },
+      { "id": "10800", "longName": "Deuce on the Strip", "name": "DEUCE - Deuce on the Strip", "shortName": "DEUCE", "type": "3" }
+    ]
+  }
+}

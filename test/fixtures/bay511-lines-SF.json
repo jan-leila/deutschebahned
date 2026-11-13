@@ -1,0 +1,5 @@
+[
+  {"Id":"14","Name":"MISSION","FromDate":"2026-08-16T00:00:00-07:00","ToDate":"2027-01-09T23:59:00-08:00","TransportMode":"bus","PublicCode":"14","SiriLineRef":"14","Monitored":true,"OperatorRef":"SF"},
+  {"Id":"49","Name":"VAN NESS-MISSION","FromDate":"2026-08-16T00:00:00-07:00","ToDate":"2027-01-09T23:59:00-08:00","TransportMode":"bus","PublicCode":"49","SiriLineRef":"49","Monitored":true,"OperatorRef":"SF"},
+  {"Id":"KBUS","Name":"INGLESIDE BUS","FromDate":"2026-08-16T00:00:00-07:00","ToDate":"2027-01-09T23:59:00-08:00","TransportMode":"bus","PublicCode":"K Bus","SiriLineRef":"K_BUS","Monitored":true,"OperatorRef":"SF"}
+]

@@ -1,0 +1,1 @@
+{"Siri":{"ServiceDelivery":{"ResponseTimestamp":"2025-11-12T19:00:00.123-05:00","StopMonitoringDelivery":[{"ResponseTimestamp":"2025-11-12T19:00:00.123-05:00","ErrorCondition":{"OtherError":{"ErrorText":"No such stop: MTA_1"}}}]}}}

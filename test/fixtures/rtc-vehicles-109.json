@@ -1,0 +1,32 @@
+{
+  "success": true,
+  "route": "/real-time/las-vegas-rtc/vehicles GET",
+  "data": {
+    "agencyKey": "las-vegas-rtc",
+    "vehicles": [
+      {
+        "block": "109002", "blockMthd": "AVL_FEED_BLOCK_ASSIGNMENT", "direction": "0", "headsign": "South Strip Transfer Terminal",
+        "headwaySecs": 900, "id": "1415",
+        "loc": { "heading": 180.0, "lat": 36.1215, "lon": -115.1361, "speed": 9.4, "time": 1762991985 },
+        "nextStopId": "1650", "nextStopName": "Maryland Pkwy @ Flamingo Rd",
+        "routeId": "10109", "routeName": "109 - Maryland Parkway", "routeShortName": "109",
+        "schAdhSecs": 42, "schAdhStr": "42.0 sec (late)", "serviceId": "WK", "trip": "2410933", "vehicleType": "3"
+      },
+      {
+        "block": "109004", "direction": "1", "headsign": "Bonneville Transit Center", "id": "1431",
+        "loc": { "heading": 0, "lat": 0, "lon": 0, "speed": 0, "time": 1762991990 },
+        "routeId": "10109", "routeShortName": "109", "trip": "2410960", "vehicleType": "3"
+      },
+      {
+        "direction": "1", "headsign": "", "id": "1499",
+        "loc": { "heading": 0, "lat": 36.16, "lon": -115.14, "speed": 0, "time": 1762991000 },
+        "routeId": "10109", "routeShortName": "109", "vehicleType": "3"
+      },
+      {
+        "block": "109003", "direction": "1", "headsign": "Bonneville Transit Center", "id": "1422",
+        "loc": { "heading": 2.5, "lat": 36.1046, "lon": -115.1357, "speed": 0, "time": 1762991970 },
+        "routeId": "10109", "routeShortName": "109", "trip": "2410971", "vehicleType": "3"
+      }
+    ]
+  }
+}

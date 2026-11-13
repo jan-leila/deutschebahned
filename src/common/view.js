@@ -33,7 +33,8 @@ function findProvider(config, providerId) {
 
 // Coverage area of one system → {lat, lon, radius} in meters, or null = everywhere.
 // manual: as configured. auto: around the system's saved stops that have a position (centre of their bounding box,
-// radius = farthest stop + AUTO_MARGIN); no such stop → null.
+// radius = farthest stop + AUTO_MARGIN); no such stop → the stored centre and radius when a centre is set (the settings
+// page fills in the plug-in's home area), else null.
 function coverage(config, providerId) {
   var p = findProvider(config, providerId);
   if (!p) return null;
@@ -42,7 +43,10 @@ function coverage(config, providerId) {
   var stops = (config && config.stops) || [];
   var pts = [], i;
   for (i = 0; i < stops.length; i++) if (stops[i].providerId === providerId && hasCoords(stops[i])) pts.push(stops[i]);
-  if (!pts.length) return null;
+  if (!pts.length) {
+    var la = +cv.lat || 0, lo = +cv.lon || 0;
+    return la || lo ? { lat: la, lon: lo, radius: +cv.radius || 0 } : null;
+  }
   var minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
   for (i = 0; i < pts.length; i++) {
     if (pts[i].lat < minLat) minLat = pts[i].lat;

@@ -1,0 +1,30 @@
+{
+  "bustime-response": {
+    "prd": [
+      { "tmstmp": "20260113 14:00:10", "typ": "A", "stpnm": "Madison & Ashland", "stpid": "457", "vid": "8184", "dstp": 1806,
+        "rt": "20", "rtdd": "20", "rtdir": "Westbound", "des": "Austin", "prdtm": "20260113 14:05",
+        "tablockid": "20 -803", "tatripid": "1040713", "origtatripno": "262522629", "dly": false, "dyn": 0, "prdctdn": "5",
+        "zone": "", "psgld": "", "stst": 49800, "stsd": "2026-01-13", "flagstop": 0 },
+      { "tmstmp": "20260113 14:00:10", "typ": "A", "stpnm": "Madison & Ashland", "stpid": "457", "vid": "1234", "dstp": 900,
+        "rt": "9", "rtdd": "9", "rtdir": "Southbound", "des": " 95th Street ", "prdtm": "20260113 14:02:30",
+        "tablockid": "9 -712", "tatripid": "88001", "origtatripno": "262599001", "dly": false, "dyn": 0, "prdctdn": "2",
+        "zone": "", "psgld": "", "stst": 50100, "stsd": "2026-01-13", "flagstop": 0 },
+      { "tmstmp": "20260113 14:00:10", "typ": "A", "stpnm": "Madison & Ashland", "stpid": "457", "vid": "8140", "dstp": 5703,
+        "rt": "20", "rtdd": "20", "rtdir": "Westbound", "des": "Austin", "prdtm": "20260113 14:14",
+        "tablockid": "20 -853", "tatripid": "1040714", "origtatripno": "262522630", "dly": false, "dyn": 1, "prdctdn": "14",
+        "zone": "", "psgld": "", "stst": 50340, "stsd": "2026-01-13", "flagstop": 0 },
+      { "tmstmp": "20260113 14:00:10", "typ": "A", "stpnm": "Madison & Damen", "stpid": "458", "vid": "8184", "dstp": 7000,
+        "rt": "20", "rtdd": "20", "rtdir": "Westbound", "des": "Austin", "prdtm": "20260113 14:09",
+        "tablockid": "20 -803", "tatripid": "1040713", "origtatripno": "262522629", "dly": false, "dyn": 0, "prdctdn": "9",
+        "zone": "", "psgld": "", "stst": 49800, "stsd": "2026-01-13", "flagstop": 0 },
+      { "tmstmp": "20260113 14:00:10", "typ": "A", "stpnm": "Madison & Damen", "stpid": "458", "vid": "8199", "dstp": 40000,
+        "rt": "20", "rtdd": "20", "rtdir": "Westbound", "des": "Austin", "prdtm": "20260113 15:20",
+        "tablockid": "20 -860", "tatripid": "1040720", "origtatripno": "262522640", "dly": false, "dyn": 0, "prdctdn": "80",
+        "zone": "", "psgld": "", "stst": 52000, "stsd": "2026-01-13", "flagstop": 0 }
+    ],
+    "error": [
+      { "stpid": "4590", "msg": "No service scheduled" },
+      { "stpid": "99999", "msg": "No data found for parameter" }
+    ]
+  }
+}

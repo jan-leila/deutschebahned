@@ -183,7 +183,7 @@ test('config page: editing fields; coverage area summaries', { skip }, async () 
     assert.equal(await page.eval(`${rows}[1].querySelector('.coverage-summary').textContent`), 'Used within 25 km of 44.97, -93.26.');
     await page.eval(set(`${rows}[0].querySelector('input[name=apiKey]')`, 'newkey'));
     await page.eval(set(`${rows}[1].querySelector('select[name=coverageMode]')`, 'auto'));
-    assert.match(await page.eval(`${rows}[1].querySelector('.coverage-summary').textContent`), /^Used everywhere/);
+    assert.match(await page.eval(`${rows}[1].querySelector('.coverage-summary').textContent`), /^Used within about 25 km of 44.97, -93.26 \(its home area, until you save stops\)/, 'automatic without stops: the centre stays as its home area');
     await page.eval(`document.querySelector('#routes .route-row .remove').click()`);           // drop route 44
     await page.eval(`document.querySelector('#routes .route-row input[name=scale]').value = '-0.8'`);
     await page.eval(`document.querySelector('#routes .route-row input[name=color]').value = '#00aa55'`);
@@ -210,7 +210,7 @@ test('config page: add / remove transit systems; removing one drops its routes a
     assert.equal(await page.eval(`${rows}.length`), 3);
     assert.equal(await page.eval(`${rows}[2].querySelector('select[name=type]').value`), 'metrotransit', 'first unused type');
     assert.deepEqual(await page.eval(`[...${rows}[2].querySelectorAll('select[name=type] option')].map(o => o.value)`),
-      ['metrotransit', 'onebusaway', 'mock']);
+      ['metrotransit', 'onebusaway', 'bvg', 'wmata', 'mta', 'bay511', 'mbta', 'cta', 'rtc', 'mock']);
     await page.eval(set(`${rows}[2].querySelector('select[name=type]')`, 'mock'));
     assert.equal(await page.eval(`${rows}[2].querySelector('input[name=id]').value`), 'mock-2', 'an unused system takes an id after its type');
     await page.eval(`${rows}[0].querySelector('.remove').click()`);
@@ -649,3 +649,40 @@ test('config page: watch display switches for the walking time and the direction
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
+
+test('config page: a new system covers its home city; systems that need a key say where to get one', { skip }, async () => {
+  const page = await load(destParams({ prefs: METRIC }));
+  try {
+    await page.eval(`showPage('systems'); document.getElementById('add-provider').click()`);
+    const row = `[...document.querySelectorAll('#providers .provider-row')].pop()`;
+    await page.eval(set(`${row}.querySelector('select[name=type]')`, 'wmata'));
+    assert.equal(await page.eval(`${row}.querySelector('input[name=id]').value`), 'wmata');
+    assert.equal(await page.eval(`${row}.querySelector('.coverage-summary').textContent`),
+      'Used within about 60 km of 38.9072, -77.0369 (its home area, until you save stops).');
+    assert.equal(await page.eval(`${row}.querySelector('.key-hint').textContent`), 'Needs a free API key: https://developer.wmata.com.');
+    assert.equal(await page.eval(`${row}.querySelector('.key-hint').classList.contains('warn')`), true);
+    await page.eval(set(`${row}.querySelector('input[name=apiKey]')`, 'k123'));
+    assert.equal(await page.eval(`${row}.querySelector('.key-hint').textContent`), '', 'hint gone once a key is set');
+    await page.eval(set(`${row}.querySelector('select[name=type]')`, 'bvg'));
+    assert.match(await page.eval(`${row}.querySelector('.coverage-summary').textContent`), /of 52\.52, 13\.405/);
+    assert.equal(await page.eval(`${row}.querySelector('.key-hint').textContent`), 'Optional: blank = the default.');
+    const out = await saved(page);
+    const p = out.config.providers.pop();
+    assert.deepEqual([p.id, p.type, p.coverage], ['bvg', 'bvg', { mode: 'auto', lat: 52.52, lon: 13.405, radius: 60000 }]);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+// the geocoder (photon.komoot.io) with recorded responses
+function geoStub() {
+  const fx = n => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', n), 'utf8'));
+  const search = fx('geocode-search-dc.json'), reverse = fx('geocode-reverse-mpls.json');
+  return `<script>window.__fetched = []; window.fetch = function (url) {
+    window.__fetched.push(String(url));
+    var u = String(url), body = u.indexOf('https://photon.komoot.io/api/') === 0 ? ${JSON.stringify(search)}
+      : u.indexOf('https://photon.komoot.io/reverse') === 0 ? ${JSON.stringify(reverse)} : null;
+    if (!body) return Promise.reject(new TypeError('offline'));
+    return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(body); } });
+  };</script>`;
+}
+

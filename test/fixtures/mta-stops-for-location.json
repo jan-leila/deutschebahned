@@ -1,0 +1,5 @@
+{"code":200,"currentTime":1762992000000,"text":"OK","version":2,"data":{"limitExceeded":false,"outOfRange":false,"list":[
+ {"code":"308214","direction":"S","id":"MTA_308214","lat":40.6745,"locationType":0,"lon":-73.9858,"name":"5 AV/3 ST","routeIds":["MTA NYCT_B63"],"wheelchairBoarding":"UNKNOWN"},
+ {"code":"308209","direction":"S","id":"MTA_308209","lat":40.67685,"locationType":0,"lon":-73.983,"name":"5 AV/UNION ST","routeIds":["MTA NYCT_B63","MTA NYCT_B103"],"wheelchairBoarding":"UNKNOWN"},
+ {"code":"999999","direction":"S","id":"MTA_999999","lat":40.6799,"locationType":0,"lon":-73.9799,"name":"CORNER OF THE BOX","routeIds":["MTA NYCT_B63"],"wheelchairBoarding":"UNKNOWN"}],
+ "references":{"agencies":[],"routes":[],"situations":[],"stopTimes":[],"stops":[],"trips":[]}}}

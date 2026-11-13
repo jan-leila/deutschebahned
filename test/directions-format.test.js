@@ -19,6 +19,9 @@ test('directions.abbreviate / fromBearing', () => {
   assert.equal(directions.abbreviate(' southbound'), 'SB');
   assert.equal(directions.abbreviate('EB'), 'EB');
   assert.equal(directions.abbreviate('W'), 'WB');
+  assert.equal(directions.abbreviate('S.'), 'SB');
+  assert.equal(directions.abbreviate('S Hackescher Markt'), '', "Berlin's S-Bahn prefix, not south");
+  assert.equal(directions.abbreviate('N Main St'), '');
   assert.equal(directions.abbreviate('Westgate Transit Center'), '');
   assert.equal(directions.abbreviate('Downtown'), '');
   assert.equal(directions.abbreviate(null), '');

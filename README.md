@@ -11,7 +11,20 @@ Everything is configured on the phone in the app's settings page. It has separat
 
 You can add several **transit systems**, for example one per city or several in one city. Each saved route and stop belongs to one system, and a refresh only asks the systems whose *coverage area* contains you. By default that's the area around the system's saved stops; you can also set a centre and radius. Ids are namespaced per system (`system/id`), so systems never collide.
 
-Transit data comes from **Metro Transit (Minneapolis–St Paul)** by default: the public NexTrip v2 and Schedule APIs at `svc.metrotransit.org`, which need no API key. Route geometry is built from the stop lists plus per-stop coordinates (about 85 requests the first time per route), then cached on the phone for 7 days. "The bus you're on" comes from live vehicle positions (`vehicleRadius`). Sources are plug-ins behind a small interface (`src/sources/`): [OneBusAway](https://onebusaway.org/) works for other cities, and a deterministic `mock` is used for demos and tests.
+Transit data comes from **Metro Transit (Minneapolis–St Paul)** by default: the public NexTrip v2 and Schedule APIs at `svc.metrotransit.org`, which need no API key. Route geometry is built from the stop lists plus per-stop coordinates (about 85 requests the first time per route), then cached on the phone for 7 days. "The bus you're on" comes from live vehicle positions (`vehicleRadius`). Sources are plug-ins behind a small interface (`src/sources/`), and a deterministic `mock` is used for demos and tests. Other cities:
+
+| system | city | API key |
+|---|---|---|
+| BVG / VBB | Berlin (U-Bahn, S-Bahn, tram, bus) | none |
+| WMATA | Washington DC (Metrobus, Metrorail) | free, [developer.wmata.com](https://developer.wmata.com) |
+| MTA Bus Time | New York (buses; the subway has no JSON real-time API) | free, [register.developer.obanyc.com](https://register.developer.obanyc.com) |
+| 511 Bay Area | San Francisco Bay Area (Muni by default; any operators, e.g. `SF, BA` in the base URL) | free, [511.org/open-data/token](https://511.org/open-data/token); 60 requests/hour by default, so arrivals are rationed |
+| MBTA | Boston (subway, bus, commuter rail, ferry) | optional, raises the rate limit |
+| CTA | Chicago (buses; the 'L' has a separate API) | free, [Bus Tracker](https://www.transitchicago.com/developers/bustracker/) |
+| RTC | Las Vegas (through Swiftly) | [Swiftly](https://goswift.ly/realtime-api-key) |
+| OneBusAway | any OneBusAway server (default Puget Sound) | per server |
+
+A new system covers its home city until you save stops for it. The settings page shows which systems need a key and where to get one.
 
 Settings saved by older versions (one provider, pinned stops, stop scales) are migrated on the phone, including learned weights and recorded picks.
 

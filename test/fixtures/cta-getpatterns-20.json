@@ -1,0 +1,32 @@
+{
+  "bustime-response": {
+    "ptr": [
+      {
+        "pid": 3936, "ln": 10560.0, "rtdir": "Eastbound",
+        "pt": [
+          { "seq": 1, "lat": 41.88181, "lon": -87.6768, "typ": "S", "stpid": "4720", "stpnm": "Madison & Damen", "pdist": 0.0 },
+          { "seq": 2, "lat": 41.8818, "lon": -87.672, "typ": "W", "pdist": 0.0 },
+          { "seq": 3, "lat": 41.8818, "lon": -87.672, "typ": "W", "pdist": 0.0 },
+          { "seq": 4, "lat": 41.88175, "lon": -87.6668, "typ": "S", "stpid": "4724", "stpnm": "Madison & Ashland", "pdist": 2650.0 },
+          { "seq": 5, "lat": 41.8817, "lon": -87.6569, "typ": "S", "stpid": "4728", "stpnm": "Madison & Racine", "pdist": 5300.0 }
+        ]
+      },
+      {
+        "pid": 3937, "ln": 10560.0, "rtdir": "Westbound",
+        "pt": [
+          { "seq": 1, "lat": 41.88185, "lon": -87.657, "typ": "S", "stpid": "456", "stpnm": "Madison & Racine", "pdist": 0.0 },
+          { "seq": 3, "lat": 41.88195, "lon": -87.6769, "typ": "S", "stpid": "458", "stpnm": "Madison & Damen", "pdist": 5300.0 },
+          { "seq": 2, "lat": 41.8819, "lon": -87.6669, "typ": "S", "stpid": "457", "stpnm": "Madison & Ashland", "pdist": 2650.0 }
+        ]
+      },
+      {
+        "pid": 3938, "ln": 5300.0, "rtdir": "Westbound",
+        "pt": [
+          { "seq": 1, "lat": 41.88188, "lon": -87.647, "typ": "S", "stpid": "4590", "stpnm": "Madison & Halsted", "pdist": 0.0 },
+          { "seq": 2, "lat": 41.88185, "lon": -87.657, "typ": "S", "stpid": "456", "stpnm": "Madison & Racine", "pdist": 2650.0 },
+          { "seq": 3, "lat": 41.8819, "lon": -87.6669, "typ": "S", "stpid": "457", "stpnm": "Madison & Ashland", "pdist": 5300.0 }
+        ]
+      }
+    ]
+  }
+}

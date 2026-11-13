@@ -1,0 +1,12 @@
+{"Contents":{"ResponseTimestamp":"2026-11-13T12:00:00-08:00","dataObjects":{"id":"SF","ScheduledStopPoint":[
+  {"id":"15571","Extensions":{"LocationType":"0","PlatformCode":null,"ParentStation":null},"Name":"Mission St & 24th St","Location":{"Longitude":"-122.418270","Latitude":"37.752360"},"Url":null,"StopType":"onstreetBus"},
+  {"id":"15567","Extensions":{"LocationType":"0","PlatformCode":null,"ParentStation":null},"Name":"Mission St & 20th St","Location":{"Longitude":"-122.418910","Latitude":"37.758800"},"Url":null,"StopType":"onstreetBus"},
+  {"id":"15565","Extensions":{"LocationType":"0","PlatformCode":null,"ParentStation":null},"Name":"Mission St & 18th St","Location":{"Longitude":"-122.419180","Latitude":"37.761720"},"Url":null,"StopType":"onstreetBus"},
+  {"id":"15563","Extensions":{"LocationType":"0","PlatformCode":null,"ParentStation":null},"Name":"Mission St & 16th St","Location":{"Longitude":"-122.419630","Latitude":"37.765040"},"Url":null,"StopType":"onstreetBus"},
+  {"id":"15552","Extensions":{"LocationType":"0","PlatformCode":null,"ParentStation":null},"Name":"Mission St & 16th St","Location":{"Longitude":"-122.419770","Latitude":"37.764890"},"Url":null,"StopType":"onstreetBus"},
+  {"id":"15554","Extensions":{"LocationType":"0","PlatformCode":null,"ParentStation":null},"Name":"Mission St & 18th St","Location":{"Longitude":"-122.419460","Latitude":"37.761510"},"Url":null,"StopType":"onstreetBus"},
+  {"id":"15556","Extensions":{"LocationType":"0","PlatformCode":null,"ParentStation":null},"Name":"Mission St & 20th St","Location":{"Longitude":"-122.419200","Latitude":"37.758600"},"Url":null,"StopType":"onstreetBus"},
+  {"id":"15558","Extensions":{"LocationType":"0","PlatformCode":null,"ParentStation":null},"Name":"Mission St & 24th St","Location":{"Longitude":"-122.418580","Latitude":"37.752130"},"Url":null,"StopType":"onstreetBus"},
+  {"id":"13008","Extensions":{"LocationType":"0","PlatformCode":null,"ParentStation":null},"Name":"Bacon St & San Bruno Ave","Location":{"Longitude":"-122.404150","Latitude":"37.727770"},"Url":null,"StopType":"onstreetBus"},
+  {"id":"17777","Extensions":{"LocationType":"0","PlatformCode":null,"ParentStation":null},"Name":"No Position","Location":{"Longitude":"","Latitude":""},"Url":null,"StopType":"onstreetBus"}
+]}}}

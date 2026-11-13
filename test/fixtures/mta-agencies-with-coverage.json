@@ -1,0 +1,6 @@
+{"code":200,"currentTime":1762992000000,"text":"OK","version":2,"data":{"limitExceeded":false,"list":[
+ {"agencyId":"MTA NYCT","lat":40.707,"latSpan":0.65,"lon":-73.92,"lonSpan":0.76},
+ {"agencyId":"MTABC","lat":40.68,"latSpan":0.52,"lon":-73.87,"lonSpan":0.61}],
+ "references":{"agencies":[{"id":"MTA NYCT","name":"MTA New York City Transit","timezone":"America/New_York","url":"http://www.mta.info"},
+  {"id":"MTABC","name":"MTA Bus Company","timezone":"America/New_York","url":"http://www.mta.info"}],
+  "routes":[],"situations":[],"stopTimes":[],"stops":[],"trips":[]}}}

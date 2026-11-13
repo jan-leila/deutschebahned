@@ -28,8 +28,9 @@ function clock() {
   return Math.floor(Date.now() / 1000);
 }
 
-// GET url, cb(err, parsedJson). Calls cb exactly once.
-function http(url, cb) {
+// GET url, cb(err, parsedJson). Calls cb exactly once. headers: optional {name: value} request headers (e.g. API keys
+// that a source sends as a header).
+function http(url, cb, headers) {
   var done = false;
   function finish(err, body) {
     if (done) return;
@@ -41,6 +42,7 @@ function http(url, cb) {
     xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
     xhr.timeout = HTTP_TIMEOUT_MS;
+    for (var h in headers || {}) if (headers.hasOwnProperty(h)) xhr.setRequestHeader(h, headers[h]);
   } catch (e) {
     finish(e);
     return;
@@ -54,7 +56,8 @@ function http(url, cb) {
     clearTimeout(timer);
     var body;
     try {
-      body = JSON.parse(xhr.responseText);
+      // some APIs (511.org) start their JSON with a UTF-8 byte order mark, which JSON.parse rejects
+      body = JSON.parse(String(xhr.responseText).replace(/^﻿/, ''));
     } catch (e) {
       finish(new Error('HTTP ' + xhr.status + (xhr.status >= 200 && xhr.status < 300 ? ' (bad JSON)' : '')));
       return;

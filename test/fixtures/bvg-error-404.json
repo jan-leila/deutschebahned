@@ -1,0 +1,11 @@
+{
+ "message": "LOCATION: location/stop not found",
+ "isHafasError": true,
+ "code": "NOT_FOUND",
+ "isCausedByServer": false,
+ "hafasCode": "LOCATION",
+ "url": "https://bvg-apps-ext.hafas.de/bin/mgate.exe?",
+ "hafasResponseId": "nmgajuum26n3yz8x",
+ "hafasMessage": "HCI Service: location missing or invalid",
+ "hafasDescription": "An internal error occurred during the search"
+}
