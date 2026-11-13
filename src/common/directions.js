@@ -19,6 +19,12 @@ function fromBearing(deg) {
   return 'WB';
 }
 
+var NAMES = { NB: 'North', SB: 'South', EB: 'East', WB: 'West' };
+// 'NB' → 'North', 'SB' → 'South', 'EB' → 'East', 'WB' → 'West'; anything else → '' (what the watch and notifications show)
+function fullName(code) {
+  return Object.prototype.hasOwnProperty.call(NAMES, code) ? NAMES[code] : '';
+}
+
 function findDirection(route, directionId) {
   var dirs = (route && route.directions) || [];
   for (var i = 0; i < dirs.length; i++) if (String(dirs[i].id) === String(directionId)) return dirs[i];
@@ -61,4 +67,4 @@ function stopLabel(route, stopId) {
   return dirs.length === 1 ? label(route, dirs[0], stopId) : '';
 }
 
-module.exports = { abbreviate: abbreviate, fromBearing: fromBearing, label: label, directionsAt: directionsAt, stopLabel: stopLabel };
+module.exports = { abbreviate: abbreviate, fromBearing: fromBearing, fullName: fullName, label: label, directionsAt: directionsAt, stopLabel: stopLabel };

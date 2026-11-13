@@ -288,3 +288,19 @@ test('encodeList: ITEM_ROUTE carries the route full name, long titles kept up to
   const n = protocol.encodeNotify({ title: 'x'.repeat(50), body: 'b' });
   assert.equal(Buffer.byteLength(n.NOTIFY_TITLE), 31);
 });
+
+test('encodeList: ITEM_WALK carries the walking time; showWalk / showArrow false leave out the time / the arrow', () => {
+  const base = { kind: 'pickup', key: 'p', badge: '2', title: 'Pine', times: [100], distance: 350, bearing: 10, lanes: [] };
+  const [, walk] = protocol.encodeList(1, [Object.assign({ walk: 249.6 }, base)], 's', { units: 'metric' });
+  assert.equal(walk.ITEM_WALK, 250);
+  assert.equal(walk.ITEM_DIST, '350m', 'the distance stays under the arrow');
+  assert.equal(walk.ITEM_BEARING, 10);
+  for (const w of [null, undefined, NaN, -5]) {
+    const [, m] = protocol.encodeList(1, [Object.assign({ walk: w }, base)], 's');
+    assert.equal('ITEM_WALK' in m, false, String(w));
+  }
+  const [, off] = protocol.encodeList(1, [Object.assign({ walk: 250 }, base)], 's', { showWalk: false, showArrow: false });
+  assert.equal('ITEM_WALK' in off, false);
+  assert.equal(off.ITEM_BEARING, -1, 'no arrow');
+  assert.equal(off.ITEM_DIST, '0.2mi', 'the distance is still shown');
+});

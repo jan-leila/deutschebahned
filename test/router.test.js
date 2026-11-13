@@ -345,7 +345,7 @@ test('describe / summary', async () => {
   assert.equal(router.describe(p, { units: 'imperial', clock24: false }), [
     'Leave 8:13 AM',
     'Walk 330ft to First Ave (2 min)',
-    'Take 2 NB to Downtown at 8:15 AM from First Ave',
+    'Take 2 North to Downtown at 8:15 AM from First Ave',
     'Get off at Tower 8:24 AM',
     'Walk 460ft to Work (2 min)',
     'Arrive 8:25 AM (by 8:33 AM)'
@@ -353,7 +353,7 @@ test('describe / summary', async () => {
   assert.equal(router.describe(p, { units: 'metric', clock24: true }), [
     'Leave 08:13',
     'Walk 100m to First Ave (2 min)',
-    'Take 2 NB to Downtown at 08:15 from First Ave',
+    'Take 2 North to Downtown at 08:15 from First Ave',
     'Get off at Tower 08:24',
     'Walk 140m to Work (2 min)',
     'Arrive 08:25 (by 08:33)'

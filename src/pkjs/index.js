@@ -189,7 +189,7 @@ var session = sessionModule.createSession({
   // the scheduled trip in progress is pinned above the ranked list
   pinnedItems: function (config, data, pos, now) {
     var active = triggers.activeTrips(config.destinations, scheduler.plans(), now, config.schedule);
-    return tripItems.build(active, data, pos, now, { clock24: config.clock24 });
+    return tripItems.build(active, data, pos, now, { clock24: config.clock24, walkSpeed: config.schedule.walkSpeed });
   },
   log: log
 });

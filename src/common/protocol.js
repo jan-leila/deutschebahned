@@ -73,6 +73,7 @@ function encodeDir(d) {
 function encodeList(listId, items, status, opts) {
   items = items || [];
   var units = opts && opts.units === 'metric' ? 'metric' : 'imperial';
+  var showWalk = !(opts && opts.showWalk === false), showArrow = !(opts && opts.showArrow === false);
   var n = Math.min(items.length, MAX_ITEMS);
   var out = [{ LIST_ID: listId, ITEM_COUNT: n, STATUS: truncateUtf8(status, STATUS_MAX_BYTES) }];
   for (var i = 0; i < n; i++) {
@@ -91,11 +92,13 @@ function encodeList(listId, items, status, opts) {
       ITEM_T0: toInt(times[0]),
       ITEM_T1: toInt(times[1]),
       ITEM_T2: toInt(times[2]),
-      ITEM_BEARING: encodeBearing(it.bearing),
+      ITEM_BEARING: showArrow ? encodeBearing(it.bearing) : -1,
       ITEM_DIST: encodeDistance(it.distance, units),
       ITEM_DIR: encodeDir(lane0.dir || it.dir),
       ITEM_LANES: lanes.length >= 2 ? 2 : 1
     };
+    // a tile you walk to (pickup, trip boarding): whole seconds to walk there, shown right-aligned in its times line
+    if (showWalk && typeof it.walk === 'number' && isFinite(it.walk) && it.walk >= 0) msg.ITEM_WALK = Math.round(it.walk);
     if (lanes.length >= 2) {
       var lane1 = lanes[1] || {};
       var u = lane1.times || [];

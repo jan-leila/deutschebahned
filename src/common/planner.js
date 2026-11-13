@@ -4,6 +4,7 @@
 var geo = require('./geo');
 var settings = require('./settings');
 var directions = require('./directions');
+var format = require('./format');
 
 var DEFAULT_COLORS = ['0055AA', 'AA0000', '00AA55', 'AA5500', '5500AA', '00AAAA', 'AA00AA', '555555'];
 
@@ -329,6 +330,12 @@ function mergeSameName(candidates) {
   return out;
 }
 
+// walking speed (m/s): the one trip planning uses
+function walkSpeed(config) {
+  var s = config && config.schedule && config.schedule.walkSpeed;
+  return typeof s === 'number' && s > 0 ? s : 1.3;
+}
+
 function pickupItem(config, tile, now) {
   var c = tile[0];
   var lanes = [];
@@ -353,6 +360,7 @@ function pickupItem(config, tile, now) {
     features: features,
     bearing: c.bearing,
     distance: c.distance,
+    walk: format.walkSeconds(c.distance, walkSpeed(config)),   // seconds to walk to lane 0's stop, null if unknown
     dir: c.dir,
     lanes: lanes
   };

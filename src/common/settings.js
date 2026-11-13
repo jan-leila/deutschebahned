@@ -59,6 +59,8 @@ function defaults() {
     maxItems: 10,
     refreshInterval: 60,
     vehicleRadius: 250,
+    showWalk: true,    // watch: walking time to a stop, right-aligned in the tile's times line
+    showArrow: true,   // watch: the arrow pointing at the stop
     routes: [],
     stops: [],
     destinations: [],
@@ -304,6 +306,8 @@ function normalize(raw) {
     if (RANGES.hasOwnProperty(f)) out[f] = num(r[f], d[f], RANGES[f]);
   }
 
+  out.showWalk = bool(r.showWalk, d.showWalk);
+  out.showArrow = bool(r.showArrow, d.showArrow);
   out.routes = normalizeRoutes(lists.routes, out.providers);
   out.stops = normalizeStops(lists.stops, out.providers);
 

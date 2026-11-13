@@ -67,3 +67,20 @@ test('format.duration / clock', () => {
   assert.equal(format.clock(t + 4 * 3600, false), '12:05 PM');
   assert.equal(format.clock(t - 8 * 3600, false), '12:05 AM');
 });
+
+test('format.walk / walkSeconds; directions.fullName', () => {
+  assert.equal(format.walk(0), '<1 min');
+  assert.equal(format.walk(59), '<1 min');
+  assert.equal(format.walk(60), '1 min');
+  assert.equal(format.walk(61), '2 min', 'rounded up: better early than late');
+  assert.equal(format.walk(59 * 60), '59 min');
+  assert.equal(format.walk(3600), '1h00');
+  assert.equal(format.walk(3725), '1h03');
+  for (const bad of [-1, NaN, null, undefined, '60']) assert.equal(format.walk(bad), '', String(bad));
+  for (const s of [0, 59, 61, 3599, 7200, 359999]) assert.ok(Buffer.byteLength(format.walk(s)) <= 7, String(s));
+  assert.equal(format.walkSeconds(130, 1.3), 100);
+  assert.equal(format.walkSeconds(131, 1.3), 101);
+  assert.equal(format.walkSeconds(null, 1.3), null);
+  assert.equal(format.walkSeconds(100, 0), null);
+  assert.deepEqual(['NB', 'SB', 'EB', 'WB', '', 'XB', 'N'].map(directions.fullName), ['North', 'South', 'East', 'West', '', '', '']);
+});

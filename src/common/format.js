@@ -29,6 +29,21 @@ function duration(seconds) {
   return Math.floor(min / 60) + ' h ' + pad2(min % 60);
 }
 
+// walking time for the watch (≤ 7 bytes): '<1 min' (< 60 s), '4 min' (rounded up), '1h05' (≥ 1 h); not finite / < 0 → ''
+function walk(seconds) {
+  if (typeof seconds !== 'number' || !isFinite(seconds) || seconds < 0) return '';
+  if (seconds < 60) return '<1 min';
+  var min = Math.ceil(seconds / 60);
+  if (min < 60) return min + ' min';
+  return Math.floor(min / 60) + 'h' + pad2(min % 60);
+}
+
+// meters at speed m/s → whole seconds (rounded up); null when either is unusable
+function walkSeconds(meters, speed) {
+  if (typeof meters !== 'number' || !isFinite(meters) || meters < 0 || !(speed > 0)) return null;
+  return Math.ceil(meters / speed);
+}
+
 // epoch seconds → local wall clock: '8:05 AM' / '12:30 PM' (12 h) or '08:05' (24 h)
 function clock(epoch, clock24) {
   var d = new Date(epoch * 1000);
@@ -38,4 +53,4 @@ function clock(epoch, clock24) {
   return h12 + ':' + pad2(m) + (h < 12 ? ' AM' : ' PM');
 }
 
-module.exports = { distance: distance, duration: duration, clock: clock };
+module.exports = { distance: distance, duration: duration, walk: walk, walkSeconds: walkSeconds, clock: clock };

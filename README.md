@@ -2,7 +2,7 @@
 
 A Pebble watchapp for the buses you actually ride.
 
-- **Pickups:** when you're near a stop served by one of *your* routes, it shows that route's next pickup times at the stop.
+- **Pickups:** when you're near a stop served by one of *your* routes, it shows that route's next pickup times at the stop, an arrow pointing to it with the distance, and how long it takes to walk there next to the bus times (at the walking speed set under *Nearby & timing*, where the walking time and the arrow can each be turned off). Directions are spelled out (North, South, East, West).
 - **Drop-offs:** when you're within a set distance of one of your routes' paths, it shows when you'd reach each of *your stops* that the route serves. You get one time for the bus that was physically here within the last *x* seconds (probably the one you're on) and one for the next bus to come by.
 - **Ordering:** each row's score is `Σ scale × value`. Each saved stop has two scales, one for *walking to it* (meters to a pickup there) and one for *riding to it* (meters left to a drop-off there). Route scales multiply seconds. Higher scores show first, so negative scales put nearer and sooner rows first. Every scale starts at 0, so learning decides the order.
 - **Learning:** press **SELECT** on the row you care about right now. The phone records the position, every row's distance and time values, and which row you picked. It then fits the scales (a softmax over row scores against the one-hot pick, L2-pulled toward your configured scales). Hold **SELECT** to refresh.

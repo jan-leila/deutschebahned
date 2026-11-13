@@ -28,6 +28,7 @@ static void clear_geo(BusItem *it) {
   it->route[0] = 0;
   it->dist[0] = it->dir[0] = it->dir2[0] = 0;
   it->u[0] = it->u[1] = it->u[2] = 0;
+  it->walk = -1;
 }
 
 void bus_model_init(BusModel *m) {
@@ -64,6 +65,12 @@ bool bus_model_set_item(BusModel *m, int32_t list_id, int index, int kind, const
 bool bus_model_set_route(BusModel *m, int32_t list_id, int index, const char *route) {
   if (list_id != m->list_id || index < 0 || index >= m->count) return false;
   copy_utf8(m->items[index].route, sizeof m->items[index].route, route);
+  return true;
+}
+
+bool bus_model_set_walk(BusModel *m, int32_t list_id, int index, int32_t walk) {
+  if (list_id != m->list_id || index < 0 || index >= m->count) return false;
+  m->items[index].walk = walk >= 0 ? walk : -1;
   return true;
 }
 
@@ -217,4 +224,27 @@ void bus_format_detail(const BusItem *it, int32_t now, bool clock24, char *buf, 
   } else {
     append(buf, n, &len, "no buses");
   }
+}
+
+const char *bus_dir_name(const char *code) {
+  if (!code) return "";
+  if (code[0] && code[1] == 'B' && code[2] == '\0') {
+    switch (code[0]) {
+      case 'N': return "North";
+      case 'S': return "South";
+      case 'E': return "East";
+      case 'W': return "West";
+      default: break;
+    }
+  }
+  return code;
+}
+
+void bus_format_walk(int32_t seconds, char *buf, size_t n) {
+  if (n == 0) return;
+  if (seconds < 0) { buf[0] = 0; return; }
+  if (seconds < 60) { snprintf(buf, n, "<1m walk"); return; }
+  int32_t min = (seconds + 59) / 60;
+  if (min < 60) snprintf(buf, n, "%dm walk", (int)min);
+  else snprintf(buf, n, "%dh%02d walk", (int)(min / 60), (int)(min % 60));
 }

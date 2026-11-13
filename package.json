@@ -59,7 +59,8 @@
       "NOTIFY_COLOR",
       "ITEM_ROUTE",
       "TEST_NOW",
-      "WATCH_PREFS"
+      "WATCH_PREFS",
+      "ITEM_WALK"
     ],
     "capabilities": [
       "configurable",

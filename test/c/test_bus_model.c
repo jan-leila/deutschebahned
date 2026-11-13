@@ -130,6 +130,43 @@ static void test_color(void) {
   CHECK(!bus_color_prefers_dark_text(-1));  // no color -> default dark badge, light text
 }
 
+static void test_walk(void) {
+  char b[16];
+  bus_format_walk(-1, b, sizeof b);   CHECK_STR(b, "");
+  bus_format_walk(0, b, sizeof b);    CHECK_STR(b, "<1m walk");
+  bus_format_walk(59, b, sizeof b);   CHECK_STR(b, "<1m walk");
+  bus_format_walk(60, b, sizeof b);   CHECK_STR(b, "1m walk");
+  bus_format_walk(61, b, sizeof b);   CHECK_STR(b, "2m walk");
+  bus_format_walk(3599, b, sizeof b); CHECK_STR(b, "1h00 walk");
+  bus_format_walk(3725, b, sizeof b); CHECK_STR(b, "1h03 walk");
+  BusModel m;
+  bus_model_init(&m);
+  bus_model_begin_list(&m, 3, 1);
+  CHECK(bus_model_set_item(&m, 3, 0, BUS_KIND_PICKUP, "2", "A", -1, 1, 0, 0));
+  CHECK(bus_model_item(&m, 0)->walk == -1);
+  CHECK(bus_model_set_walk(&m, 3, 0, 240));
+  CHECK(bus_model_item(&m, 0)->walk == 240);
+  CHECK(bus_model_set_walk(&m, 3, 0, -7));
+  CHECK(bus_model_item(&m, 0)->walk == -1);
+  CHECK(!bus_model_set_walk(&m, 4, 0, 10));
+  CHECK(!bus_model_set_walk(&m, 3, 1, 10));
+  bus_model_set_walk(&m, 3, 0, 99);
+  CHECK(bus_model_set_item(&m, 3, 0, BUS_KIND_PICKUP, "2", "A", -1, 1, 0, 0));
+  CHECK(bus_model_item(&m, 0)->walk == -1);   // a new item starts without one
+}
+
+static void test_dir_name(void) {
+  CHECK_STR(bus_dir_name("NB"), "North");
+  CHECK_STR(bus_dir_name("SB"), "South");
+  CHECK_STR(bus_dir_name("EB"), "East");
+  CHECK_STR(bus_dir_name("WB"), "West");
+  CHECK_STR(bus_dir_name(""), "");
+  CHECK_STR(bus_dir_name("XB"), "XB");
+  CHECK_STR(bus_dir_name("N"), "N");
+  CHECK_STR(bus_dir_name("NBX"), "NBX");
+  CHECK_STR(bus_dir_name(NULL), "");
+}
+
 static void test_detail(void) {
   char b[64];
   int32_t now = at(12, 0);
@@ -239,6 +276,8 @@ int main(void) {
   test_relative();
   test_clock();
   test_detail();
+  test_dir_name();
+  test_walk();
   test_color();
   test_geo();
   test_lane();

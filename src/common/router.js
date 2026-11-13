@@ -489,7 +489,8 @@ function describe(p, opts) {
       lines.push('Walk ' + format.distance(l.meters, units) + (l.toName ? ' to ' + l.toName : '') + ' (' + walkTime(l.seconds) + ')');
     } else {
       var head = l.headsign && l.headsign !== l.routeName && !(directions.abbreviate(l.headsign) && directions.abbreviate(l.headsign) === l.dir && /bound\s*$/i.test(l.headsign)) ? ' to ' + l.headsign : '';
-      lines.push('Take ' + l.routeName + (l.dir ? ' ' + l.dir : '') + head + ' at ' + t(l.departAt) +
+      var dirName = directions.fullName(l.dir) || l.dir;
+      lines.push('Take ' + l.routeName + (dirName ? ' ' + dirName : '') + head + ' at ' + t(l.departAt) +
                  (l.boardStopName ? ' from ' + l.boardStopName : ''));
       lines.push('Get off ' + (l.alightStopName ? 'at ' + l.alightStopName + ' ' : '') + t(l.arriveAt));
     }

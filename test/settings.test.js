@@ -20,6 +20,8 @@ test('defaults match the contract', () => {
   assert.equal(d.maxItems, 10);
   assert.equal(d.refreshInterval, 60);
   assert.equal(d.vehicleRadius, 250);
+  assert.equal(d.showWalk, true);
+  assert.equal(d.showArrow, true);
   assert.deepEqual(d.routes, []);
   assert.deepEqual(d.stops, []);
   for (const gone of ['provider', 'connections', 'stopScales', 'defaultStopScale', 'defaultRouteScale', 'defaultConnectionScale',
@@ -217,4 +219,11 @@ test('destinations: validated, ids kept or generated, max 8', () => {
   const many = settings.normalize({ destinations: Array.from({ length: 12 }, (_, i) => ({ lat: 1, lon: 1, arriveBy: '08:' + String(i).padStart(2, '0') })) });
   assert.equal(many.destinations.length, settings.MAX_DESTINATIONS);
   assert.equal(new Set(many.destinations.map(d => d.id)).size, 8);
+});
+
+test('showWalk / showArrow: booleans, default on', () => {
+  const c = settings.normalize({ version: 2, providers: P, showWalk: 'false', showArrow: 0 });
+  assert.equal(c.showWalk, false);
+  assert.equal(c.showArrow, false);
+  assert.equal(settings.normalize({ showWalk: 'maybe' }).showWalk, true);
 });

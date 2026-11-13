@@ -53,11 +53,14 @@ test('build: one labelled tile per remaining bus leg; board stop before departur
   assert.ok(Math.abs(before[0].distance - 150) < 2);
   assert.ok(Math.abs(before[0].bearing - 90) < 1);
   assert.equal(before[1].bearing !== null, true);
+  assert.equal(before[0].walk, Math.ceil(before[0].distance / 1.3), 'walking time to the boarding stop (default speed)');
+  assert.equal(tripItems.build(active, data, P, T + 300, { walkSpeed: 1.5 })[0].walk, Math.ceil(before[0].distance / 1.5));
 
   const riding = tripItems.build(active, data, P, T + 900, {});
   assert.equal(riding[0].title, 'Hennepin & 4th');
   assert.equal(riding[0].times[2], 1, 'riding flag');
   assert.equal(riding[0].stopId, 'b');
+  assert.equal(riding[0].walk, null, 'no walking time once on the bus');
 
   const second = tripItems.build(active, data, P, T + 1800 + tripItems.LEG_GRACE + 1, {});
   assert.deepEqual(second.map(i => i.badge), ['B Line'], 'finished legs drop off');

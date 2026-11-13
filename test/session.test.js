@@ -312,3 +312,20 @@ test('configPageParams', () => {
   assert.deepEqual(p.config, settings.defaults());
   assert.deepEqual(p.prefs, h.session.getPrefs());
 });
+
+test('lists follow the showWalk / showArrow settings', async () => {
+  const items = [{ kind: 'pickup', key: 'p', title: 'P', times: [NOW + 60], distance: 350, bearing: 90, walk: 270, features: {} }];
+  const on = harness({ items });
+  on.session.load();
+  await refresh(on.session);
+  const m = on.sent.find(x => 'ITEM_INDEX' in x);
+  assert.equal(m.ITEM_WALK, 270);
+  assert.equal(m.ITEM_BEARING, 90);
+  const off = harness({ items, storage: { 'busWatch.config': JSON.stringify({ version: 2, providers: [{ id: 'p', type: 'mock' }],
+    showWalk: false, showArrow: false }) } });
+  off.session.load();
+  await refresh(off.session);
+  const m2 = off.sent.find(x => 'ITEM_INDEX' in x);
+  assert.equal('ITEM_WALK' in m2, false);
+  assert.equal(m2.ITEM_BEARING, -1);
+});

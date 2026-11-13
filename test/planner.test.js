@@ -83,6 +83,7 @@ test('pickups: one item per nearby stop x configured route, first N times, featu
     routeId: 'R', stopId: 'R:b', routeLongName: '',
     features: { 'stop:R:b': Math.round(geo.distance(pos, sB)), 'route:R': 0 },
     bearing: geo.bearing(pos, sB), distance: geo.distance(pos, sB),
+    walk: Math.ceil(geo.distance(pos, sB) / 1.3),   // seconds at the default 1.3 m/s
     dir: '', // route R not in data.routes -> no direction label
     lanes: [{ stopId: 'R:b', dir: '', times: [NOW - 20, NOW + 200, NOW + 800] }],
   });
@@ -534,4 +535,16 @@ test('dropoff: bearing/distance null when the pinned stop has no coordinates', (
   assert.equal(it.bearing, null);
   assert.equal(it.distance, null);
   assert.equal(it.dir, 'NB', 'named direction still labels it');
+});
+
+test('pickups: walking time to the stop at the configured walking speed; unknown distance → null', () => {
+  const sB = stop('R:b', 'B St', east(-260), ['R']);
+  const data = { stops: [sB], routes: {}, errors: [], arrivals: { 'R:b': [arr('R:b', 'R', 't1', 300)] } };
+  const d = geo.distance(pos, sB);
+  const fast = planner.buildItems(config({ schedule: Object.assign(settings.defaults().schedule, { walkSpeed: 2 }) }), data, pos, NOW);
+  assert.equal(fast[0].walk, Math.ceil(d / 2));
+  const noPos = Object.assign({}, sB, { lat: undefined, lon: undefined });
+  const items = planner.buildItems(config(), Object.assign({}, data, { stops: [noPos] }), pos, NOW);
+  assert.equal(items[0].distance, null);
+  assert.equal(items[0].walk, null);
 });

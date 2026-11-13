@@ -224,8 +224,9 @@ static void draw_arrow(GContext *ctx, const BusItem *it, int16_t cx, int16_t cy,
 #endif
 }
 
-// Small direction label ("NB") right of the badge; returns the width used (incl. spacing), 0 when none.
-static int16_t draw_dir(GContext *ctx, const char *dir, GFont font, int16_t x, int16_t cy, GColor color) {
+// Small direction label ("North") right of the badge; returns the width used (incl. spacing), 0 when none.
+static int16_t draw_dir(GContext *ctx, const char *code, GFont font, int16_t x, int16_t cy, GColor color) {
+  const char *dir = bus_dir_name(code);
   if (!dir[0]) return 0;
   int16_t w = text_width(dir, font);
   graphics_context_set_text_color(ctx, color);
@@ -306,7 +307,7 @@ static void draw_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
   bool trip = it->kind == BUS_KIND_TRIP;
   int16_t pill_w = trip ? text_width("TRIP", s_f14b) + 6 : 0, bx = ix + (pill_w ? pill_w + 3 : 0);
   int16_t bw = badge_width(it, badge_font, iw / 2);
-  int16_t tx = bx + (bw ? bw + 4 : 0) + (show_dir ? text_width(it->dir, dir_font) + 4 : 0);
+  int16_t tx = bx + (bw ? bw + 4 : 0) + (show_dir ? text_width(bus_dir_name(it->dir), dir_font) + 4 : 0);
   int16_t tw = ix + iw - tx;
   graphics_context_set_text_color(ctx, fg);
   if (s->level == 0) {
@@ -345,20 +346,30 @@ static void draw_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
   int32_t now = s_test_now ? s_test_now : (int32_t)time(NULL);
   char buf[48];
   GColor detail_color = s->level == 0 ? GColorBlack : dim;
+  // Walking time to the stop ("4m walk"), right-aligned in the times line just left of the arrow column.
+  char walk[16];
+  bus_format_walk(it->walk, walk, sizeof walk);
+  int16_t walk_w = walk[0] ? text_width(walk, s_f14) : 0;
   if (mode == 'A') {
     int16_t colw = (has_arrow || has_dist) ? ARROW_COL_W : 0, lw = iw - colw;
+    int16_t walk_cy = two ? line1_cy : (line1_cy + line2_cy) / 2;   // lane 0 is the stop the time is for
+    if (walk_w) {
+      graphics_context_set_text_color(ctx, detail_color);
+      draw_line(ctx, walk, s_f14, ix + lw - walk_w - 2, walk_w + 2, walk_cy, GTextAlignmentRight);
+    }
+    int16_t lw1 = walk_w ? lw - walk_w - 6 : lw;   // the times line that carries the walking time
     graphics_context_set_text_color(ctx, detail_color);
     if (two) {
       char lane[40];
       bus_format_lane(it->t, now, lane, sizeof lane);
-      snprintf(buf, sizeof buf, "%s%s%s", it->dir, it->dir[0] ? " " : "", lane);
-      draw_line(ctx, buf, detail_font, ix, lw, line1_cy, GTextAlignmentLeft);
+      snprintf(buf, sizeof buf, "%s%s%s", bus_dir_name(it->dir), it->dir[0] ? " " : "", lane);
+      draw_line(ctx, buf, detail_font, ix, lw1, line1_cy, GTextAlignmentLeft);
       bus_format_lane(it->u, now, lane, sizeof lane);
-      snprintf(buf, sizeof buf, "%s%s%s", it->dir2, it->dir2[0] ? " " : "", lane);
+      snprintf(buf, sizeof buf, "%s%s%s", bus_dir_name(it->dir2), it->dir2[0] ? " " : "", lane);
       draw_line(ctx, buf, detail_font, ix, lw, line2_cy, GTextAlignmentLeft);
     } else {
       bus_format_detail(it, now, clock_is_24h_style(), buf, sizeof buf);
-      draw_line(ctx, buf, detail_font, ix, lw, (line1_cy + line2_cy) / 2, GTextAlignmentLeft);
+      draw_line(ctx, buf, detail_font, ix, lw1, walk_cy, GTextAlignmentLeft);
     }
     if (colw) {
       int16_t cx = ix + iw - colw / 2, dist_cy = line2_cy + 1;
@@ -386,6 +397,11 @@ static void draw_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
       int16_t r = dfi.cap / 2 + 1;
       draw_arrow(ctx, it, right - r - 1, line1_cy, r);
       right -= 2 * r + 4;
+    }
+    if (walk_w && right - walk_w - 4 > ix + 24) {
+      graphics_context_set_text_color(ctx, detail_color);
+      draw_line(ctx, walk, s_f14, right - walk_w - 2, walk_w + 2, line1_cy, GTextAlignmentRight);
+      right -= walk_w + 6;
     }
     bus_format_detail(it, now, clock_is_24h_style(), buf, sizeof buf);
     graphics_context_set_text_color(ctx, detail_color);
@@ -701,6 +717,7 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
                       tuple_int(dict_find(iter, MESSAGE_KEY_ITEM_U1)),
                       tuple_int(dict_find(iter, MESSAGE_KEY_ITEM_U2)));
     bus_model_set_route(&s_model, lid, i, tuple_str(dict_find(iter, MESSAGE_KEY_ITEM_ROUTE)));
+    bus_model_set_walk(&s_model, lid, i, tuple_int_or(dict_find(iter, MESSAGE_KEY_ITEM_WALK), -1));
   }
   if (status) {
     bus_model_set_status(&s_model, tuple_str(status));

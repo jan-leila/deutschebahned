@@ -291,11 +291,13 @@ test('config page (metrotransit): add a route by typing its name; the index is b
     const rows = `document.querySelectorAll('#routes .route-row')`;
     assert.equal(await page.eval(`${rows}.length`), 2);
     assert.match(await page.eval(`${rows}[1].querySelector('.row-head').textContent`), /Route 901/);
-    // picking a saved route again doesn't add it twice
+    // routes already saved (2, and now 901) aren't offered again, not even as a typed id
     await page.eval(`document.getElementById('add-route').click()`);
     await search(page, '2');
-    assert.deepEqual((await results(page))[0], ['metrotransit', '2', false]);
-    await page.eval(`document.querySelector('#search .result').click()`);
+    assert.deepEqual(await results(page), [['metrotransit', '922', false]]);
+    await search(page, 'blue');
+    assert.deepEqual(await results(page), [['metrotransit', 'blue', true]]);
+    await page.eval(`document.querySelector('#search .search-cancel').click()`);
     assert.equal(await page.eval(`${rows}.length`), 2);
     // anything the index doesn't know: the typed id
     await page.eval(`document.getElementById('add-route').click()`);
@@ -540,6 +542,110 @@ test('config page (mock): a trip destination from a searched stop', { skip }, as
     assert.equal(await page.eval(`${row}.querySelector('input[name=name]').value`), 'One stop 9');
     const out = await saved(page);
     assert.ok(Math.abs(out.config.destinations[1].lat - 44.96) < 0.01);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('config page (metrotransit): a newly added route starts with its official color; none → Auto, no error', { skip }, async () => {
+  const page = await load(mtParams({ config: Object.assign({}, mtConfig, { routes: [] }) }), fetchStub());
+  try {
+    await page.eval(`showPage('routes'); document.getElementById('add-route').click()`);
+    assert.ok(await until(page, `!/Indexing/.test(document.querySelector('#search .search-status').textContent)`));
+    await search(page, '2');
+    await page.eval(`document.querySelector('#search .result[data-id="2"]').click()`);
+    const row = id => `[...document.querySelectorAll('#routes .route-row')].find(r => r.querySelector('input[name=id]').value === '${id}')`;
+    assert.ok(await until(page, `${row('2')}.querySelector('input[name=color]').value === '#771473'`), 'official color loaded');
+    assert.match(await page.eval(`${row('2')}.querySelector('.c-color .status').textContent`), /Official color/);
+    // route 901 has no route details in the recorded API: it stays Auto, quietly
+    await page.eval(`document.getElementById('add-route').click()`);
+    await search(page, 'blue');
+    await page.eval(`document.querySelector('#search .result[data-id="901"]').click()`);
+    assert.ok(await until(page, `${row('901')}.querySelector('.c-color .status').textContent === ''`));
+    assert.equal(await page.eval(`${row('901')}.querySelector('input[name=color]').value`), '');
+    const out = await saved(page);
+    assert.deepEqual(out.config.routes.map(r => [r.id, r.color]), [['2', '771473'], ['901', '']]);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('config page: routes, stops and trips reorder by dragging their handle (or arrow keys); the order is saved', { skip }, async () => {
+  const cfg = Object.assign({}, destParams().config, {
+    routes: ['A', 'B', 'C'].map(id => ({ providerId: 'mock', id, name: id })),
+    stops: ['s1', 's2', 's3'].map(id => ({ providerId: 'mock', id, name: id })) });
+  const page = await load(destParams({ config: cfg }));
+  try {
+    const ids = list => page.eval(`[...document.querySelectorAll('#${list} > .row')].map(r => r.querySelector('input[name=id]').value)`);
+    // drag a row by its handle with pointer events (what touch produces), to just below another row's middle / above it
+    const dragTo = (list, from, to, below) => page.eval(`(() => {
+      const rows = [...document.querySelectorAll('#${list} > .row')];
+      const h = rows[${from}].querySelector('.drag'), r = rows[${to}].getBoundingClientRect();
+      const y = ${below} ? r.bottom - 2 : r.top + 2, opts = { bubbles: true, cancelable: true, pointerId: 7, clientX: 10 };
+      h.dispatchEvent(new PointerEvent('pointerdown', Object.assign({ clientY: h.getBoundingClientRect().top }, opts)));
+      if (!rows[${from}].classList.contains('dragging')) throw new Error('not dragging');
+      document.dispatchEvent(new PointerEvent('pointermove', Object.assign({ clientY: y }, opts)));
+      document.dispatchEvent(new PointerEvent('pointerup', Object.assign({ clientY: y }, opts)));
+      return rows[${from}].classList.contains('dragging');
+    })()`);
+    await page.eval(`showPage('routes')`);
+    assert.equal(await dragTo('routes', 0, 2, true), false, 'drag ends on pointerup');
+    assert.deepEqual(await ids('routes'), ['B', 'C', 'A']);
+    await dragTo('routes', 2, 0, false);
+    assert.deepEqual(await ids('routes'), ['A', 'B', 'C']);
+    await page.eval(`showPage('stops')`);
+    await dragTo('stops', 2, 0, false);
+    assert.deepEqual(await ids('stops'), ['s3', 's1', 's2']);
+    await page.eval(`showPage('trips')`);
+    await page.eval(`document.querySelectorAll('#destinations > .row')[0].querySelector('.drag')
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))`);
+    assert.deepEqual(await ids('destinations'), ['gym', 'work']);
+    const out = await saved(page);
+    assert.deepEqual(out.config.routes.map(r => r.id), ['A', 'B', 'C']);
+    assert.deepEqual(out.config.stops.map(s => s.id), ['s3', 's1', 's2']);
+    assert.deepEqual(out.config.destinations.map(d => d.id), ['gym', 'work']);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('config page (mock): adding a stop does not offer the stops already saved; a trip destination still can', { skip }, async () => {
+  const cfg = Object.assign({}, destParams().config, { stops: [{ providerId: 'mock', id: 'R1:s9', name: 'Home' }] });
+  const page = await load(destParams({ config: cfg }));
+  try {
+    await page.eval(`showPage('stops'); document.getElementById('add-stop').click()`);
+    await search(page, 'one stop 9');
+    const res = await results(page);
+    assert.ok(res.length > 0 && !res.some(r => r[1] === 'R1:s9'), JSON.stringify(res));
+    await search(page, 'R1:s9');
+    assert.ok(!(await results(page)).some(r => r[1] === 'R1:s9'), 'not as a typed id either');
+    await page.eval(`document.querySelector('#search .search-cancel').click(); showPage('trips')`);
+    await page.eval(`document.querySelector('#destinations .row .pick-stop').click()`);
+    await search(page, 'one stop 9');
+    assert.deepEqual((await results(page))[0], ['mock', 'R1:s9', false]);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('config page: walking speed lives on the Nearby & timing page (also used for trip plans)', { skip }, async () => {
+  const page = await load(destParams());
+  try {
+    assert.equal(await page.eval(`document.querySelectorAll('[data-field="schedule.walkSpeed"]').length`), 1);
+    assert.equal(await page.eval(`document.querySelector('[data-field="schedule.walkSpeed"]').closest('.page').getAttribute('data-page')`), 'nearby');
+    await page.eval(set(`document.querySelector('[data-field="schedule.walkSpeed"]')`, '5.4'));
+    assert.ok(Math.abs((await saved(page)).config.schedule.walkSpeed - 1.5) < 1e-9, '5.4 km/h = 1.5 m/s');
+  } finally { await page.close(); }
+});
+
+test('config page: watch display switches for the walking time and the direction arrow', { skip }, async () => {
+  const page = await load(destParams());
+  try {
+    for (const f of ['showWalk', 'showArrow']) {
+      assert.equal(await page.eval(`document.querySelector('[data-field="${f}"]').type`), 'checkbox');
+      assert.equal(await page.eval(`document.querySelector('[data-field="${f}"]').checked`), true, f + ' on by default');
+      assert.equal(await page.eval(`document.querySelector('[data-field="${f}"]').closest('.page').getAttribute('data-page')`), 'nearby');
+    }
+    await page.eval(`document.querySelector('[data-field="showArrow"]').click()`);
+    const out = await saved(page);
+    assert.equal(out.config.showWalk, true);
+    assert.equal(out.config.showArrow, false);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });

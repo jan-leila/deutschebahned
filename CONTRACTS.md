@@ -69,12 +69,14 @@ Config shape and defaults (distances are always **meters**, speeds m/s; the sett
 | `pickupsPerItem` | 3 | 1..3 integer |
 | `maxItems` | 10 | 1..12 integer |
 | `refreshInterval` | 60 | 15..3600 integer — seconds |
+| `showWalk` | `true` | boolean — the watch shows the walking time to a stop (ITEM_WALK) |
+| `showArrow` | `true` | boolean — the watch shows the arrow pointing at the stop (off: ITEM_BEARING −1) |
 | `vehicleRadius` | 250 | 10..2000 integer — meters: a live bus position reported this close to you (within `recentWindow`) is "the bus you're on" |
 | `routes` | `[]` | `[{providerId, id, name, scale, color}]` — `scale` −1000..1000, default **0**; `color` is `'RRGGBB'` or `''` (= provider color / default) |
 | `stops` | `[]` | `[{providerId, id, name, lat, lon, walkScale, rideScale}]` — the stops you care about; `lat`/`lon` numbers or both `null`; scales −1000..1000, default **0** |
 | `destinations` | `[]` | ≤ 8 × `{id, name, lat, lon, arriveBy: 'HH:MM', days: [0..6], enabled}` — see below |
 | `schedule.leadMinutes` | 15 | 0..120 integer — re-check this long before the leave time |
-| `schedule.walkSpeed` | 1.3 | 0.3..3 m/s |
+| `schedule.walkSpeed` | 1.3 | 0.3..3 m/s — walking times to stops on the watch and in trip plans |
 | `schedule.maxWalk` | 800 | 50..5000 integer m — walking to the first / from the last stop |
 | `schedule.transferWalk` | 250 | 0..1000 integer m — walking between stops when transferring |
 | `schedule.maxTransfers` | 1 | 0..1 integer |
@@ -366,6 +368,7 @@ Item = { kind: 'pickup'|'dropoff', key, badge, title, color, times: [epoch s], r
          features: { [featureKey]: number },
          bearing,   // degrees [0, 360) from pos to the item's stop (geo.bearing), null if the stop has no coordinates
          distance,  // meters, null if unknown. pickup: straight line pos → stop; dropoff: left to travel (below)
+         walk,      // pickup: seconds to walk to the stop = format.walkSeconds(distance, schedule.walkSpeed), null if unknown
          dir,       // directions label of the item's stop: 'NB'|'SB'|'EB'|'WB'|''
          routeLongName, // route.longName of the item's route ('' if none) — shown as a scrolling line on the watch
          lanes }    // pickup: [{stopId, dir, times}] 1 or 2 lanes, lanes[0] is the item's own stopId/dir/times; dropoff: []
@@ -442,7 +445,7 @@ train(samples, priorFn, opts)            // → { weights: {key: number}, before
 ## 7. `src/common/protocol.js` — phone ⇄ watch messages
 
 Message keys (`package.json` `messageKeys`): `LIST_ID ITEM_COUNT ITEM_INDEX ITEM_KIND ITEM_TITLE ITEM_T0 ITEM_T1 ITEM_T2 ITEM_BADGE ITEM_COLOR STATUS SELECT_INDEX REFRESH
-ITEM_BEARING ITEM_DIST ITEM_DIR ITEM_LANES ITEM_DIR2 ITEM_U0 ITEM_U1 ITEM_U2 WAKEUP_COUNT WAKEUP_INDEX WAKEUP_TIME WAKEUP_COOKIE WAKEUP_FIRED NOTIFY_TITLE NOTIFY_BODY NOTIFY_COLOR ITEM_ROUTE TEST_NOW WATCH_PREFS`.
+ITEM_BEARING ITEM_DIST ITEM_DIR ITEM_LANES ITEM_DIR2 ITEM_U0 ITEM_U1 ITEM_U2 WAKEUP_COUNT WAKEUP_INDEX WAKEUP_TIME WAKEUP_COOKIE WAKEUP_FIRED NOTIFY_TITLE NOTIFY_BODY NOTIFY_COLOR ITEM_ROUTE TEST_NOW WATCH_PREFS ITEM_WALK`.
 `TEST_NOW` (test only, sent by `src/pkjs/ui-fixture.js`): unix seconds the watch shows its times against instead of its clock.
 
 Phase 4 (carousel): `TITLE_MAX_BYTES = 63` (full stop names; the watch scrolls what doesn't fit), item messages carry `ITEM_ROUTE` =
@@ -459,6 +462,9 @@ encodeList(listId, items, status)  // → [ {LIST_ID, ITEM_COUNT: n, STATUS},
 encodeList(listId, items, status, opts) // opts = {units} ('imperial' default). Each item message also carries:
                                    //   ITEM_BEARING = round(bearing) % 360, or -1 when bearing is null/not finite
                                    //   ITEM_DIST    = format.distance(distance, units) ('' when null)  (≤ DIST_MAX_BYTES 7); units other than 'metric' → imperial
+                                   //   ITEM_WALK    = round(item.walk) — seconds to walk to the stop (pickups, trip boarding) — only when it is a
+                                   //                  number ≥ 0 and opts.showWalk !== false
+                                   //   opts.showArrow === false → ITEM_BEARING = -1 (no arrow) for every item
                                    //   ITEM_DIR     = lanes[0].dir || dir || ''                         (truncated to DIR_MAX_BYTES 3)
                                    //   ITEM_LANES   = 2 if item.lanes has ≥ 2 entries, else 1
                                    //   ITEM_DIR2, ITEM_U0, ITEM_U1, ITEM_U2 = lanes[1].dir ('' / ≤ 3 B) and lanes[1].times (missing → 0) (only when ITEM_LANES = 2)
@@ -509,7 +515,7 @@ deps.locale  // optional: the phone's locale, for the units guess before the wat
 - `refresh(cb)`: sends `encodeStatus('Locating...')`; position = `config.location` if mode is `'fixed'` else `locate`;
   sends `encodeStatus('Loading...')`; `cfg = runtimeConfig(pos)`; `planner.gather` (provider created via `createProvider(config)` from the
   saved config and reused until the config changes; one `routeCache` kept likewise) with `cfg` → `planner.buildItems(cfg, …)` →
-  `ranking.rank(items, cfg, learned)`; `listId` increments (starting at 1); sends `encodeList(listId, ranked, status, {units: prefs.units})`
+  `ranking.rank(items, cfg, learned)`; `listId` increments (starting at 1); sends `encodeList(listId, ranked, status, {units: prefs.units, showWalk, showArrow})` (from the config)
   where status = `'No buses nearby'` if empty, else `'Updated HH:MM'` (local time, 24h).
   Errors (locate or gather) → sends `encodeStatus('Error: ' + message)`. `cb(err, rankedItems)`. A refresh started while
   one is running is skipped (`cb(null, null)`).
@@ -585,7 +591,9 @@ navigator.language)`). DOM contract (used by the test):
 - **Routes**: `#routes .route-row[data-provider]` with hidden `input[name=providerId|id]`, `.row-head` ("Route <id>", system),
   `input[name=name|scale]`, the color line (`input[name=color]` hidden `#rrggbb` or `''` = automatic, swatch + 64-color palette,
   `.load-color` → `routeInfo` color), `.remove`. `#add-route` opens the search (routes); a pick adds `{name: hit name, scale 0, color ''}`
-  (an already saved route is highlighted instead).
+  (an already saved route is highlighted instead) and then loads its official color (`routeInfo`) into it, quietly: no color / an error
+  leaves it Auto with no message, and a color chosen meanwhile is kept. `schedule.walkSpeed` and the `showWalk` / `showArrow`
+  checkboxes ("On the watch") are on the `nearby` page.
 - **Stops**: `#stops .stop-row[data-provider]` with hidden `input[name=providerId|id|lat|lon]`, `.row-head` ("Stop #<id>", system),
   `input[name=name|walkScale|rideScale]`, `.stop-meta` ("Routes …" from the index, saved routes in `<b>`, a `.warn` when no saved route
   serves it), `.remove`. `#add-stop` opens the search (stops); a pick adds it with scales 0 and its position from the index, else
@@ -600,6 +608,11 @@ navigator.language)`). DOM contract (used by the test):
   to / riding to / route <name>"), `#train-now` (`optimize.train` on the injected samples with `ranking.weightFor(k, view.build(readForm(),
   prefs, null))` as prior → sets learned, before/after in `#train-result`), `#reset-learned` (learned → null), `#bake-learned`
   (`view.bake` into the form, learned → null), `#clear-samples` (marks clearSamples, `#sample-count` → 0), `#save`.
+- **Order**: route, stop and trip rows each have a `.drag` handle. Dragging it (pointer events, so touch works) moves the row before the
+  first other row whose middle is below the pointer, or to the end; ArrowUp / ArrowDown on the handle move the row by one. The shown order
+  is the saved order (`readForm` reads rows top to bottom).
+- **Search never offers what is saved**: adding a route / stop leaves out results (and the typed-id fallback) already in `#routes` /
+  `#stops` for that system; the best 6 of the rest are shown. Trip destinations may be any stop.
 - Global functions: `readForm()` → normalized config from the form; `fillForm(config)`; `save()`; `showPage(name)`.
 - `save()` navigates to `return_to + encodeURIComponent(JSON.stringify(result))`,
   `result = {config: readForm()}` plus `learned` (object, or `null` = reset) only if changed on the page, plus `clearSamples: true` if requested.
@@ -634,6 +647,9 @@ int  bus_model_row_count(const BusModel *m);                  // count, or 1 whe
 const BusItem *bus_model_item(const BusModel *m, int index);  // NULL unless 0 <= index < count and present
 int  bus_model_clamp_selection(const BusModel *m, int sel);   // into 0..row_count-1
 bool bus_color_prefers_dark_text(int32_t rgb);                // 0.299R + 0.587G + 0.114B > 150 (integer math); -1 → false
+bool bus_model_set_walk(BusModel *m, int32_t list_id, int index, int32_t walk); // set_item resets walk to −1; negative → −1
+void bus_format_walk(int32_t seconds, char *buf, size_t n);  // "<1m walk" | "4m walk" (rounded up) | "1h05 walk"; negative → ""
+const char *bus_dir_name(const char *code);                   // "NB" → "North", "SB" → "South", "EB" → "East", "WB" → "West"; else code (NULL → "")
 void bus_format_relative(int32_t seconds, char *buf, size_t n);  // <= 30 → "now"; < 3600 → "%dm" (floor, min 1);
                                                                   // else "%dh%02d" (e.g. 3720 → "1h02")
 void bus_format_clock(int32_t epoch, bool clock24, char *buf, size_t n); // localtime; 24h "HH:MM"; 12h "H:MM" (12 not 0)
@@ -705,8 +721,11 @@ at most 8. main.c then `wakeup_cancel_all()` and `wakeup_schedule(time, cookie, 
 - **Arrow + distance** on every stop tile (levels 0 and 1): an arrow filled with the route color (black on B&W) pointing at the stop,
   rotated by the compass heading when `compass_service` reports a valid heading (north-up otherwise), with `dist` drawn under it
   (GOTHIC_14). Drop-off tiles: same arrow, `dist` = distance left to ride, and the detail line shows the ETA.
-- **Direction labels**: `dir` is shown next to the badge; a two-lane pickup tile shows at level 0 one line per lane:
-  `"NB 3m, 12m"` / `"SB 5m"` (level 1: lane 0 only).
+- **Walking time**: `walk` (ITEM_WALK, −1 = none) → `bus_format_walk` (`"<1m walk"`, `"4m walk"` rounded up, `"1h05 walk"`) in GOTHIC_14,
+  right-aligned in the times line just left of the arrow column: level 0 on the (single) detail line or on lane 0's line of a two-lane
+  tile (that line's times get the rest of the width); level 1 between the times and the arrow when at least 24 px of times stay.
+- **Direction labels**: `dir` is shown as its full name (`bus_dir_name`: `NB` → `North`, `SB` → `South`, `EB` → `East`, `WB` → `West`)
+  next to the badge; a two-lane pickup tile shows at level 0 one line per lane: `"North 3m, 12m"` / `"South 5m"` (level 1: lane 0 only).
 - **Notifications**: NOTIFY_* → a notification window (color bar in NOTIFY_COLOR, title, scrollable body), double vibe, light; BACK closes.
 - **Wakeups**: WAKEUP_* → bus_wakeup → scheduled as above; `wakeup_service_subscribe` → send `{WAKEUP_FIRED: cookie}`.
 - No items → the status centred plus "Hold SELECT to refresh".
@@ -721,8 +740,10 @@ at most 8. main.c then `wakeup_cancel_all()` and `wakeup_schedule(time, cookie, 
 
 `directions`: `abbreviate(name)` (`'Northbound'`/`'north'`/`'NB'`/`'N'` → `'NB'`, …, else `''`), `fromBearing(deg)` (quadrants centred on
 N/E/S/W), `label(route, directionOrId, stopId)` (named direction, else heading to the next stop), `directionsAt(route, stopId)`,
-`stopLabel(route, stopId)` (label of its only direction, else `''`). `format`: `distance(m, units)` (≤ 7 bytes: `35m 350m 1.2km 12km` /
-`130ft 0.4mi 12mi`), `duration(s)` (`now`, `4 min`, `1 h 05`), `clock(epoch, clock24)` (`8:05 AM` / `08:05`, local time). `geo.bearing(a, b)`.
+`stopLabel(route, stopId)` (label of its only direction, else `''`), `fullName(code)` (`NB` → `North` …, else `''`). `format`: `distance(m,
+units)` (≤ 7 bytes: `35m 350m 1.2km 12km` / `130ft 0.4mi 12mi`), `duration(s)` (`now`, `4 min`, `1 h 05`), `walk(s)` (≤ 7 bytes: `<1 min`,
+`4 min` rounded up, `1h05`), `walkSeconds(m, speed)` (rounded up; null if unusable), `clock(epoch, clock24)` (`8:05 AM` / `08:05`, local
+time). `geo.bearing(a, b)`.
 Tests: `test/directions-format.test.js`.
 
 ## 13. `src/common/router.js` — trip planning (independent; requires only geo / directions / format)
@@ -764,7 +785,7 @@ that throws or calls back twice is tolerated.
   no longer than every candidate's estimated door-to-door time; otherwise it wins when it leaves strictly later than the bus plan (or there is none).
 - Walk legs with 0 m are omitted. `toName` = the boarding stop's name (first / transfer walk) or `destination.name` (final walk).
 - `describe` → lines joined by `\n`: `Leave 8:13 AM`, `Walk 330ft to First Ave (2 min)` (minutes rounded up),
-  `Take 2 NB to Downtown at 8:15 AM from First Ave` (headsign omitted when equal to the route name), `Get off at Tower 8:24 AM`, …,
+  `Take 2 North to Downtown at 8:15 AM from First Ave` (direction: `directions.fullName`) (headsign omitted when equal to the route name), `Get off at Tower 8:24 AM`, …,
   `Arrive 8:25 AM (by 8:33 AM)`; estimated: every planned time prefixed `~` and a last line `Estimated: no live times yet`. `null` → `No route found`.
 - `summary` → `Leave 8:13 AM · 2 at 8:15 AM` (`, then T2` appended for a transfer when it fits), walk only `Leave 8:10 AM · walk 1.2km`,
   estimated `Leave ~8:13 AM · 2 at ~8:15 AM`; truncated to 40 chars with `…`; `null` → `No route found`. Tests: `test/router.test.js`.

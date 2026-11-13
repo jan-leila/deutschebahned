@@ -61,6 +61,10 @@ button.danger { color: var(--danger); }
 .stop-scale-row { grid-template-columns: 1fr 6em; }
 .row label { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 11.5px; color: var(--muted); }
 .row label input { color: var(--text); padding: 6px 8px; }
+.row .drag { position: absolute; top: 44px; right: 8px; width: 30px; height: 30px; padding: 0; border-radius: 8px;
+  color: var(--muted); font-size: 16px; line-height: 1; letter-spacing: -2px; cursor: grab; touch-action: none; user-select: none;
+  -webkit-user-select: none; }
+.row.dragging { opacity: .9; outline: 2px dashed var(--accent); box-shadow: 0 6px 18px rgba(0,0,0,.18); z-index: 2; }
 .row .remove { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; padding: 0; border-radius: 50%;
   color: var(--danger); font-size: 18px; line-height: 1; }
 .empty { color: var(--muted); font-size: 13.5px; padding: 4px 0; }
@@ -214,7 +218,7 @@ header .titles { flex: 1; min-width: 0; }
   <section>
     <p class="help">Buses of these routes show up when you're near one of their stops. <b>Scale</b> is a weight per second
       of waiting; <b>0</b> leaves the order to learning, a <b>negative</b> number brings sooner buses of this route up.
-      <b>Color</b> is how the route is drawn on the watch; <b>Auto</b> uses the transit agency's color.</p>
+      <b>Color</b> is how the route is drawn on the watch: a new route starts with the agency's official color; <b>Auto</b> follows the agency.</p>
     <div id="routes" class="list"></div>
     <div class="empty">No routes yet.</div>
     <button type="button" class="add" id="add-route">+ Add route</button>
@@ -246,8 +250,6 @@ header .titles { flex: 1; min-width: 0; }
         <input type="number" step="1" data-field="schedule.leadMinutes"></label>
       <label class="field check"><span class="name">Leave reminder</span><span class="hint">also notify at the leave time</span>
         <input type="checkbox" data-field="schedule.leaveReminder"></label>
-      <label class="field"><span class="name">Walking speed</span><span class="hint"><span data-unit-label="speed"></span></span>
-        <input type="number" step="any" data-field="schedule.walkSpeed" data-unit="speed"></label>
       <label class="field"><span class="name">Max walk</span><span class="hint"><span data-unit-label="short"></span> · to the first / from the last stop</span>
         <input type="number" step="1" data-field="schedule.maxWalk" data-unit="short"></label>
       <label class="field"><span class="name">Transfer walk</span><span class="hint"><span data-unit-label="short"></span> · between stops when transferring</span>
@@ -263,6 +265,13 @@ header .titles { flex: 1; min-width: 0; }
 </div>
 
 <div class="page" data-page="nearby" data-title="Nearby &amp; timing" data-sub="How far to look and how far ahead." hidden>
+  <section>
+    <h2>On the watch</h2>
+    <label class="field check"><span class="name">Walking time</span><span class="hint">how long to walk to a stop, next to its bus times</span>
+      <input type="checkbox" data-field="showWalk"></label>
+    <label class="field check"><span class="name">Direction arrow</span><span class="hint">the arrow pointing at the stop</span>
+      <input type="checkbox" data-field="showArrow"></label>
+  </section>
   <section>
     <h2>Location</h2>
     <p class="help"><b>GPS</b> uses the phone's position. <b>Fixed</b> always uses the coordinates below (handy for testing or a demo).</p>
@@ -285,6 +294,8 @@ header .titles { flex: 1; min-width: 0; }
       <input type="number" step="1" data-field="routeRadius" data-unit="short"></label>
     <label class="field"><span class="name">Vehicle radius</span><span class="hint"><span data-unit-label="short"></span> · a live bus reported this close to you (within the recent window) is the bus you're on</span>
       <input type="number" step="1" data-field="vehicleRadius" data-unit="short"></label>
+    <label class="field"><span class="name">Walking speed</span><span class="hint"><span data-unit-label="speed"></span> · for walking times to stops on the watch and for trip plans</span>
+      <input type="number" step="any" data-field="schedule.walkSpeed" data-unit="speed"></label>
     <label class="field"><span class="name">Recent window</span><span class="hint">s · a bus that passed here this recently counts as "here"</span>
       <input type="number" step="any" data-field="recentWindow"></label>
     <label class="field"><span class="name">Lookahead</span><span class="hint">min · pickups and the next bus here</span>
@@ -613,6 +624,66 @@ header .titles { flex: 1; min-width: 0; }
     };
     row.appendChild(rm);
   }
+  // ---- drag to reorder (routes, stops, trips): a handle on each row, pointer events (touch-friendly) ----------
+  // While dragging, the row moves before the first other row whose middle is below the pointer (or to the end).
+  // The order is the saved order: readForm reads rows in the order they're shown. Arrow keys on the handle move a row too.
+  var drag = null;
+  function moveTo(row, y) {
+    var list = row.parentNode, rows = qsa(list, ':scope > .row'), before = null;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i] === row) continue;
+      var r = rows[i].getBoundingClientRect();
+      if (y < r.top + r.height / 2) { before = rows[i]; break; }
+    }
+    if (before === row.nextElementSibling && before) return;
+    if (!before && !row.nextElementSibling) return;
+    list.insertBefore(row, before);
+  }
+  function endDrag() {
+    if (!drag) return;
+    drag.row.className = drag.row.className.replace(/\s*\bdragging\b/g, '');
+    document.removeEventListener('pointermove', onDragMove);
+    document.removeEventListener('pointerup', endDrag);
+    document.removeEventListener('pointercancel', endDrag);
+    var moved = drag.row;
+    drag = null;
+    reordered(moved);
+  }
+  function onDragMove(e) {
+    if (!drag || e.pointerId !== drag.pointer) return;
+    if (e.cancelable) e.preventDefault();
+    moveTo(drag.row, e.clientY);
+  }
+  function reordered(row) {
+    if (row.parentNode && row.parentNode.id === 'stops') renderStopMeta();
+    if (state.learned && current === 'learning') renderLearned();
+  }
+  function addDragHandle(row) {
+    var h = el('button', 'drag', '⋮⋮');
+    h.title = 'Drag to reorder';
+    h.setAttribute('aria-label', 'Drag to reorder (or use the arrow keys)');
+    h.addEventListener('pointerdown', function (e) {
+      if (drag) endDrag();
+      if (e.cancelable) e.preventDefault();
+      drag = { row: row, pointer: e.pointerId };
+      row.className += ' dragging';
+      try { h.setPointerCapture(e.pointerId); } catch (err) { /* synthetic events */ }
+      document.addEventListener('pointermove', onDragMove);
+      document.addEventListener('pointerup', endDrag);
+      document.addEventListener('pointercancel', endDrag);
+    });
+    h.addEventListener('keydown', function (e) {
+      var list = row.parentNode;
+      if (e.key === 'ArrowUp' && row.previousElementSibling) list.insertBefore(row, row.previousElementSibling);
+      else if (e.key === 'ArrowDown' && row.nextElementSibling) list.insertBefore(row.nextElementSibling, row);
+      else return;
+      e.preventDefault();
+      h.focus();
+      reordered(row);
+    });
+    row.appendChild(h);
+  }
+
   function rowHead(title, detail) {
     var h = el('div', 'row-head');
     h.appendChild(el('b', '', title));
@@ -885,11 +956,19 @@ header .titles { flex: 1; min-width: 0; }
     if (!search.kind) return;
     var q = trim(searchEl('.search-input').value), c = readForm(), hits = [], i, k;
     var kind = search.kind === 'route' ? 'route' : 'stop';
+    // adding a route / stop: the ones already saved aren't offered (a trip destination may be any stop)
+    var savedList = search.kind === 'route' ? 'routes' : search.kind === 'stop' ? 'stops' : '';
+    var savedCount = savedList ? qsa(document, '#' + savedList + ' .row').length : 0;
+    function saved(pid, id) { return !!savedList && !!findRow(savedList, pid, id); }
     for (i = 0; i < c.providers.length; i++) {
       var idx = indexState(c.providers[i]).index;
       if (!idx) continue;
-      var found = catalog.search(idx, q, { kind: kind, limit: 6 });
-      for (k = 0; k < found.length; k++) { found[k].providerId = c.providers[i].id; hits.push(found[k]); }
+      var found = catalog.search(idx, q, { kind: kind, limit: 6 + savedCount });
+      for (k = 0; k < found.length; k++) {
+        if (saved(c.providers[i].id, found[k].id)) continue;
+        found[k].providerId = c.providers[i].id;
+        hits.push(found[k]);
+      }
     }
     hits.sort(function (a, b) { return b.score - a.score; });
     hits = hits.slice(0, 6);
@@ -902,6 +981,7 @@ header .titles { flex: 1; min-width: 0; }
     for (i = 0; i < hits.length; i++) if (hits[i].id === q) exact = true;
     if (q && !exact && search.kind !== 'destination') {
       for (i = 0; i < c.providers.length; i++) {
+        if (saved(c.providers[i].id, q)) continue;
         list.appendChild(resultButton({ kind: kind, raw: true, providerId: c.providers[i].id, id: q, name: q }, multi));
       }
     }
@@ -947,14 +1027,18 @@ header .titles { flex: 1; min-width: 0; }
     row.appendChild(labelled('c-scale', 'Scale /s', makeInput('scale', 'number', values.scale)));
     addColorLine(row, values.color || '');
     addRemove(row);
+    addDragHandle(row);
     $('routes').appendChild(row);
     return row;
   }
   function pickRoute(hit) {
     var have = findRow('routes', hit.providerId, hit.id);
     if (have) return flash(have);
-    flash(addRoute({ providerId: hit.providerId, id: hit.id, name: hit.raw ? hit.id : hit.name, scale: 0, color: '' }));
+    var row = addRoute({ providerId: hit.providerId, id: hit.id, name: hit.raw ? hit.id : hit.name, scale: 0, color: '' });
+    flash(row);
     renderStopMeta();
+    // a new route starts with the agency's official color (stays Auto when the system has none)
+    loadRouteColor(row, qs(row, '.c-color .status'), true);
   }
 
   // ---- stops -------------------------------------------------------------------------------------------------
@@ -974,6 +1058,7 @@ header .titles { flex: 1; min-width: 0; }
     row.appendChild(labelled('c-rideScale', 'Riding to it /m', makeInput('rideScale', 'number', values.rideScale)));
     row.appendChild(el('div', 'stop-meta'));
     addRemove(row);
+    addDragHandle(row);
     $('stops').appendChild(row);
     return row;
   }
@@ -1121,6 +1206,7 @@ header .titles { flex: 1; min-width: 0; }
     row.appendChild(line);
     row.appendChild(el('div', 'plan-summary', planText(values.id)));
     addRemove(row);
+    addDragHandle(row);
     $('destinations').appendChild(row);
     updateButtons();
     return row;
@@ -1195,14 +1281,19 @@ header .titles { flex: 1; min-width: 0; }
     show();
   }
 
-  function loadRouteColor(row, status) {
+  // quiet: on a newly added route, only report success (no color = it stays Auto, no error shown)
+  function loadRouteColor(row, status, quiet) {
     var id = rowValue(row, 'id'), src = sourceFor(rowValue(row, 'providerId'));
-    if (!src || typeof src.routeInfo !== 'function') { setStatus(status, "This system can't look up routes.", true); return; }
+    if (!src || typeof src.routeInfo !== 'function') { if (!quiet) setStatus(status, "This system can't look up routes.", true); return; }
     setStatus(status, 'Loading…');
     src.routeInfo(id, function (err, info) {
-      if (err) return setStatus(status, "Couldn't load color: " + errText(err), true);
-      var c = settings.color(info && info.color);
-      if (!c) return setStatus(status, "Couldn't load color: no color for route " + id, true);
+      if (!row.parentNode) return;
+      var c = err ? '' : settings.color(info && info.color);
+      if (!c) {
+        if (quiet) return setStatus(status, '');
+        return setStatus(status, "Couldn't load color: " + (err ? errText(err) : 'no color for route ' + id), true);
+      }
+      if (quiet && rowValue(row, 'color')) return setStatus(status, '');   // the user already chose one
       row.setColor('#' + c);
       setStatus(status, 'Official color (the watch shows the nearest of its 64 colors).');
     });

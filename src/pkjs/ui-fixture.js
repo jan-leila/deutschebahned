@@ -35,16 +35,16 @@ function mainItems() {
   return [
     { kind: 'pickup', badge: '2', color: '771473', title: 'Franklin Av & Lyndale Av S',
       route: 'Franklin Av - Riverside Av - U of M - 8th St SE', times: [t(180), t(720), t(1500)],
-      bearing: 40, dist: '350ft', dir: 'EB',
+      bearing: 40, dist: '350ft', dir: 'EB', walk: 85,
       lanes: [{ dir: 'EB', times: [t(180), t(720), t(1500)] }, { dir: 'WB', times: [t(300), t(1260)] }] },
     { kind: 'dropoff', badge: '2', color: '771473', title: 'Home', route: 'Franklin Av - Riverside Av - U of M - 8th St SE',
       times: [t(600), t(1500), t(300)], bearing: 275, dist: '2.4mi', dir: 'WB' },
     { kind: 'pickup', badge: 'B Line', color: 'ED1B2E', title: 'Lake St & Hennepin Av', route: 'B Line - Lake St - Marshall Av',
-      times: [t(0), t(900), t(4000)], bearing: 180, dist: '0.2mi', dir: 'EB' },
+      times: [t(0), t(900), t(4000)], bearing: 180, dist: '0.2mi', dir: 'EB', walk: 250 },
     { kind: 'dropoff', badge: 'B Line', color: 'ED1B2E', title: 'Work', route: 'B Line - Lake St - Marshall Av',
       times: [0, t(1200), t(240)], bearing: 95, dist: '3.1mi', dir: 'EB' },
     { kind: 'pickup', badge: 'Blue', color: '00539F', title: 'Lake St/Midtown Station', route: 'Blue Line - Mpls - Airport - MOA',
-      times: [t(300), t(900)], bearing: 130, dist: '0.4mi', dir: 'SB',
+      times: [t(300), t(900)], bearing: 130, dist: '0.4mi', dir: 'SB', walk: 500,
       lanes: [{ dir: 'SB', times: [t(300), t(900)] }, { dir: 'NB', times: [t(420)] }] },
     { kind: 'dropoff', badge: 'Blue', color: '00539F', title: 'Airport', route: 'Blue Line - Mpls - Airport - MOA',
       times: [t(1800), t(2400), t(1500)], bearing: 160, dist: '6.8mi', dir: 'SB' },
@@ -55,7 +55,7 @@ function mainItems() {
     { kind: 'dropoff', badge: '6', color: '0053A0', title: 'Gym', route: 'Hennepin Av - University Av SE - Southdale',
       times: [t(240), t(1140), t(360)], bearing: 0, dist: '1.2mi', dir: 'NB' },
     { kind: 'pickup', badge: '18', color: '0053A0', title: 'Nicollet & 26th St', route: 'Nicollet Av - 46th St Station',
-      times: [t(60), t(660), 0], bearing: 315, dist: '90ft', dir: 'NB' }
+      times: [t(60), t(660), 0], bearing: 315, dist: '90ft', dir: 'NB', walk: 25 }
   ];
 }
 
@@ -63,7 +63,7 @@ function tripItems() {
   // A planned trip in progress: its remaining bus legs come first (kind 2: t0 board, t1 alight, t2 = 1 once riding).
   var items = [
     { kind: 'trip', badge: '2', color: '771473', title: 'Franklin Av & Lyndale Av S', dir: 'EB',
-      route: 'Planned trip: Work · by 9:00 AM', times: [t(240), t(1260), 0], bearing: 40, dist: '350ft' },
+      route: 'Planned trip: Work · by 9:00 AM', times: [t(240), t(1260), 0], bearing: 40, dist: '350ft', walk: 85 },
     { kind: 'trip', badge: 'Blue', color: '00539F', title: 'Mall of America Station', dir: 'SB',
       route: 'Planned trip: Work · by 9:00 AM', times: [t(-600), t(1500), 1], bearing: 160, dist: '6.8mi' }
   ];

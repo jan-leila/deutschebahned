@@ -29,6 +29,7 @@ typedef struct {
   char dir[BUS_DIR_LEN];      // "NB" / "SB" / "EB" / "WB" / ""
   char dir2[BUS_DIR_LEN];     // lane 2 direction (lanes == 2)
   int32_t u[3];               // lane 2 times (lanes == 2)
+  int32_t walk;               // seconds to walk to the stop (ITEM_WALK), -1 = none / not shown
 } BusItem;
 
 typedef struct {
@@ -48,15 +49,22 @@ bool bus_model_set_geo(BusModel *m, int32_t list_id, int index, int32_t bearing,
                        int lanes, const char *dir2, int32_t u0, int32_t u1, int32_t u2);
 // Route full name of an item already set (set_item resets it to ""); same list/index rules and truncation.
 bool bus_model_set_route(BusModel *m, int32_t list_id, int index, const char *route);
+// Walking time (s) of an item already set (set_item resets it to -1); negative -> -1. Same list/index rules.
+bool bus_model_set_walk(BusModel *m, int32_t list_id, int index, int32_t walk);
 void bus_model_set_status(BusModel *m, const char *status);
 int bus_model_row_count(const BusModel *m);
 const BusItem *bus_model_item(const BusModel *m, int index);
 int bus_model_clamp_selection(const BusModel *m, int sel);
 // True when text on this route color should be dark (0.299R + 0.587G + 0.114B > 150); -1 (none) -> false.
 bool bus_color_prefers_dark_text(int32_t rgb);
+// What the screen shows for a direction code: "NB" -> "North", "SB" -> "South", "EB" -> "East", "WB" -> "West";
+// anything else (incl. "") is returned as it is. Never NULL (NULL -> "").
+const char *bus_dir_name(const char *code);
 
 void bus_format_relative(int32_t seconds, char *buf, size_t n);
 void bus_format_clock(int32_t epoch, bool clock24, char *buf, size_t n);
 // One pickup lane: non-zero times relative to now joined ", " ("now, 12m, 1h05"); none -> "no times".
 void bus_format_lane(const int32_t times[3], int32_t now, char *buf, size_t n);
 void bus_format_detail(const BusItem *it, int32_t now, bool clock24, char *buf, size_t n);
+// Walking time: < 60 s -> "<1m walk"; else minutes rounded up "4m walk"; >= 1 h "1h05 walk"; negative -> "".
+void bus_format_walk(int32_t seconds, char *buf, size_t n);

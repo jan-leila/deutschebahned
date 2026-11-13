@@ -92,7 +92,7 @@ function createSession(deps) {
 
   function sendList(items, status) {
     listId++;
-    send(protocol.encodeList(listId, items, status, { units: prefs.units }));
+    send(protocol.encodeList(listId, items, status, { units: prefs.units, showWalk: config.showWalk, showArrow: config.showArrow }));
     return listId;
   }
 

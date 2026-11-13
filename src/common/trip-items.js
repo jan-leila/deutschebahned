@@ -16,7 +16,7 @@ function tripLabel(destination, plan, opts) {
   return 'Planned trip: ' + destination.name + ' · by ' + format.clock(plan.arriveBy, !!(opts && opts.clock24));
 }
 
-// active = triggers.activeTrips(...); data = planner.gather Data (for stop coordinates); opts = {clock24}
+// active = triggers.activeTrips(...); data = planner.gather Data (for stop coordinates); opts = {clock24, walkSpeed}
 // → Item[] (kind 'trip', pinned: true), trip order then leg order
 function build(active, data, pos, now, opts) {
   var items = [];
@@ -45,6 +45,8 @@ function build(active, data, pos, now, opts) {
         stopId: stopId,
         bearing: stop && pos ? geo.bearing(pos, stop) : null,
         distance: stop && pos ? geo.distance(pos, stop) : null,
+        // before boarding: the time to walk to the boarding stop
+        walk: !riding && stop && pos ? format.walkSeconds(geo.distance(pos, stop), opts && opts.walkSpeed > 0 ? opts.walkSpeed : 1.3) : null,
         estimated: !!trip.plan.estimated,
         lanes: [],
         features: {}
