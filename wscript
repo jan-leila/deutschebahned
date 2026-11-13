@@ -8,6 +8,8 @@ def options(ctx):
 
 def configure(ctx):
     ctx.load('pebble_sdk')
+    # The SDK names the bundle after the checkout directory; pin it so scripts can rely on build/bus-watch.pbw.
+    ctx.env.BUNDLE_NAME = 'bus-watch.pbw'
 
 def build(ctx):
     ctx.load('pebble_sdk')
