@@ -1,0 +1,35 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: Cache Pebble SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pebble-sdk
+          key: pebble-sdk-4.9.169
+      - name: Build Pebble environment
+        # python3.13-rsa's test suite is flaky inside the nix-shell build; retry like binary-watch does.
+        run: |
+          for attempt in 1 2 3; do
+            nix-shell --run true && exit 0
+            echo "::warning::nix-shell build failed (attempt $attempt), retrying"
+          done
+          exit 1
+      - name: Unit, settings page, C model and integration tests
+        run: nix-shell --run 'node tools/build-config.js && node tools/run-tests.js'
+      - name: Build watch app
+        run: |
+          nix-shell --run '
+            set -e
+            [ -e ~/.local/share/pebble-sdk/SDKs/4.9.169 ] || pebble sdk install 4.9.169
+            pebble build
+          '
+          ls build/*.pbw
