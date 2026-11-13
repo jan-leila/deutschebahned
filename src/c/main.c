@@ -310,6 +310,12 @@ static void draw_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
     int16_t y0 = title_cy - tfi.cap / 2 - tfi.top, y1 = mode == 'C' ? bottom : line1_cy - dfi.cap / 2 - 1;
     if (y0 < top) y0 = top;
     draw_marquee(ctx, it->title, title_font, tx, tw, title_cy, y0, y1, x, x + w, GColorWhite, width);
+    // Descenders (the 'y' of "Lyndale") reach below y1; clear them beside the box down to the title's line bottom.
+    // Safe: the badge, direction label, details and arrow are all drawn after this.
+    int16_t ly1 = title_cy - tfi.cap / 2 - tfi.top + tfi.line;
+    if (ly1 > bottom) ly1 = bottom;
+    fill_span(ctx, GColorWhite, 0, tx, y1, ly1);
+    fill_span(ctx, GColorWhite, tx + tw, width, y1, ly1);
   } else {
     draw_line(ctx, it->title, title_font, tx, tw, title_cy, GTextAlignmentLeft);
   }
