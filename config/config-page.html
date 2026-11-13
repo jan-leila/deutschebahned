@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!--PARAMS-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Bus Watch settings</title>
+<style>
+:root {
+  --bg: #f2f3f5; --card: #ffffff; --text: #1b1d21; --muted: #646a73; --line: #dde0e5;
+  --input: #ffffff; --accent: #0a6cf0; --accent-text: #ffffff; --danger: #c62828; --soft: #eef3fd;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111317; --card: #1c1f25; --text: #e9ebef; --muted: #9aa1ab; --line: #30343c;
+    --input: #14161a; --accent: #4c94ff; --accent-text: #0b1220; --danger: #ff6b6b; --soft: #1d2633;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  padding-bottom: 84px;
+}
+header { padding: 20px 16px 4px; max-width: 640px; margin: 0 auto; }
+header h1 { margin: 0; font-size: 24px; }
+header p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+main { max-width: 640px; margin: 0 auto; padding: 8px 12px; }
+section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 14px 10px; margin: 12px 0; }
+section h2 { margin: 0 0 4px; font-size: 17px; }
+.help { color: var(--muted); font-size: 13.5px; margin: 0 0 10px; }
+.help b { color: var(--text); font-weight: 600; }
+.help code, td code { font-size: 12.5px; }
+.field { display: grid; grid-template-columns: 1fr minmax(6.5em, 42%); gap: 2px 12px; align-items: center;
+  padding: 9px 0; border-top: 1px solid var(--line); }
+.field:first-of-type { border-top: 0; }
+.field > .name { font-weight: 500; }
+.field > .hint { grid-column: 1; color: var(--muted); font-size: 12.5px; }
+.field > input, .field > select { grid-column: 2; grid-row: 1 / span 2; }
+.field.wide { grid-template-columns: 1fr; }
+.field.wide > input, .field.wide > select { grid-column: 1; grid-row: auto; }
+.field.check > input { justify-self: end; width: 24px; height: 24px; }
+input, select, button { font: inherit; color: inherit; }
+input[type=text], input[type=url], input[type=number], select {
+  width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--input); font-size: 16px;
+}
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+button { border: 1px solid var(--line); background: var(--input); border-radius: 9px; padding: 8px 12px; cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button.danger { color: var(--danger); }
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.list { display: flex; flex-direction: column; gap: 8px; }
+.row { position: relative; display: grid; gap: 6px 8px; padding: 10px 44px 10px 10px; border: 1px solid var(--line);
+  border-radius: 11px; background: var(--soft); }
+.route-row { grid-template-columns: 1fr 1fr 5.5em; }
+.connection-row { grid-template-columns: 1fr 1fr; }
+.connection-row .c-scale { grid-column: 2; }
+.stop-scale-row { grid-template-columns: 1fr 6em; }
+.row label { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 11.5px; color: var(--muted); }
+.row label input { color: var(--text); padding: 6px 8px; }
+.row .remove { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; padding: 0; border-radius: 50%;
+  color: var(--danger); font-size: 18px; line-height: 1; }
+.empty { color: var(--muted); font-size: 13.5px; padding: 4px 0; }
+.list:not(:empty) + .empty { display: none; }
+.add { margin-top: 8px; }
+#location-fixed.off { display: none; }
+.stats { display: flex; gap: 10px; margin: 4px 0 8px; }
+.stat { flex: 1; border: 1px solid var(--line); border-radius: 11px; padding: 8px 10px; background: var(--soft); }
+.stat b { display: block; font-size: 22px; }
+.stat span { color: var(--muted); font-size: 12.5px; }
+#train-result { font-size: 13.5px; min-height: 1em; margin: 4px 0; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th, td { text-align: left; padding: 6px 4px; border-top: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; border-top: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td small { color: var(--muted); display: block; }
+details { margin-top: 6px; }
+summary { cursor: pointer; color: var(--accent); font-size: 14px; padding: 6px 0; }
+.opt { color: var(--muted); font-weight: 400; font-size: 12.5px; }
+.field.wide > .hint { grid-row: auto; }
+.status { color: var(--muted); font-size: 12.5px; margin: 4px 0 0; min-height: 0; }
+.status:empty { display: none; }
+.status.err { color: var(--danger); }
+body:not(.has-listRoutes) .needs-listRoutes, body:not(.has-routeInfo) .needs-routeInfo,
+body:not(.has-stopInfo) .needs-stopInfo { display: none !important; }
+.destination-row { grid-template-columns: 1fr 1fr; }
+.destination-row .c-name { grid-column: 1 / -1; }
+.destination-row input[type=time] { width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--input); font-size: 16px; color: var(--text); }
+.destination-row .c-enabled { flex-direction: row; align-items: center; gap: 8px; align-self: end; padding-bottom: 6px; font-size: 13.5px; color: var(--text); }
+.destination-row .c-enabled input { width: 22px; height: 22px; }
+.days { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.days .days-label { font-size: 11.5px; color: var(--muted); width: 100%; }
+.days label.day { flex-direction: row; align-items: center; justify-content: center; gap: 0; position: relative;
+  min-width: 2.4em; height: 2.2em; border: 1px solid var(--line); border-radius: 8px; background: var(--input);
+  font-size: 13px; color: var(--text); cursor: pointer; }
+.days label.day input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.days label.day.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.plan-summary { grid-column: 1 / -1; font-size: 13px; color: var(--text); }
+.plan-summary:empty { display: none; }
+button.small { padding: 5px 10px; font-size: 13.5px; }
+.row .line { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 13px; }
+.row .line .status { margin: 0; }
+.color-label { color: var(--muted); font-size: 11.5px; }
+.swatch { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px 4px 5px; font-size: 13.5px; }
+.chip { display: inline-block; width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line); flex: none;
+  background: repeating-linear-gradient(135deg, var(--soft) 0 4px, var(--line) 4px 8px); }
+.palette { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; padding: 8px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--card); max-width: 360px; }
+.palette[hidden] { display: none; }
+.palette button { aspect-ratio: 1; min-width: 0; padding: 0; border-radius: 6px; border: 1px solid rgba(127,127,127,.35); }
+.palette button.on { outline: 2px solid var(--text); outline-offset: 1px; }
+.palette .auto { grid-column: 1 / -1; aspect-ratio: auto; padding: 6px; font-size: 13.5px; background: var(--input); }
+#stop-picker { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--accent); border-radius: 11px; background: var(--card); }
+#stop-picker[hidden] { display: none; }
+#stop-picker label { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--muted); }
+#stop-picker select { color: var(--text); }
+#stop-picker .buttons { margin: 0; }
+.picker-title { font-size: 14px; }
+.savebar { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: var(--card); border-top: 1px solid var(--line); }
+.savebar .inner { max-width: 640px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
+.savebar .note { flex: 1; color: var(--muted); font-size: 12.5px; }
+.savebar button { min-width: 8em; padding: 11px 16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Bus Watch</h1>
+  <p>Nearby pickups and drop-offs on your wrist.</p>
+</header>
+<main>
+
+<section id="sec-provider">
+  <h2>Transit data</h2>
+  <p class="help"><b>Metro Transit</b> needs no API key. <b>OneBusAway</b> servers use an API key
+    (blank = the public <code>TEST</code> key). <b>Mock</b> serves made-up data for trying the app.</p>
+  <label class="field wide"><span class="name">Provider</span>
+    <select data-field="provider.type"></select></label>
+  <label class="field wide"><span class="name">Base URL <span class="opt">optional</span></span>
+    <input type="url" data-field="provider.baseUrl" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <span class="hint">Blank = the provider's default server.</span></label>
+  <label class="field wide"><span class="name">API key <span class="opt">optional</span></span>
+    <input type="text" data-field="provider.apiKey" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <span class="hint">Blank = the provider's default (Metro Transit needs no key).</span></label>
+  <p class="status" id="source-status" aria-live="polite"></p>
+  <datalist id="route-options"></datalist>
+</section>
+
+<section id="sec-location">
+  <h2>Location</h2>
+  <p class="help"><b>GPS</b> uses the phone's position. <b>Fixed</b> always uses the coordinates below (handy for testing or a demo).</p>
+  <label class="field"><span class="name">Mode</span><span class="hint"></span>
+    <select data-field="location.mode"><option value="gps">GPS</option><option value="fixed">Fixed position</option></select></label>
+  <div id="location-fixed">
+    <label class="field"><span class="name">Latitude</span><span class="hint">degrees, −90…90</span>
+      <input type="number" step="any" data-field="location.lat"></label>
+    <label class="field"><span class="name">Longitude</span><span class="hint">degrees, −180…180</span>
+      <input type="number" step="any" data-field="location.lon"></label>
+    <div class="buttons"><button type="button" id="use-here">Use my current position</button></div>
+  </div>
+</section>
+
+<section id="sec-display">
+  <h2>Display</h2>
+  <label class="field"><span class="name">Units</span><span class="hint">distances on the watch</span>
+    <select data-field="units"><option value="imperial">Miles / feet</option><option value="metric">Kilometers / meters</option></select></label>
+  <label class="field check"><span class="name">24-hour clock</span><span class="hint">times in notifications</span>
+    <input type="checkbox" data-field="clock24"></label>
+</section>
+
+<section id="sec-search">
+  <h2>What to look for</h2>
+  <p class="help">How far to search and how far ahead. Values outside the allowed range are clamped when saving.</p>
+  <label class="field"><span class="name">Stop radius</span><span class="hint">m · stops this close count as nearby</span>
+    <input type="number" step="any" data-field="stopRadius"></label>
+  <label class="field"><span class="name">Route radius</span><span class="hint">m · this close to a route's path means you're on it</span>
+    <input type="number" step="any" data-field="routeRadius"></label>
+  <label class="field"><span class="name">Recent window</span><span class="hint">s · a bus that passed here this recently counts as "here"</span>
+    <input type="number" step="any" data-field="recentWindow"></label>
+  <label class="field"><span class="name">Vehicle radius</span><span class="hint">m · a live bus position reported within this many meters of you (and within the recent window) counts as the bus you're on</span>
+    <input type="number" step="1" data-field="vehicleRadius"></label>
+  <label class="field"><span class="name">Lookahead</span><span class="hint">min · pickups and the next bus here</span>
+    <input type="number" step="any" data-field="lookahead"></label>
+  <label class="field"><span class="name">Drop-off horizon</span><span class="hint">min · how far ahead to look for arrivals at pinned stops</span>
+    <input type="number" step="any" data-field="dropoffHorizon"></label>
+  <label class="field"><span class="name">Nearby stops</span><span class="hint">how many stops to query</span>
+    <input type="number" step="1" data-field="maxStops"></label>
+  <label class="field"><span class="name">Pickups per item</span><span class="hint">times shown on each line</span>
+    <input type="number" step="1" data-field="pickupsPerItem"></label>
+  <label class="field"><span class="name">Max items</span><span class="hint">lines in the watch list</span>
+    <input type="number" step="1" data-field="maxItems"></label>
+  <label class="field"><span class="name">Refresh every</span><span class="hint">s</span>
+    <input type="number" step="1" data-field="refreshInterval"></label>
+</section>
+
+<section id="sec-scales">
+  <h2>Sort order</h2>
+  <p class="help">Every line on the watch gets a <b>score = Σ scale × value</b> and the <b>highest score is shown first</b>.
+    <b>Stop scales</b> are weights per <b>meter</b> of distance to the stop; <b>route scales</b> are weights per <b>second</b>
+    until the bus. So a <b>negative</b> scale means <b>nearer / sooner first</b>, and a bigger negative number makes that
+    distance or wait matter more. <code>0</code> ignores it; a positive scale prefers farther / later.</p>
+  <label class="field"><span class="name">Default stop scale</span><span class="hint">per m, for stops without their own scale</span>
+    <input type="number" step="any" data-field="defaultStopScale"></label>
+  <label class="field"><span class="name">Default route scale</span><span class="hint">per s, for routes not listed below</span>
+    <input type="number" step="any" data-field="defaultRouteScale"></label>
+  <label class="field"><span class="name">Default pinned-stop scale</span><span class="hint">per m, for new pinned stops</span>
+    <input type="number" step="any" data-field="defaultConnectionScale"></label>
+</section>
+
+<section id="sec-routes">
+  <h2>Bus routes</h2>
+  <p class="help">Routes you care about, by provider route id (Metro Transit: the route number, e.g. <code>2</code> or
+    <code>901</code> for the Blue Line; OneBusAway: e.g. <code>1_100225</code>). The name is what the watch shows.
+    Scale is per second of waiting: <b>−2</b> ranks this route's buses ahead of a <b>−1</b> route arriving at the same time.
+    <b>Color</b> is how the route is drawn on the watch; <b>Auto</b> uses the transit agency's color (or a default).</p>
+  <div id="routes" class="list"></div>
+  <div class="empty">No routes yet; every route uses the default route scale.</div>
+  <button type="button" class="add" id="add-route">+ Add route</button>
+</section>
+
+<section id="sec-connections">
+  <h2>Pinned stops</h2>
+  <p class="help">Places you ride to: a route and the stop you get off at (e.g. Home, Work). When you're on that route the watch
+    shows the arrival there. Scale is per meter, like stop scales; empty uses the default pinned-stop scale.
+    <span class="needs-routeInfo"><b>Choose stop</b> picks it from the route's stop list.</span></p>
+  <div id="connections" class="list"></div>
+  <div class="empty">No pinned stops.</div>
+  <button type="button" class="add" id="add-connection">+ Add pinned stop</button>
+  <div id="stop-picker" hidden>
+    <div class="picker-title">Choose a stop on route <b class="picker-route"></b></div>
+    <label class="picker-route-choice" hidden>Route<select name="route"></select></label>
+    <label>Direction<select name="direction"></select></label>
+    <label>Stop<select name="stop"></select></label>
+    <p class="status picker-status" aria-live="polite"></p>
+    <div class="buttons"><button type="button" class="use primary" disabled>Use this stop</button><button type="button" class="cancel">Cancel</button></div>
+  </div>
+</section>
+
+<section id="sec-destinations">
+  <h2>Trips</h2>
+  <p class="help">Places you need to <b>arrive by</b> a time (e.g. Work by 9:00 on weekdays). The phone plans a trip with your
+    routes and the watch reminds you when to leave. No day selected = every day.
+    <span class="needs-stopInfo"><b>Choose stop</b> uses a stop's position as the destination.</span></p>
+  <div id="destinations" class="list"></div>
+  <div class="empty">No trips.</div>
+  <button type="button" class="add" id="add-destination">+ Add trip</button>
+  <details>
+    <summary>Trip planning options</summary>
+    <label class="field"><span class="name">Check ahead</span><span class="hint">min · re-check this long before the leave time</span>
+      <input type="number" step="1" data-field="schedule.leadMinutes"></label>
+    <label class="field check"><span class="name">Leave reminder</span><span class="hint">also notify at the leave time</span>
+      <input type="checkbox" data-field="schedule.leaveReminder"></label>
+    <label class="field"><span class="name">Walking speed</span><span class="hint">m/s</span>
+      <input type="number" step="any" data-field="schedule.walkSpeed"></label>
+    <label class="field"><span class="name">Max walk</span><span class="hint">m · to the first / from the last stop</span>
+      <input type="number" step="1" data-field="schedule.maxWalk"></label>
+    <label class="field"><span class="name">Transfer walk</span><span class="hint">m · between stops when transferring</span>
+      <input type="number" step="1" data-field="schedule.transferWalk"></label>
+    <label class="field"><span class="name">Max transfers</span><span class="hint"></span>
+      <input type="number" step="1" data-field="schedule.maxTransfers"></label>
+    <label class="field"><span class="name">Transfer slack</span><span class="hint">s · time needed to make a transfer</span>
+      <input type="number" step="1" data-field="schedule.minTransfer"></label>
+    <label class="field"><span class="name">Fallback check</span><span class="hint">min · with no plan yet, re-check this long before arriving</span>
+      <input type="number" step="1" data-field="schedule.fallbackMinutes"></label>
+  </details>
+</section>
+
+<section id="sec-stops">
+  <h2>Stop scales</h2>
+  <p class="help">Per-stop weights per meter of walking. Use a smaller negative number (e.g. <b>−0.5</b>) for a stop you don't
+    mind walking farther to, a bigger one (e.g. <b>−3</b>) for one you only use when it's right there.</p>
+  <div id="stop-scales" class="list"></div>
+  <div class="empty">No per-stop scales; all stops use the default stop scale.</div>
+  <button type="button" class="add" id="add-stop-scale">+ Add stop scale</button>
+</section>
+
+<section id="sec-training">
+  <h2>Learning</h2>
+  <p class="help">Each time you press SELECT on a line the watch records what you picked out of what was shown. From these
+    picks the app learns weights that override the scales above, so the lines you tend to pick move to the top.</p>
+  <div class="stats">
+    <div class="stat"><b id="sample-count">0</b><span>recorded picks</span></div>
+    <div class="stat"><b id="learned-count">0</b><span>learned weights</span></div>
+  </div>
+  <div id="train-result" aria-live="polite"></div>
+  <div class="buttons">
+    <button type="button" id="train-now">Train now</button>
+    <button type="button" id="bake-learned">Bake into scales</button>
+    <button type="button" id="reset-learned" class="danger">Reset learned</button>
+    <button type="button" id="clear-samples" class="danger">Clear picks</button>
+  </div>
+  <p class="help"><b>Bake</b> copies the learned weights into the route, pinned-stop and stop scales above and then clears them.</p>
+  <div class="table-wrap"><table id="learned"></table></div>
+  <details>
+    <summary>Training options</summary>
+    <label class="field check"><span class="name">Train automatically</span><span class="hint">after each pick</span>
+      <input type="checkbox" data-field="training.autoTrain"></label>
+    <label class="field"><span class="name">Learning rate</span><span class="hint">step size</span>
+      <input type="number" step="any" data-field="training.learningRate"></label>
+    <label class="field"><span class="name">Iterations</span><span class="hint">optimizer steps per training</span>
+      <input type="number" step="1" data-field="training.iterations"></label>
+    <label class="field"><span class="name">Temperature</span><span class="hint">score units; larger = softer choices</span>
+      <input type="number" step="any" data-field="training.temperature"></label>
+    <label class="field"><span class="name">Regularization</span><span class="hint">pull toward the scales above</span>
+      <input type="number" step="any" data-field="training.regularization"></label>
+    <label class="field"><span class="name">Max picks kept</span><span class="hint">oldest are dropped</span>
+      <input type="number" step="1" data-field="training.maxSamples"></label>
+  </details>
+</section>
+
+</main>
+<div class="savebar"><div class="inner">
+  <span class="note" id="save-note">Changes apply when you save.</span>
+  <button type="button" class="primary" id="save">Save</button>
+</div></div>
+
+<!--BUSWATCH-MODULES-->
+<script>
+(function () {
+  var BW = window.BusWatch;
+  var settings = BW.settings, ranking = BW.ranking, optimize = BW.optimize, format = BW.format, registry = BW.registry;
+  var P = window.__params && typeof window.__params === 'object' ? window.__params : {};
+
+  function isObj(v) { return v !== null && typeof v === 'object' && !(v instanceof Array); }
+
+  var state = {
+    samples: P.samples instanceof Array ? P.samples : [],
+    learned: isObj(P.learned) ? P.learned : null,
+    plans: isObj(P.plans) ? P.plans : {},
+    learnedChanged: false,
+    clearSamples: false,
+    returnTo: typeof P.return_to === 'string' && P.return_to ? P.return_to : 'pebblejs://close#'
+  };
+
+  var MAX_DESTINATIONS = settings.MAX_DESTINATIONS || 8;
+  var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  function $(id) { return document.getElementById(id); }
+  function fields() { return document.querySelectorAll('[data-field]'); }
+  function typeSelect() { return document.querySelector('[data-field="provider.type"]'); }
+  function fmt(n) {
+    if (typeof n !== 'number' || !isFinite(n)) return '';
+    return String(Math.abs(n) >= 100 ? Math.round(n * 100) / 100 : Math.round(n * 10000) / 10000);
+  }
+  function coord(n) { return String(Math.round(n * 1e6) / 1e6); }
+  function trim(s) { return String(s == null ? '' : s).replace(/^\s+|\s+$/g, ''); }
+  function errText(e) { return e && e.message ? e.message : String(e || 'unknown error'); }
+
+  // ---- form <-> config ---------------------------------------------------------------
+  function getPath(obj, path) {
+    var parts = path.split('.');
+    for (var i = 0; i < parts.length && obj != null; i++) obj = obj[parts[i]];
+    return obj;
+  }
+  function setPath(obj, path, value) {
+    var parts = path.split('.');
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (!isObj(obj[parts[i]])) obj[parts[i]] = {};
+      obj = obj[parts[i]];
+    }
+    obj[parts[parts.length - 1]] = value;
+  }
+  function rowValue(row, name) {
+    var el = row.querySelector('input[name=' + name + ']');
+    return el ? el.value : '';
+  }
+
+  // provider.type: the select shows the source in use; a config with '' (default source) or a type this page
+  // doesn't know keeps that value until the user picks another source
+  function readType() {
+    var sel = typeSelect();
+    return sel.hasAttribute('data-keep') ? sel.getAttribute('data-keep') : sel.value;
+  }
+  function fillType(type) {
+    var sel = typeSelect();
+    var known = type !== '' && registry.has(type);
+    var plugin = registry.resolve(type);
+    sel.value = known ? type : (plugin ? plugin.type : '');
+    if (known) sel.removeAttribute('data-keep');
+    else sel.setAttribute('data-keep', type);
+  }
+
+  function readDestination(row) {
+    var days = [];
+    var boxes = row.querySelectorAll('input[name=day]');
+    for (var i = 0; i < boxes.length; i++) if (boxes[i].checked) days.push(+boxes[i].value);
+    var en = row.querySelector('input[name=enabled]');
+    return { id: rowValue(row, 'id'), name: rowValue(row, 'name'), lat: rowValue(row, 'lat'), lon: rowValue(row, 'lon'),
+             arriveBy: rowValue(row, 'arriveBy'), days: days, enabled: en ? en.checked : true };
+  }
+
+  function readForm() {
+    var raw = {};
+    var els = fields();
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      setPath(raw, el.getAttribute('data-field'), el.type === 'checkbox' ? el.checked : el.value);
+    }
+    setPath(raw, 'provider.type', readType());
+    raw.routes = [];
+    var rr = document.querySelectorAll('#routes .route-row');
+    for (i = 0; i < rr.length; i++) {
+      raw.routes.push({ id: rowValue(rr[i], 'id'), name: rowValue(rr[i], 'name'), scale: rowValue(rr[i], 'scale'),
+                        color: rowValue(rr[i], 'color') });
+    }
+    raw.connections = [];
+    var cr = document.querySelectorAll('#connections .connection-row');
+    for (i = 0; i < cr.length; i++) {
+      raw.connections.push({ routeId: rowValue(cr[i], 'routeId'), stopId: rowValue(cr[i], 'stopId'),
+                             name: rowValue(cr[i], 'name'), scale: rowValue(cr[i], 'scale') });
+    }
+    raw.stopScales = {};
+    var sr = document.querySelectorAll('#stop-scales .stop-scale-row');
+    for (i = 0; i < sr.length; i++) {
+      var id = trim(rowValue(sr[i], 'stopId'));
+      if (id !== '' && !raw.stopScales.hasOwnProperty(id)) raw.stopScales[id] = rowValue(sr[i], 'scale');
+    }
+    raw.destinations = [];
+    var dr = document.querySelectorAll('#destinations .destination-row');
+    for (i = 0; i < dr.length; i++) raw.destinations.push(readDestination(dr[i]));
+    return settings.normalize(raw);
+  }
+
+  function fillForm(config) {
+    var c = settings.normalize(config);
+    var els = fields();
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i], v = getPath(c, el.getAttribute('data-field'));
+      if (el.type === 'checkbox') el.checked = !!v;
+      else el.value = typeof v === 'number' ? String(v) : (v == null ? '' : v);
+    }
+    fillType(c.provider.type);
+    closePicker();
+    clear($('routes'));
+    clear($('connections'));
+    clear($('stop-scales'));
+    clear($('destinations'));
+    for (i = 0; i < c.routes.length; i++) addRow('route', c.routes[i]);
+    for (i = 0; i < c.connections.length; i++) addRow('connection', c.connections[i]);
+    for (var k in c.stopScales) if (c.stopScales.hasOwnProperty(k)) addRow('stop-scale', { stopId: k, scale: c.stopScales[k] });
+    for (i = 0; i < c.destinations.length; i++) addDestination(c.destinations[i]);
+    updateDestinationButton();
+    updateLocationMode();
+    renderLearned();
+  }
+
+  // ---- list rows -----------------------------------------------------------------------
+  var ROWS = {
+    'route': { list: 'routes', cols: [['id', 'Route id', 'text'], ['name', 'Name', 'text'], ['scale', 'Scale /s', 'number']] },
+    'connection': { list: 'connections', cols: [['routeId', 'Route id', 'text'], ['stopId', 'Stop id', 'text'],
+                                                ['name', 'Name', 'text'], ['scale', 'Scale /m', 'number']] },
+    'stop-scale': { list: 'stop-scales', cols: [['stopId', 'Stop id', 'text'], ['scale', 'Scale /m', 'number']] }
+  };
+  function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+  function labelled(cls, text, input) {
+    var label = document.createElement('label');
+    label.className = cls;
+    label.appendChild(document.createTextNode(text));
+    label.appendChild(input);
+    return label;
+  }
+  function makeInput(name, type, value) {
+    var input = document.createElement('input');
+    input.name = name;
+    input.type = type;
+    if (type === 'number') input.step = 'any';
+    else if (type === 'text') { input.autocapitalize = 'off'; input.spellcheck = false; input.setAttribute('autocorrect', 'off'); }
+    input.value = typeof value === 'number' ? String(value) : (value == null ? '' : value);
+    return input;
+  }
+  function addRemove(row, onRemove) {
+    var rm = el('button', 'remove', '×');
+    rm.title = 'Remove';
+    rm.setAttribute('aria-label', 'Remove');
+    rm.onclick = function () {
+      if (picker.row === row) closePicker();
+      row.parentNode.removeChild(row);
+      if (onRemove) onRemove();
+    };
+    row.appendChild(rm);
+  }
+  function addRow(kind, values) {
+    var spec = ROWS[kind];
+    var row = document.createElement('div');
+    row.className = 'row ' + kind + '-row';
+    for (var i = 0; i < spec.cols.length; i++) {
+      var col = spec.cols[i];
+      var input = makeInput(col[0], col[2], values ? values[col[0]] : null);
+      if (col[0] === 'id' && kind === 'route' || col[0] === 'routeId') input.setAttribute('list', 'route-options');
+      row.appendChild(labelled('c-' + col[0], col[1], input));
+    }
+    if (kind === 'route') addColorLine(row, values ? values.color : '');
+    if (kind === 'connection') addPickLine(row, 'connection', 'needs-routeInfo');
+    addRemove(row, renderLearned);
+    $(spec.list).appendChild(row);
+    return row;
+  }
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    if (tag === 'button') e.type = 'button';
+    return e;
+  }
+  function setStatus(node, text, isErr) {
+    node.textContent = text || '';
+    node.className = node.className.replace(/\s*\berr\b/g, '') + (isErr ? ' err' : '');
+  }
+
+  // ---- destinations ----------------------------------------------------------------------
+  function destinationRows() { return document.querySelectorAll('#destinations .destination-row'); }
+  function updateDestinationButton() {
+    var n = destinationRows().length, btn = $('add-destination');
+    btn.disabled = n >= MAX_DESTINATIONS;
+    btn.textContent = n >= MAX_DESTINATIONS ? 'At most ' + MAX_DESTINATIONS + ' trips' : '+ Add trip';
+  }
+  function syncDays(row) {
+    var boxes = row.querySelectorAll('input[name=day]');
+    for (var i = 0; i < boxes.length; i++) boxes[i].parentNode.className = 'day' + (boxes[i].checked ? ' on' : '');
+  }
+  function planText(id) {
+    var p = id && state.plans.hasOwnProperty(id) ? state.plans[id] : null;
+    if (!isObj(p)) return '';
+    var text = typeof p.summary === 'string' ? p.summary : '';
+    var leave = isObj(p.plan) && typeof p.plan.leaveAt === 'number' ? format.clock(p.plan.leaveAt, document.querySelector('[data-field="clock24"]').checked) : '';
+    if (leave && text.indexOf(leave) < 0) text += (text ? ' · ' : '') + 'leave ' + leave;
+    return text ? 'Planned: ' + text : '';
+  }
+
+  function addDestination(values) {
+    if (destinationRows().length >= MAX_DESTINATIONS) return null;
+    values = values || { name: '', lat: '', lon: '', arriveBy: '09:00', days: [], enabled: true };
+    var row = document.createElement('div');
+    row.className = 'row destination-row';
+    var id = makeInput('id', 'hidden', values.id || '');
+    row.appendChild(id);
+    var name = makeInput('name', 'text', values.name);
+    name.autocapitalize = 'words';
+    name.placeholder = 'e.g. Work';
+    row.appendChild(labelled('c-name', 'Name', name));
+    row.appendChild(labelled('c-lat', 'Latitude', makeInput('lat', 'number', values.lat)));
+    row.appendChild(labelled('c-lon', 'Longitude', makeInput('lon', 'number', values.lon)));
+    row.appendChild(labelled('c-arriveBy', 'Arrive by', makeInput('arriveBy', 'time', values.arriveBy)));
+    var en = makeInput('enabled', 'checkbox', '');
+    en.checked = values.enabled !== false;
+    row.appendChild(labelled('c-enabled', 'Enabled', en));
+
+    var days = el('div', 'days');
+    days.appendChild(el('span', 'days-label', 'Days (none = every day)'));
+    var on = {};
+    var vd = values.days instanceof Array ? values.days : [];
+    for (var i = 0; i < vd.length; i++) on[vd[i]] = true;
+    for (var d = 0; d < 7; d++) {
+      var box = makeInput('day', 'checkbox', String(d));
+      box.checked = !!on[d];
+      box.onchange = function () { syncDays(row); };
+      var lab = document.createElement('label');
+      lab.appendChild(box);
+      lab.appendChild(document.createTextNode(DAY_NAMES[d]));
+      days.appendChild(lab);
+    }
+    row.appendChild(days);
+    syncDays(row);
+
+    var line = el('div', 'line');
+    var pick = el('button', 'pick-stop small needs-routeInfo needs-stopInfo', 'Choose stop…');
+    pick.onclick = function () { openPicker(row, 'destination'); };
+    var here = el('button', 'here small', 'Use my position');
+    var status = el('span', 'status');
+    here.onclick = function () {
+      locate(status, function (lat, lon) {
+        row.querySelector('input[name=lat]').value = coord(lat);
+        row.querySelector('input[name=lon]').value = coord(lon);
+      });
+    };
+    line.appendChild(pick);
+    line.appendChild(here);
+    line.appendChild(status);
+    row.appendChild(line);
+    row.appendChild(el('div', 'plan-summary', planText(values.id)));
+    addRemove(row, updateDestinationButton);
+    $('destinations').appendChild(row);
+    updateDestinationButton();
+    return row;
+  }
+
+  // ---- route colors (64 Pebble colors: each channel 00/55/AA/FF) -------------------------
+  var LEVELS = ['00', '55', 'AA', 'FF'];
+  var PEBBLE_COLORS = [];
+  (function () {
+    // 8×8 grid: two rows per red level; each row holds two green levels × four blue levels
+    for (var r = 0; r < 4; r++) for (var gh = 0; gh < 2; gh++) for (var gl = 0; gl < 2; gl++) for (var b = 0; b < 4; b++) {
+      PEBBLE_COLORS.push('#' + LEVELS[r] + LEVELS[gh * 2 + gl] + LEVELS[b]);
+    }
+  })();
+  function toHex(c) { c = settings.color(c); return c ? '#' + c.toLowerCase() : ''; }
+
+  function addColorLine(row, initial) {
+    var line = el('div', 'line c-color');
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'color';
+    input.value = toHex(initial);
+    var swatch = el('button', 'swatch small');
+    swatch.title = 'Choose the color shown on the watch';
+    var chip = el('span', 'chip'), text = el('span');
+    swatch.appendChild(chip);
+    swatch.appendChild(text);
+    var load = el('button', 'load-color small needs-routeInfo', 'Official color');
+    load.title = "Load the route's color from the transit data source";
+    var status = el('span', 'status');
+    var palette = el('div', 'palette');
+    palette.hidden = true;
+
+    function show() {
+      var v = toHex(input.value);
+      chip.style.background = v || '';
+      text.textContent = v ? v.toUpperCase() : 'Auto';
+      var bs = palette.querySelectorAll('button[data-color]');
+      for (var i = 0; i < bs.length; i++) bs[i].className = bs[i].getAttribute('data-color') === v ? 'on' : '';
+    }
+    function set(v) { input.value = toHex(v); show(); }
+    row.setColor = set;
+
+    for (var i = 0; i < PEBBLE_COLORS.length; i++) {
+      var b = el('button');
+      b.setAttribute('data-color', PEBBLE_COLORS[i]);
+      b.style.background = PEBBLE_COLORS[i];
+      b.title = PEBBLE_COLORS[i].toUpperCase();
+      b.setAttribute('aria-label', b.title);
+      palette.appendChild(b);
+    }
+    var auto = el('button', 'auto', 'Auto (agency color or default)');
+    auto.setAttribute('data-auto', '1');
+    palette.appendChild(auto);
+    palette.onclick = function (e) {
+      var t = e.target;
+      if (!t || t.tagName !== 'BUTTON') return;
+      set(t.getAttribute('data-auto') ? '' : t.getAttribute('data-color'));
+      setStatus(status, '');
+      palette.hidden = true;
+    };
+    swatch.onclick = function () { palette.hidden = !palette.hidden; show(); };
+    load.onclick = function () { loadRouteColor(row, status); };
+
+    line.appendChild(el('span', 'color-label', 'Color'));
+    line.appendChild(input);
+    line.appendChild(swatch);
+    line.appendChild(load);
+    line.appendChild(status);
+    row.appendChild(line);
+    row.appendChild(palette);
+    show();
+  }
+
+  function addPickLine(row, mode, cls) {
+    var line = el('div', 'line ' + cls);
+    var pick = el('button', 'pick-stop small', 'Choose stop…');
+    pick.onclick = function () { openPicker(row, mode); };
+    line.appendChild(pick);
+    row.appendChild(line);
+  }
+
+  // ---- source helpers -------------------------------------------------------------------
+  // The current data source, created like the phone does (registry.create) with browser I/O. Each helper is
+  // offered only when the source has the matching catalog method; failures are shown inline, never thrown.
+  function guardedStorage() {
+    function ls() { try { return window.localStorage || null; } catch (e) { return null; } }
+    return {
+      getItem: function (k) { try { var s = ls(); return s ? s.getItem(k) : null; } catch (e) { return null; } },
+      setItem: function (k, v) { try { var s = ls(); if (s) s.setItem(k, v); } catch (e) { /* full / blocked */ } },
+      removeItem: function (k) { try { var s = ls(); if (s) s.removeItem(k); } catch (e) { /* blocked */ } }
+    };
+  }
+  // GET url → JSON; cb(err, body) is always called once, asynchronously and outside the promise chain
+  function http(url, cb) {
+    var done = false;
+    function finish(err, body) {
+      if (done) return;
+      done = true;
+      setTimeout(function () { cb(err, body); }, 0);
+    }
+    try {
+      if (typeof window.fetch !== 'function') return finish(new Error('no network access'));
+      Promise.resolve(window.fetch(url)).then(function (res) {
+        if (!res) throw new Error('no response');
+        return Promise.resolve(res.json()).then(null, function () { return null; }).then(function (body) {
+          if (!res.ok) {
+            var msg = body && (body.detail || body.title || body.text);
+            throw new Error(msg || 'HTTP ' + res.status);
+          }
+          if (body == null) throw new Error('bad response');
+          finish(null, body);
+        });
+      }).then(null, function (e) { finish(e instanceof Error ? e : new Error(errText(e))); });
+    } catch (e) {
+      finish(e instanceof Error ? e : new Error(errText(e)));
+    }
+  }
+  var deps = { http: http, clock: function () { return Math.floor(new Date().getTime() / 1000); }, storage: guardedStorage() };
+  var current = { key: null, source: null, error: null };
+  function sourceKey(c) {
+    var routes = [];
+    for (var i = 0; i < c.routes.length; i++) routes.push([c.routes[i].id, c.routes[i].name]);
+    return JSON.stringify([c.provider, routes, c.location]);
+  }
+  function source() {
+    var c = readForm();
+    var key = sourceKey(c);
+    if (key !== current.key) {
+      current.key = key;
+      try { current.source = registry.create(c, deps); current.error = null; }
+      catch (e) { current.source = null; current.error = e; }
+    }
+    return current.source;
+  }
+  function can(method) { var s = source(); return !!s && typeof s[method] === 'function'; }
+  function sourceLabel() {
+    var p = registry.resolve(readType());
+    return p ? p.label || p.type : 'the data source';
+  }
+  function updateCapabilities() {
+    var methods = ['listRoutes', 'routeInfo', 'stopInfo'];
+    for (var i = 0; i < methods.length; i++) {
+      var on = can(methods[i]);
+      var cls = document.body.className.replace(new RegExp('\\s*\\bhas-' + methods[i] + '\\b', 'g'), '');
+      document.body.className = cls + (on ? ' has-' + methods[i] : '');
+    }
+  }
+
+  var routeListToken = 0;
+  function refreshSource() {
+    var token = ++routeListToken;
+    var dl = $('route-options'), status = $('source-status');
+    closePicker();
+    updateCapabilities();
+    clear(dl);
+    var s = source();
+    if (!s) { setStatus(status, current.error ? "Couldn't start the data source: " + errText(current.error) : '', true); return; }
+    if (typeof s.listRoutes !== 'function') { setStatus(status, ''); return; }
+    setStatus(status, 'Loading ' + sourceLabel() + ' routes…');
+    s.listRoutes(function (err, list) {
+      if (token !== routeListToken) return;
+      if (err) {
+        setStatus(status, "Couldn't load the route list (" + errText(err) + '). You can still type route ids.', true);
+        return;
+      }
+      list = list instanceof Array ? list : [];
+      for (var i = 0; i < list.length; i++) {
+        if (!list[i] || list[i].id == null) continue;
+        var o = document.createElement('option');
+        o.value = String(list[i].id);
+        o.textContent = list[i].label || o.value;
+        dl.appendChild(o);
+      }
+      setStatus(status, list.length + ' ' + sourceLabel() + ' routes available as suggestions for route ids.');
+    });
+  }
+
+  function loadRouteColor(row, status) {
+    var id = trim(rowValue(row, 'id'));
+    if (!id) { setStatus(status, 'Enter a route id first.', true); return; }
+    if (!can('routeInfo')) { setStatus(status, sourceLabel() + " can't look up routes.", true); return; }
+    setStatus(status, 'Loading…');
+    source().routeInfo(id, function (err, info) {
+      if (err) return setStatus(status, "Couldn't load color: " + errText(err), true);
+      var c = settings.color(info && info.color);
+      if (!c) return setStatus(status, "Couldn't load color: no color for route " + id, true);
+      row.setColor('#' + c);
+      var name = row.querySelector('input[name=name]');
+      var short = trim(info.shortName);
+      if (name && !trim(name.value) && short) name.value = short;
+      setStatus(status, 'Official color (the watch shows the nearest of its 64 colors).');
+    });
+  }
+
+  // ---- stop picker (pinned stops and trips) -----------------------------------------------
+  var picker = { row: null, mode: '', routeId: '', info: null, token: 0 };
+  function pickerEl(sel) { return $('stop-picker').querySelector(sel); }
+  function fillSelect(select, items) {
+    clear(select);
+    for (var i = 0; i < items.length; i++) {
+      var o = document.createElement('option');
+      o.value = items[i][0];
+      o.textContent = items[i][1];
+      select.appendChild(o);
+    }
+  }
+  function closePicker() {
+    var p = $('stop-picker');
+    picker.row = null;
+    picker.info = null;
+    picker.token++;
+    p.hidden = true;
+    $('sec-connections').appendChild(p);
+  }
+  // routes to choose from for a trip: the configured ones, then the source's route list
+  function routeChoices() {
+    var c = readForm(), out = [], seen = {}, i;
+    function add(id, label) { if (id && !seen.hasOwnProperty(id)) { seen[id] = true; out.push([id, label || id]); } }
+    for (i = 0; i < c.routes.length; i++) add(c.routes[i].id, c.routes[i].name !== c.routes[i].id ? c.routes[i].id + ' · ' + c.routes[i].name : c.routes[i].id);
+    for (i = 0; i < c.connections.length; i++) add(c.connections[i].routeId);
+    var opts = $('route-options').querySelectorAll('option');
+    for (i = 0; i < opts.length; i++) add(opts[i].value, opts[i].value + ' · ' + opts[i].textContent);
+    return out;
+  }
+  function openPicker(row, mode) {
+    var p = $('stop-picker'), status = pickerEl('.picker-status');
+    picker.row = row;
+    picker.mode = mode;
+    row.parentNode.insertBefore(p, row.nextSibling);
+    p.hidden = false;
+    var choice = pickerEl('.picker-route-choice');
+    choice.hidden = mode !== 'destination';
+    pickerEl('.use').textContent = mode === 'destination' ? 'Use its position' : 'Use this stop';
+    if (mode === 'destination') {
+      var routes = routeChoices();
+      fillSelect(pickerEl('select[name=route]'), routes);
+      if (!routes.length) {
+        picker.token++;
+        resetPickerLists('?');
+        setStatus(status, 'Add a route above first: stops are listed per route.', true);
+        return;
+      }
+      loadPickerRoute(routes[0][0]);
+    } else {
+      loadPickerRoute(trim(rowValue(row, 'routeId')));
+    }
+  }
+  function resetPickerLists(label) {
+    pickerEl('.picker-route').textContent = label;
+    fillSelect(pickerEl('select[name=direction]'), []);
+    fillSelect(pickerEl('select[name=stop]'), []);
+    pickerEl('.use').disabled = true;
+  }
+  function loadPickerRoute(routeId) {
+    var status = pickerEl('.picker-status');
+    var token = ++picker.token;
+    picker.routeId = routeId;
+    picker.info = null;
+    resetPickerLists(routeId || '?');
+    if (!routeId) { setStatus(status, 'Enter the route id first.', true); return; }
+    if (!can('routeInfo')) { setStatus(status, sourceLabel() + " can't list a route's stops.", true); return; }
+    setStatus(status, 'Loading directions…');
+    source().routeInfo(routeId, function (err, info) {
+      if (token !== picker.token) return;
+      var dirs = info && info.directions instanceof Array ? info.directions : [];
+      if (!err && !dirs.length) err = new Error('no directions for route ' + routeId);
+      if (err) return setStatus(status, "Couldn't load directions: " + errText(err), true);
+      picker.info = info;
+      var items = [];
+      for (var i = 0; i < dirs.length; i++) items.push([String(dirs[i].id), dirs[i].name || 'Direction ' + dirs[i].id]);
+      fillSelect(pickerEl('select[name=direction]'), items);
+      setStatus(status, '');
+      loadStops();
+    });
+  }
+  function loadStops() {
+    var status = pickerEl('.picker-status'), info = picker.info;
+    var dirId = pickerEl('select[name=direction]').value, dir = null, i;
+    fillSelect(pickerEl('select[name=stop]'), []);
+    pickerEl('.use').disabled = true;
+    if (!info) return;
+    for (i = 0; i < info.directions.length; i++) if (String(info.directions[i].id) === dirId) dir = info.directions[i];
+    if (!dir) return;
+    var stops = info.stops || {}, items = [];
+    var ids = dir.stopIds instanceof Array ? dir.stopIds : [];
+    for (i = 0; i < ids.length; i++) {
+      var s = stops.hasOwnProperty(ids[i]) ? stops[ids[i]] : null;
+      items.push([String(ids[i]), (s && trim(s.name)) || String(ids[i])]);
+    }
+    fillSelect(pickerEl('select[name=stop]'), items);
+    pickerEl('.use').disabled = items.length === 0;
+    setStatus(status, items.length ? '' : 'No stops listed for this direction.', !items.length);
+  }
+  function useStop() {
+    var s = pickerEl('select[name=stop]'), row = picker.row, status = pickerEl('.picker-status');
+    var opt = s.options[s.selectedIndex];
+    if (!row || !opt) return;
+    if (picker.mode !== 'destination') {
+      row.querySelector('input[name=stopId]').value = opt.value;
+      row.querySelector('input[name=name]').value = opt.textContent;
+      closePicker();
+      if (state.learned) renderLearned();
+      return;
+    }
+    if (!can('stopInfo')) { setStatus(status, sourceLabel() + " can't look up stop positions.", true); return; }
+    var token = ++picker.token, label = opt.textContent;
+    pickerEl('.use').disabled = true;
+    setStatus(status, 'Loading the stop position…');
+    source().stopInfo(opt.value, function (err, info) {
+      if (token !== picker.token) return;
+      pickerEl('.use').disabled = false;
+      if (!err && !(info && isFinite(+info.lat) && isFinite(+info.lon))) err = new Error('no position for stop ' + opt.value);
+      if (err) return setStatus(status, "Couldn't load the stop: " + errText(err), true);
+      row.querySelector('input[name=lat]').value = coord(+info.lat);
+      row.querySelector('input[name=lon]').value = coord(+info.lon);
+      var name = row.querySelector('input[name=name]');
+      if (!trim(name.value)) name.value = trim(info.name) || label;
+      closePicker();
+    });
+  }
+
+  // ---- location ------------------------------------------------------------------------
+  function updateLocationMode() {
+    var fixed = document.querySelector('[data-field="location.mode"]').value === 'fixed';
+    $('location-fixed').className = fixed ? '' : 'off';
+  }
+  function locate(status, onPos) {
+    if (!navigator.geolocation) { setStatus(status, 'Location not available', true); return; }
+    setStatus(status, 'Locating…');
+    navigator.geolocation.getCurrentPosition(function (p) {
+      onPos(p.coords.latitude, p.coords.longitude);
+      setStatus(status, '');
+    }, function (e) {
+      setStatus(status, 'Could not get position' + (e && e.message ? ': ' + e.message : ''), true);
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+  }
+  function useHere() {
+    var btn = $('use-here');
+    if (!navigator.geolocation) { btn.textContent = 'Location not available'; return; }
+    btn.textContent = 'Locating…';
+    navigator.geolocation.getCurrentPosition(function (p) {
+      document.querySelector('[data-field="location.lat"]').value = coord(p.coords.latitude);
+      document.querySelector('[data-field="location.lon"]').value = coord(p.coords.longitude);
+      btn.textContent = 'Use my current position';
+    }, function (e) {
+      btn.textContent = 'Could not get position' + (e && e.message ? ': ' + e.message : '');
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+  }
+
+  // ---- learned weights / training ------------------------------------------------------
+  function keyLabel(key, config) {
+    var i, sep = key.indexOf(':'), kind = key.slice(0, sep), id = key.slice(sep + 1);
+    if (kind === 'route') {
+      for (i = 0; i < config.routes.length; i++) if (config.routes[i].id === id) return 'route ' + config.routes[i].name;
+      return 'route (not listed)';
+    }
+    if (kind === 'conn') {
+      for (i = 0; i < config.connections.length; i++) if (config.connections[i].id === id) return 'pinned ' + config.connections[i].name;
+      return 'pinned (not listed)';
+    }
+    if (kind === 'stop') return config.stopScales.hasOwnProperty(id) ? 'stop' : 'stop (default scale)';
+    return '';
+  }
+
+  function renderLearned() {
+    var table = $('learned');
+    clear(table);
+    var learned = state.learned || {};
+    var keys = [];
+    for (var k in learned) if (learned.hasOwnProperty(k)) keys.push(k);
+    keys.sort();
+    $('learned-count').textContent = String(keys.length);
+    $('sample-count').textContent = String(state.samples.length);
+    if (keys.length === 0) {
+      var tr0 = table.insertRow();
+      var td0 = tr0.insertCell();
+      td0.className = 'empty';
+      td0.textContent = 'No learned weights yet. They appear after training on your picks.';
+      return;
+    }
+    var config = readForm();
+    var head = table.createTHead().insertRow();
+    var titles = ['Key', 'Scale', 'Learned'];
+    for (var h = 0; h < titles.length; h++) {
+      var th = document.createElement('th');
+      th.textContent = titles[h];
+      if (h > 0) th.className = 'num';
+      head.appendChild(th);
+    }
+    var body = table.createTBody();
+    for (var i = 0; i < keys.length; i++) {
+      var tr = body.insertRow();
+      var td = tr.insertCell();
+      var code = document.createElement('code');
+      code.textContent = keys[i];
+      td.appendChild(code);
+      var lbl = keyLabel(keys[i], config);
+      if (lbl) { var sm = document.createElement('small'); sm.textContent = lbl; td.appendChild(sm); }
+      var prior = tr.insertCell();
+      prior.className = 'num';
+      prior.textContent = fmt(ranking.weightFor(keys[i], config, null));
+      var val = tr.insertCell();
+      val.className = 'num';
+      val.textContent = fmt(learned[keys[i]]);
+    }
+  }
+
+  function pct(x) { return Math.round(x * 100) + '%'; }
+
+  function trainNow() {
+    var config = readForm();
+    var out = $('train-result');
+    var res = optimize.train(state.samples, function (key) { return ranking.weightFor(key, config, null); }, config.training);
+    if (!res || res.after.n === 0) {
+      out.textContent = 'No usable picks to train on yet (0 samples with 2+ choices).';
+      return;
+    }
+    state.learned = res.weights;
+    state.learnedChanged = true;
+    out.textContent = 'Trained on ' + res.after.n + ' pick' + (res.after.n === 1 ? '' : 's') +
+      ': picked line ranked first ' + pct(res.before.accuracy) + ' → ' + pct(res.after.accuracy) +
+      ', loss ' + res.before.loss.toFixed(3) + ' → ' + res.after.loss.toFixed(3) + '.';
+    renderLearned();
+  }
+
+  function bakeLearned() {
+    if (!state.learned) { $('train-result').textContent = 'Nothing to bake: no learned weights.'; return; }
+    var baked = ranking.bake(readForm(), state.learned);
+    state.learned = null;
+    state.learnedChanged = true;
+    fillForm(baked);
+    $('train-result').textContent = 'Learned weights copied into the scales above. Save to keep them.';
+  }
+
+  function resetLearned() {
+    state.learned = null;
+    state.learnedChanged = true;
+    $('train-result').textContent = 'Learned weights reset; the scales above apply again.';
+    renderLearned();
+  }
+
+  function clearSamples() {
+    state.samples = [];
+    state.clearSamples = true;
+    $('train-result').textContent = 'Recorded picks will be deleted when you save.';
+    renderLearned();
+  }
+
+  // ---- save ------------------------------------------------------------------------------
+  function save() {
+    var result = { config: readForm() };
+    if (state.learnedChanged) result.learned = state.learned ? state.learned : null;
+    if (state.clearSamples) result.clearSamples = true;
+    document.location.href = state.returnTo + encodeURIComponent(JSON.stringify(result));
+  }
+
+  // ---- wiring ----------------------------------------------------------------------------
+  function rangeHints() {
+    var all = [[settings.RANGES, ''], [settings.TRAINING_RANGES || {}, 'training.'], [settings.SCHEDULE_RANGES || {}, 'schedule.']];
+    for (var a = 0; a < all.length; a++) {
+      for (var f in all[a][0]) {
+        if (!all[a][0].hasOwnProperty(f)) continue;
+        var r = all[a][0][f];
+        var el = document.querySelector('[data-field="' + all[a][1] + f + '"]');
+        if (!el) continue;
+        el.min = r.min; el.max = r.max;
+        var hint = el.parentNode.querySelector('.hint');
+        if (hint) hint.textContent += (hint.textContent ? ' · ' : '') + r.min + '…' + r.max;
+      }
+    }
+  }
+
+  (function fillTypes() {
+    var types = registry.types(), items = [];
+    for (var i = 0; i < types.length; i++) items.push([types[i].type, types[i].label]);
+    fillSelect(typeSelect(), items);
+  })();
+
+  document.querySelector('[data-field="location.mode"]').addEventListener('change', updateLocationMode);
+  $('use-here').onclick = useHere;
+  $('add-route').onclick = function () { addRow('route').querySelector('input').focus(); };
+  $('add-connection').onclick = function () { addRow('connection').querySelector('input').focus(); };
+  $('add-stop-scale').onclick = function () { addRow('stop-scale').querySelector('input').focus(); };
+  $('add-destination').onclick = function () {
+    var row = addDestination();
+    if (row) row.querySelector('input[name=name]').focus();
+  };
+  $('train-now').onclick = trainNow;
+  $('bake-learned').onclick = bakeLearned;
+  $('reset-learned').onclick = resetLearned;
+  $('clear-samples').onclick = clearSamples;
+  $('save').onclick = save;
+  typeSelect().addEventListener('change', function () { typeSelect().removeAttribute('data-keep'); refreshSource(); });
+  document.querySelector('[data-field="provider.baseUrl"]').addEventListener('change', refreshSource);
+  document.querySelector('[data-field="provider.apiKey"]').addEventListener('change', refreshSource);
+  pickerEl('select[name=route]').addEventListener('change', function () { loadPickerRoute(this.value); });
+  pickerEl('select[name=direction]').addEventListener('change', loadStops);
+  pickerEl('select[name=stop]').addEventListener('change', function () { pickerEl('.use').disabled = !this.value; });
+  pickerEl('.use').onclick = useStop;
+  pickerEl('.cancel').onclick = closePicker;
+  // keep the "Scale" column of the learned table in sync with edits
+  document.querySelector('main').addEventListener('change', function () { if (state.learned) renderLearned(); });
+
+  window.readForm = readForm;
+  window.fillForm = fillForm;
+  window.save = save;
+
+  rangeHints();
+  fillForm(P.config);
+  refreshSource();
+})();
+</script>
+</body>
+</html>
