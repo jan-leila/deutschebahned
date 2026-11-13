@@ -35,9 +35,20 @@ Each part is tested on its own (see `CONTRACTS.md` for the interfaces):
 | scale optimizer | `test/optimize.test.js` | `node tools/run-tests.js optimize` |
 | phone⇄watch protocol, session | `test/protocol.test.js`, `test/session.test.js` | `node tools/run-tests.js protocol session` |
 | settings page (headless Chromium) | `test/config-page.test.js` | `node tools/run-tests.js config-page` |
+| settings page screenshots (visual regression) | `test/settings-screenshots/baseline/` | `node tools/settings-screenshots.js [--update] [--only REGEX] [light\|dark]` |
 | watch UI model + wheel layout (host gcc) | `test/c/test_bus_model.c`, `test/c/test_bus_wheel.c` | `node tools/run-tests.js c-model` |
 | watch UI in the emulator (fixture data) | `tools/test-ui-emulator.sh [platform]` | |
 | integration (all JS parts together) | `test/integration.test.js`, `test/pkjs-glue.test.js` | `node tools/run-tests.js integration pkjs-glue` |
 | end to end in the emulator | `tools/test-app-emulator.sh [platform]` | |
 
 `node tools/run-tests.js` runs every `test/*.test.js`. `node tools/smoke-metrotransit.js [lat lon] [routes] [route:stop]` runs the real pipeline against the live Metro Transit API.
+
+### Settings page screenshots
+
+`tools/settings-screenshots.js` renders the settings page in headless Chromium at phone width (7 scenes, in light and dark colour schemes) and compares each full-page screenshot pixel by pixel with `test/settings-screenshots/baseline/` (`tools/lib/png-diff.js`). It follows binary-watch's settings screenshots. The page is loaded with the same `window.__params` injection `src/pkjs/index.js` uses. `Date` is frozen, timezone and locale are pinned, and the network is replaced by the recorded Metro Transit responses in `test/fixtures/`, so the run is deterministic and offline. A run writes `current/`, plus red-on-grey diff images in `diff/` for anything that changed. It exits non-zero when an image differs by more than `--threshold` (fraction of pixels, default 0.001), is missing, or the page threw an error. After an intended change, rerun with `--update` and commit the new baselines.
+
+## Releases
+
+Releases follow binary-watch's process (`.github/workflows/release.yml`). Each push to the `release` branch builds `bus-watch.pbw` and publishes it as a GitHub release `v<version>` (version from `package.json`), with the asset `bus-watch-v<version>.pbw`. If that release already exists the run stops without building. After a release, the workflow commits a minor version bump to `main` (`tools/bump-version.js`; Pebble only uses major.minor). If `main` was already bumped by hand, it is left alone.
+
+To release: `git push origin-github main:release`.

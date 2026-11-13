@@ -26,6 +26,8 @@ test/app-out/
 test/screenshots/current/
 test/screenshots/diff/
 test/screenshots/.state/
+test/settings-screenshots/current/
+test/settings-screenshots/diff/
 
 # Editors / OS
 .vscode/
