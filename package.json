@@ -1,8 +1,10 @@
 {
   "name": "bus-watch",
   "author": "leyla",
-  "version": "0.1.0",
-  "keywords": ["pebble-app"],
+  "version": "0.2.0",
+  "keywords": [
+    "pebble-app"
+  ],
   "private": true,
   "dependencies": {},
   "scripts": {
@@ -15,8 +17,16 @@
     "uuid": "7df2b6a7-ddc2-40db-951f-26fc5dbdf5d5",
     "sdkVersion": "3",
     "enableMultiJS": true,
-    "targetPlatforms": ["aplite", "basalt", "chalk", "diorite", "emery"],
-    "watchapp": { "watchface": false },
+    "targetPlatforms": [
+      "aplite",
+      "basalt",
+      "chalk",
+      "diorite",
+      "emery"
+    ],
+    "watchapp": {
+      "watchface": false
+    },
     "messageKeys": [
       "LIST_ID",
       "ITEM_COUNT",
@@ -51,10 +61,18 @@
       "TEST_NOW",
       "WATCH_PREFS"
     ],
-    "capabilities": ["configurable", "location"],
+    "capabilities": [
+      "configurable",
+      "location"
+    ],
     "resources": {
       "media": [
-        { "type": "bitmap", "name": "IMAGE_MENU_ICON", "file": "icon.png", "menuIcon": true }
+        {
+          "type": "bitmap",
+          "name": "IMAGE_MENU_ICON",
+          "file": "icon.png",
+          "menuIcon": true
+        }
       ]
     }
   }
