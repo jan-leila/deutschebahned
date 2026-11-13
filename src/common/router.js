@@ -13,7 +13,8 @@ var DEFAULT_HEADWAY = 900;        // s, wait slack when the headway can't be obs
 var MAX_LOOKAHEAD_MINUTES = 240;  // cap of the arrivals window
 var WINDOW_MARGIN_MINUTES = 30;   // arrivals are fetched until arriveBy + this, to see whether the data reaches arriveBy
 var SUMMARY_MAX = 40;
-var DEFAULTS = { walkSpeed: 1.3, maxWalk: 800, transferWalk: 250, maxTransfers: 1, minTransfer: 120 };
+var LAST_TRIP_GAP = 3600;         // s: a connecting run with no other one this long after it is "the last one for an hour"
+var DEFAULTS = { walkSpeed: 1.3, maxWalk: 800, transferWalk: 250, maxTransfers: 1, minTransfer: 120, lastTransfer: 600 };
 
 function num(v, d) { return typeof v === 'number' && isFinite(v) ? v : d; }
 function isPos(p) { return !!p && typeof p.lat === 'number' && typeof p.lon === 'number' && isFinite(p.lat) && isFinite(p.lon); }
@@ -56,6 +57,7 @@ function plan(source, request, cb) {
     transferWalk: num(req.transferWalk, DEFAULTS.transferWalk),
     maxTransfers: num(req.maxTransfers, DEFAULTS.maxTransfers),
     minTransfer: num(req.minTransfer, DEFAULTS.minTransfer),
+    lastTransfer: num(req.lastTransfer, DEFAULTS.lastTransfer),
     routeNames: req.routeNames || {}, routeColors: req.routeColors || {}
   };
 
@@ -337,6 +339,31 @@ function runs(leg, cache, minBoard) {
   return out;
 }
 
+// median gap (s) between consecutive departures in a sorted arrival list, or null with fewer than 2
+function medianGap(list) {
+  var gaps = [];
+  for (var i = 1; i < list.length; i++) if (list[i].time > list[i - 1].time) gaps.push(list[i].time - list[i - 1].time);
+  if (!gaps.length) return null;
+  gaps.sort(function (a, b) { return a - b; });
+  return gaps[Math.floor(gaps.length / 2)];
+}
+
+// Is boarding `b` of leg (route at its boarding stop) the last run for LAST_TRIP_GAP? The next listed run of that
+// route there decides; with none listed: yes when the fetched data reaches an hour past b (nothing else comes), else
+// the route's observed headway there (< an hour → no); no way to tell → yes (better a safe transfer than a missed one).
+function lastForAnHour(leg, cache, b) {
+  var rid = leg.d.route.id, at = arrivalsOf(cache, leg.b.id, rid);
+  if (!at) return true;
+  for (var i = 0; i < at.length; i++) {
+    if (at[i].time > b.time && at[i].tripKey !== b.tripKey) return at[i].time - b.time >= LAST_TRIP_GAP;
+  }
+  var c = cache[leg.b.id], horizon = -Infinity;
+  for (var k = 0; c && c.list && k < c.list.length; k++) if (c.list[k] && c.list[k].time > horizon) horizon = c.list[k].time;
+  if (horizon >= b.time + LAST_TRIP_GAP) return true;
+  var gap = medianGap(at);
+  return gap === null || gap >= LAST_TRIP_GAP;
+}
+
 // live itinerary of one candidate with the latest leave time → Plan | null
 function livePlan(cand, o, cache) {
   var w = cand.walks;
@@ -348,11 +375,15 @@ function livePlan(cand, o, cache) {
     if (cand.legs.length === 1) {
       if (first[i].a.time + last.s <= o.arriveBy) times = [first[i]];
     } else {
-      // the connection that gets there first (and in time)
-      var second = runs(cand.legs[1], cache, first[i].a.time + w[1].s + o.minTransfer);
+      // the connection that gets there first (and in time). The transfer needs minTransfer of slack, and at least
+      // lastTransfer when that connection is the last one for an hour (missing it would cost that hour).
+      var ready = first[i].a.time + w[1].s;
+      var second = runs(cand.legs[1], cache, ready + o.minTransfer);
       var pickRun = null;
       for (var j = 0; j < second.length; j++) {
         if (second[j].a.time + last.s > o.arriveBy) continue;
+        if (o.lastTransfer > o.minTransfer && second[j].b.time - ready < o.lastTransfer &&
+            lastForAnHour(cand.legs[1], cache, second[j].b)) continue;
         if (!pickRun || second[j].a.time < pickRun.a.time) pickRun = second[j];
       }
       if (pickRun) times = [first[i], pickRun];
@@ -386,7 +417,8 @@ function estimatedPlan(cand, o, cache) {
     var e = estimateLeg(cand.legs[l], cache);
     var depart = t - e.ride;
     times.unshift({ b: { time: depart, headsign: '' }, a: { time: t }, slack: e.headway });
-    // before a later leg: the transfer walk and a wait of max(headway, minTransfer)
+    // before a later leg: the transfer walk and a wait of max(headway, minTransfer) (when that leg's buses come an hour
+    // or more apart the headway is already more than any lastTransfer, so the estimate needs no extra margin)
     if (l > 0) t = depart - w[l].s - Math.max(e.headway, o.minTransfer);
   }
   var p = buildPlan(cand, times, o, true);
@@ -529,5 +561,6 @@ module.exports = {
   summary: summary,
   ESTIMATED_SPEED: ESTIMATED_SPEED,
   MAX_ARRIVAL_REQUESTS: MAX_ARRIVAL_REQUESTS,
-  DEFAULT_HEADWAY: DEFAULT_HEADWAY
+  DEFAULT_HEADWAY: DEFAULT_HEADWAY,
+  LAST_TRIP_GAP: LAST_TRIP_GAP
 };

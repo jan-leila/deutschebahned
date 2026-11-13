@@ -32,6 +32,8 @@ var SCHEDULE_RANGES = {
   transferWalk: { min: 0, max: 1000, integer: true },
   maxTransfers: { min: 0, max: 1, integer: true },
   minTransfer: { min: 0, max: 1200, integer: true },
+  // seconds of transfer slack needed when the connecting bus is the last one for an hour (missing it costs that much)
+  lastTransfer: { min: 0, max: 3600, integer: true },
   fallbackMinutes: { min: 5, max: 240, integer: true }
 };
 
@@ -65,7 +67,7 @@ function defaults() {
     stops: [],
     destinations: [],
     schedule: { leadMinutes: 15, walkSpeed: 1.3, maxWalk: 800, transferWalk: 250, maxTransfers: 1, minTransfer: 120,
-                leaveReminder: true, fallbackMinutes: 60 },
+                lastTransfer: 600, leaveReminder: true, fallbackMinutes: 60 },
     training: { autoTrain: true, learningRate: 0.05, iterations: 300, temperature: 60, regularization: 0.01, maxSamples: 200 }
   };
 }
@@ -324,6 +326,7 @@ function normalize(raw) {
     var dname = str(de.name, '');
     var dest = { id: did, name: dname === '' ? 'Destination ' + (dests.length + 1) : dname,
                  lat: num(dlat, 0, { min: -90, max: 90 }), lon: num(dlon, 0, { min: -180, max: 180 }),
+                 address: str(de.address, ''),   // what the user typed / picked (shown again; the position is what counts)
                  arriveBy: arrive, days: weekdays(de.days), enabled: bool(de.enabled, true) };
     if (did === '') pendingIds.push(dest);
     dests.push(dest);

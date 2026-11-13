@@ -202,6 +202,36 @@ test('one transfer: latest leave, transferWalk and minTransfer respected', async
   }
 });
 
+test('last trip for an hour: the transfer needs lastTransfer of slack, not just minTransfer', async () => {
+  // a1 reaches E2 at +700; T2's c1 leaves N0 at +1150 and the next T2 (c2) only at +5000 (over an hour later)
+  const trips = [
+    { route: 'T1', key: 'a1', times: { E0: NOW + 300, E2: NOW + 700 } },
+    { route: 'T2', key: 'c1', times: { N0: NOW + 1150, N2: NOW + 1550 } },
+    { route: 'T2', key: 'c2', times: { N0: NOW + 5000, N2: NOW + 5400 } },
+  ];
+  const slack = 1150 - 700 - WX;
+  assert.ok(slack > 120 && slack < 600, String(slack));
+  const req = { destination: TDEST, arriveBy: NOW + 2000, routeIds: ['T1', 'T2'] };
+  // default lastTransfer (600 s): the tight connection to the last bus for an hour is refused → no plan in time
+  assert.equal(await plan(fakeSource({ routes: [T1, T2], trips }), req), null);
+  // a smaller margin that the slack covers → the plan
+  const ok = await plan(fakeSource({ routes: [T1, T2], trips }), Object.assign({ lastTransfer: slack }, req));
+  assert.deepEqual(ok.legs.filter(l => l.mode === 'bus').map(l => l.tripKey), ['a1', 'c1']);
+  // lastTransfer 0 (off) → only minTransfer counts
+  assert.ok(await plan(fakeSource({ routes: [T1, T2], trips }), Object.assign({ lastTransfer: 0 }, req)));
+  // a later T2 within the hour (c2 at +2500) means c1 isn't the last one: minTransfer is enough
+  const frequent = trips.map(t => t.key === 'c2' ? Object.assign({}, t, { times: { N0: NOW + 2500, N2: NOW + 2900 } }) : t);
+  assert.deepEqual((await plan(fakeSource({ routes: [T1, T2], trips: frequent }), req)).legs.filter(l => l.mode === 'bus')
+    .map(l => l.tripKey), ['a1', 'c1']);
+  // nothing listed after c1, but the data reaches an hour past it (another route at N0 at +5000): it is the last one
+  const onlyC1 = trips.filter(t => t.key !== 'c2').concat([{ route: 'X', key: 'x1', times: { N0: NOW + 5000 } }]);
+  assert.equal(await plan(fakeSource({ routes: [T1, T2], trips: onlyC1 }), req), null);
+  // nothing after c1 and the data stops soon after (horizon): T2's observed headway decides (two runs 10 min apart → frequent)
+  const seen = [{ route: 'T2', key: 'c0', times: { N0: NOW + 550, N2: NOW + 950 } }].concat(trips.filter(t => t.key !== 'c2'));
+  assert.ok(await plan(fakeSource({ routes: [T1, T2], trips: seen, horizon: 1600 }), req), 'headway 600 s: not the last bus');
+  assert.equal(router.LAST_TRIP_GAP, 3600);
+});
+
 test('transfer only when there is no direct live itinerary', async () => {
   const D0 = { id: 'D0', pos: at(C, 10, 10) }, D1 = { id: 'D1', pos: at(TDEST, -10, 0) };
   const D = mkRoute('D', [D0, D1]);

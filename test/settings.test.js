@@ -194,7 +194,7 @@ test('schedule defaults and ranges', () => {
   const d = settings.defaults();
   assert.deepEqual(d.destinations, []);
   assert.deepEqual(d.schedule, { leadMinutes: 15, walkSpeed: 1.3, maxWalk: 800, transferWalk: 250, maxTransfers: 1,
-    minTransfer: 120, leaveReminder: true, fallbackMinutes: 60 });
+    minTransfer: 120, lastTransfer: 600, leaveReminder: true, fallbackMinutes: 60 });
   const c = settings.normalize({ schedule: { leadMinutes: '500', walkSpeed: 0, maxTransfers: 3.7, leaveReminder: 'false' } });
   assert.equal(c.schedule.leadMinutes, 120);
   assert.equal(c.schedule.walkSpeed, 0.3);
@@ -212,9 +212,9 @@ test('destinations: validated, ids kept or generated, max 8', () => {
     { id: 'dest1', name: 'Gym', lat: 1, lon: 2, arriveBy: '18:00' },
   ] });
   assert.deepEqual(c.destinations, [
-    { id: 'work', name: 'Work', lat: 44.97, lon: -93.26, arriveBy: '09:05', days: [1, 2, 5], enabled: false },
-    { id: 'dest2', name: 'Destination 2', lat: 44.9, lon: -93.2, arriveBy: '17:30', days: [], enabled: true },
-    { id: 'dest1', name: 'Gym', lat: 1, lon: 2, arriveBy: '18:00', days: [], enabled: true },
+    { id: 'work', name: 'Work', lat: 44.97, lon: -93.26, address: '', arriveBy: '09:05', days: [1, 2, 5], enabled: false },
+    { id: 'dest2', name: 'Destination 2', lat: 44.9, lon: -93.2, address: '', arriveBy: '17:30', days: [], enabled: true },
+    { id: 'dest1', name: 'Gym', lat: 1, lon: 2, address: '', arriveBy: '18:00', days: [], enabled: true },
   ]);
   const many = settings.normalize({ destinations: Array.from({ length: 12 }, (_, i) => ({ lat: 1, lon: 1, arriveBy: '08:' + String(i).padStart(2, '0') })) });
   assert.equal(many.destinations.length, settings.MAX_DESTINATIONS);

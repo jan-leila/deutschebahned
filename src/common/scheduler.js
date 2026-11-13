@@ -138,7 +138,7 @@ function createScheduler(deps) {
       arriveBy: occurrence, now: now,
       routeIds: ids, routeNames: names, routeColors: colors,
       walkSpeed: s.walkSpeed, maxWalk: s.maxWalk, transferWalk: s.transferWalk,
-      maxTransfers: s.maxTransfers, minTransfer: s.minTransfer,
+      maxTransfers: s.maxTransfers, minTransfer: s.minTransfer, lastTransfer: s.lastTransfer,
       routeCache: routeCache
     };
   }

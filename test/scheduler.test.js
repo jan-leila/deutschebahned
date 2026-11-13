@@ -123,6 +123,7 @@ test('replan: plans every enabled destination, stores them and sends wakeups', a
   assert.equal(req.transferWalk, 200);
   assert.equal(req.maxTransfers, 1);
   assert.equal(req.minTransfer, 90);
+  assert.equal(req.lastTransfer, 600, 'last-bus transfer safety (default)');
   assert.equal(typeof req.routeCache, 'object');
   assert.equal(env.router.calls[1].req.routeCache, req.routeCache, 'route cache shared between plans');
 

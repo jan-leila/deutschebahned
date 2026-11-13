@@ -428,8 +428,8 @@ test('config page: reset learned and clear samples', { skip }, async () => {
 });
 
 const dests = [
-  { id: 'work', name: 'Work', lat: 44.97, lon: -93.26, arriveBy: '08:45', days: [1, 2, 3, 4, 5], enabled: true },
-  { id: 'gym', name: 'Gym', lat: 44.95, lon: -93.29, arriveBy: '18:00', days: [], enabled: false },
+  { id: 'work', name: 'Work', lat: 44.97, lon: -93.26, address: '', arriveBy: '08:45', days: [1, 2, 3, 4, 5], enabled: true },
+  { id: 'gym', name: 'Gym', lat: 44.95, lon: -93.29, address: '', arriveBy: '18:00', days: [], enabled: false },
 ];
 const destParams = (extra) => Object.assign({ config: { version: 2, providers: [{ id: 'mock', type: 'mock' }],
   location: { mode: 'fixed', lat: 44.96, lon: -93.27 },
@@ -482,9 +482,9 @@ test('config page: editing destinations, days and schedule fields', { skip }, as
     await page.eval(`document.querySelector('input[data-field="schedule.leaveReminder"]').click()`);
     const out = await saved(page);
     assert.deepEqual(out.config.destinations, [
-      { id: 'work', name: 'Work', lat: 44.97, lon: -93.26, arriveBy: '08:45', days: [1, 2, 4, 5, 6], enabled: true },
-      { id: 'gym', name: 'Gym', lat: 44.95, lon: -93.29, arriveBy: '07:05', days: [], enabled: true },
-      { id: 'dest1', name: 'School', lat: 44.9, lon: -93.1, arriveBy: '10:30', days: [0], enabled: true }]);
+      { id: 'work', name: 'Work', lat: 44.97, lon: -93.26, address: '', arriveBy: '08:45', days: [1, 2, 4, 5, 6], enabled: true },
+      { id: 'gym', name: 'Gym', lat: 44.95, lon: -93.29, address: '', arriveBy: '07:05', days: [], enabled: true },
+      { id: 'dest1', name: 'School', lat: 44.9, lon: -93.1, address: '', arriveBy: '10:30', days: [0], enabled: true }]);
     assert.equal(out.config.schedule.maxWalk, 5000, 'clamped');
     assert.equal(out.config.schedule.leaveReminder, true);
     assert.equal(out.config.schedule.leadMinutes, 20);
@@ -686,3 +686,58 @@ function geoStub() {
   };</script>`;
 }
 
+test('config page: a trip address is looked up (pick from the matches); the place names a blank trip', { skip }, async () => {
+  const page = await load(destParams(), geoStub());
+  try {
+    await page.eval(`showPage('trips'); document.getElementById('add-destination').click()`);
+    const row = `[...document.querySelectorAll('#destinations .destination-row')].pop()`;
+    await page.eval(`${row}.querySelector('input[name=address]').value = '1600 Pennsylvania Ave'`);
+    await page.eval(`${row}.querySelector('.find-address').click()`);
+    assert.ok(await until(page, `${row}.querySelectorAll('.address-results .result').length === 2`), 'matches listed');
+    // looked up near the trip's area (the fixed location)
+    assert.match(await page.eval(`window.__fetched[0]`), /^https:\/\/photon\.komoot\.io\/api\/\?q=1600%20Pennsylvania%20Ave&limit=5&lat=44\.96&lon=-93\.27$/);
+    assert.match(await page.eval(`${row}.querySelector('.address-results .result').textContent`), /White House.*1600 Pennsylvania Avenue Northwest/);
+    await page.eval(`${row}.querySelector('.address-results .result').click()`);
+    assert.equal(await page.eval(`${row}.querySelectorAll('.address-results .result').length`), 0);
+    assert.equal(await page.eval(`${row}.querySelector('input[name=name]').value`), 'White House', 'blank name → the place');
+    assert.equal(await page.eval(`${row}.querySelector('input[name=address]').value`),
+      'White House, 1600 Pennsylvania Avenue Northwest, Washington, DC');
+    // typed coordinates on another blank trip: reverse geocoding names it
+    await page.eval(`document.getElementById('add-destination').click()`);
+    await page.eval(set(`${row}.querySelector('input[name=lat]')`, '44.9778'));
+    await page.eval(set(`${row}.querySelector('input[name=lon]')`, '-93.265'));
+    assert.ok(await until(page, `${row}.querySelector('input[name=name]').value === 'South 4th Street'`), 'named from the position');
+    assert.equal(await page.eval(`${row}.querySelector('input[name=address]').value`), 'South 4th Street, Minneapolis, Minnesota');
+    const out = await saved(page);
+    const [white, street] = out.config.destinations.slice(-2);
+    assert.deepEqual([white.name, white.lat, white.lon, white.address],
+      ['White House', 38.897639, -77.036552, 'White House, 1600 Pennsylvania Avenue Northwest, Washington, DC']);
+    assert.deepEqual([street.name, street.lat, street.lon], ['South 4th Street', 44.9778, -93.265]);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('config page: a name the user typed is kept; lookup failures show in the row; last-bus transfer safety is saved', { skip }, async () => {
+  const page = await load(destParams(), geoStub());
+  try {
+    await page.eval(`showPage('trips')`);
+    const row = `document.querySelectorAll('#destinations .destination-row')[0]`;   // "Work"
+    await page.eval(`${row}.querySelector('input[name=address]').value = 'anything'`);
+    await page.eval(`${row}.querySelector('.find-address').click()`);
+    assert.ok(await until(page, `${row}.querySelectorAll('.address-results .result').length === 2`));
+    await page.eval(`${row}.querySelectorAll('.address-results .result')[1].click()`);
+    assert.equal(await page.eval(`${row}.querySelector('input[name=name]').value`), 'Work', 'kept');
+    assert.equal(await page.eval(`${row}.querySelector('input[name=lat]').value`), '38.879226');
+    await page.eval(`${row}.querySelector('input[name=address]').value = ''; ${row}.querySelector('.find-address').click()`);
+    assert.equal(await page.eval(`${row}.querySelector('.line .status').textContent`), 'Type an address first.');
+    await page.eval(`window.fetch = function () { return Promise.reject(new TypeError('offline')); }`);
+    await page.eval(`${row}.querySelector('input[name=address]').value = 'x'; ${row}.querySelector('.find-address').click()`);
+    assert.ok(await until(page, `/Couldn't look up the address/.test(${row}.querySelector('.line .status').textContent)`));
+    assert.equal(await page.eval(`document.querySelector('[data-field="schedule.lastTransfer"]').value`), '600');
+    await page.eval(set(`document.querySelector('[data-field="schedule.lastTransfer"]')`, '900'));
+    const out = await saved(page);
+    assert.equal(out.config.schedule.lastTransfer, 900);
+    assert.equal(out.config.destinations[0].address, 'x');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});

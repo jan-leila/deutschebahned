@@ -74,13 +74,14 @@ Config shape and defaults (distances are always **meters**, speeds m/s; the sett
 | `vehicleRadius` | 250 | 10..2000 integer — meters: a live bus position reported this close to you (within `recentWindow`) is "the bus you're on" |
 | `routes` | `[]` | `[{providerId, id, name, scale, color}]` — `scale` −1000..1000, default **0**; `color` is `'RRGGBB'` or `''` (= provider color / default) |
 | `stops` | `[]` | `[{providerId, id, name, lat, lon, walkScale, rideScale}]` — the stops you care about; `lat`/`lon` numbers or both `null`; scales −1000..1000, default **0** |
-| `destinations` | `[]` | ≤ 8 × `{id, name, lat, lon, arriveBy: 'HH:MM', days: [0..6], enabled}` — see below |
+| `destinations` | `[]` | ≤ 8 × `{id, name, lat, lon, address, arriveBy: 'HH:MM', days: [0..6], enabled}` — see below (`address`: trimmed string, default `''`; shown again on the page, the position is what counts) |
 | `schedule.leadMinutes` | 15 | 0..120 integer — re-check this long before the leave time |
 | `schedule.walkSpeed` | 1.3 | 0.3..3 m/s — walking times to stops on the watch and in trip plans |
 | `schedule.maxWalk` | 800 | 50..5000 integer m — walking to the first / from the last stop |
 | `schedule.transferWalk` | 250 | 0..1000 integer m — walking between stops when transferring |
 | `schedule.maxTransfers` | 1 | 0..1 integer |
 | `schedule.minTransfer` | 120 | 0..1200 integer s — slack needed to make a transfer |
+| `schedule.lastTransfer` | 600 | 0..3600 integer s — slack needed instead (when larger) when the connecting bus is the last one for an hour (`router.LAST_TRIP_GAP`); 0 = off |
 | `schedule.leaveReminder` | `true` | boolean — also notify at the leave time itself |
 | `schedule.fallbackMinutes` | 60 | 5..240 integer — no plan yet: re-check this long (+ lead) before `arriveBy` |
 | `training.autoTrain` | `true` | boolean (accept `1/0`, `'true'/'false'`) |
@@ -744,7 +745,26 @@ navigator.language)`). DOM contract (used by the test):
   `.pick-stop` opens the search (stops) and fills `lat`/`lon` (6 decimals) and an empty `name` from the picked stop; `.here` fills lat/lon
   from `navigator.geolocation`; `.plan-summary` shows `plans[id].summary` and the leave time (`format.clock(plan.leaveAt, prefs.clock24)`,
   appended unless the summary already contains it). `#add-destination` appends a row (`arriveBy` `09:00`, enabled, no days; disabled at
-  8). Schedule fields: `data-field="schedule.<name>"`.
+  8). Schedule fields: `data-field="schedule.<name>"` (incl. `schedule.lastTransfer`).
+  **Addresses**: `input[name=address]` + `.find-address` (or Enter) → `geocode.search` near the trip's position, else the fixed location,
+  else the first system's coverage centre → `.address-results` `.result` buttons (one match is used at once); a pick sets `lat`/`lon`, the
+  address to the place's `address`, and a blank `name` to the place's `name`. When `lat`/`lon` change (typed, `.here`) and the name or the
+  address is blank, `geocode.reverse` fills them in. Errors go to the row's `.line .status`.
+
+## 10a. `src/common/geocode.js` — addresses ⇄ positions (Photon)
+
+```js
+DEFAULT_BASE_URL = 'https://photon.komoot.io'   // OpenStreetMap data, no key, CORS `*`
+search(http, query, near?, cb, opts?)   // cb(err, [{name, address, lat, lon}]) ≤ opts.limit (5); '' → [] without a request
+                                        //   GET {base}/api/?q={enc}&limit={n}[&lat=&lon=] (near: prefer places close to it)
+reverse(http, {lat, lon}, cb, opts?)    // cb(err, place | null)   GET {base}/reverse?lat=&lon=&limit=1
+place(feature)                          // GeoJSON feature → place | null
+```
+
+`place`: `name` = the place's own name, else "number street" (number first in US / CA / GB / IE / AU / NZ, else "street number"), else the
+street, city, state, country; `address` = name, street line, city (and the state in the US), comma separated without repeats; positions to
+6 decimals. A body that isn't a FeatureCollection → `Error(message || 'unexpected geocoder response')`. Tests: `test/geocode.test.js`
+(real recorded responses).
 - **Learning**: `#sample-count`, `#learned-count`, `#learned` (table: key, its scale from the runtime view, learned value; labels "walking
   to / riding to / route <name>"), `#train-now` (`optimize.train` on the injected samples with `ranking.weightFor(k, view.build(readForm(),
   prefs, null))` as prior → sets learned, before/after in `#train-result`), `#reset-learned` (learned → null), `#bake-learned`
@@ -903,7 +923,7 @@ MAX_ARRIVAL_REQUESTS = 8; DEFAULT_HEADWAY = 900
 ```
 
 `source` is any provider (§3; only `route` and `arrivals` are used). `request = {origin, destination /*{lat, lon, name?}*/, arriveBy, now, routeIds,
-routeNames?: {id: name}, routeColors?: {id: 'RRGGBB'}, walkSpeed, maxWalk, transferWalk, maxTransfers, minTransfer, routeCache?: {id: Route}}`
+routeNames?: {id: name}, routeColors?: {id: 'RRGGBB'}, walkSpeed, maxWalk, transferWalk, maxTransfers, minTransfer, lastTransfer, routeCache?: {id: Route}}`
 (the scheduler passes `config.schedule` values; missing ones default to the §2 defaults). Every route in `routeIds` is loaded (cache first, the rest
 in parallel; fetched routes are written into `routeCache` when given); failing routes are skipped; `routeIds` non-empty and none loaded → `cb(err)`
 (empty `routeIds` → walk only or `null`). Bad request (no origin/destination/arriveBy/now) → `cb(Error)`. `cb` is called exactly once; a source
@@ -927,6 +947,10 @@ that throws or calls back twice is tolerated.
 - **One transfer** (`maxTransfers` ≥ 1, only when no direct candidate gave a plan): route A b→x, walk x→y ≤ `transferWalk`, route B y→a (A ≠ B),
   best (b, x, y, a) per ordered direction pair, ranked by estimated time (+ `minTransfer`); ≤ 3 checked within the remaining request budget.
   t_y ≥ t_x + walk(x,y) + `minTransfer`; for each first-leg run the connection arriving first (in time) is used.
+  **Last bus for an hour**: a connecting run that is the last one of route B at y for `LAST_TRIP_GAP` (3600 s) needs t_y − (t_x + walk) ≥
+  `lastTransfer` (request field, default 600; ignored when ≤ `minTransfer`). "Last" = the next listed run of B at y is ≥ an hour later; none
+  listed → last when the fetched data at y reaches an hour past it, else when B's observed headway there is unknown or ≥ an hour.
+  (Estimated plans already wait a full headway, which for such a route is ≥ an hour.)
 - **Walk only** when origin→destination ≤ `maxWalk` and leaving at arriveBy − walk is ≥ now: returned without fetching arrivals when the walk is
   no longer than every candidate's estimated door-to-door time; otherwise it wins when it leaves strictly later than the bus plan (or there is none).
 - Walk legs with 0 m are omitted. `toName` = the boarding stop's name (first / transfer walk) or `destination.name` (final walk).

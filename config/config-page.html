@@ -92,7 +92,10 @@ summary { cursor: pointer; color: var(--accent); font-size: 14px; padding: 6px 0
 body:not(.has-listRoutes) .needs-listRoutes, body:not(.has-routeInfo) .needs-routeInfo,
 body:not(.has-stopInfo) .needs-stopInfo { display: none !important; }
 .destination-row { grid-template-columns: 1fr 1fr; }
-.destination-row .c-name { grid-column: 1 / -1; }
+.destination-row .c-name, .destination-row .c-address, .destination-row .address-results { grid-column: 1 / -1; }
+.destination-row .c-address { display: grid; grid-template-columns: 1fr auto; gap: 2px 6px; align-items: center; }
+.destination-row .c-address input { grid-column: 1; }
+.destination-row .c-address .find-address { grid-column: 2; grid-row: 2; }
 .destination-row input[type=time] { width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 9px;
   background: var(--input); font-size: 16px; color: var(--text); }
 .destination-row .c-enabled { flex-direction: row; align-items: center; gap: 8px; align-self: end; padding-bottom: 6px; font-size: 13.5px; color: var(--text); }
@@ -244,7 +247,8 @@ header .titles { flex: 1; min-width: 0; }
 <div class="page" data-page="trips" data-title="Trips" data-sub="Reminders to leave on time." hidden>
   <section>
     <p class="help">Places you need to <b>arrive by</b> a time (e.g. Work by 9:00 on weekdays). The phone plans a trip with your
-      routes and the watch reminds you when to leave. No day selected = every day.</p>
+      routes and the watch reminds you when to leave. No day selected = every day. Type an <b>address</b> and press Find (or
+      choose a stop, or use your position); a blank name becomes the name of the place.</p>
     <div id="destinations" class="list"></div>
     <div class="empty">No trips.</div>
     <button type="button" class="add" id="add-destination">+ Add trip</button>
@@ -262,6 +266,9 @@ header .titles { flex: 1; min-width: 0; }
         <input type="number" step="1" data-field="schedule.maxTransfers"></label>
       <label class="field"><span class="name">Transfer slack</span><span class="hint">s · time needed to make a transfer</span>
         <input type="number" step="1" data-field="schedule.minTransfer"></label>
+      <label class="field"><span class="name">Last-bus transfer safety</span><span class="hint">s · the slack needed instead when the
+        connecting bus is the last one for an hour (0 = off)</span>
+        <input type="number" step="1" data-field="schedule.lastTransfer"></label>
       <label class="field"><span class="name">Fallback check</span><span class="hint">min · with no plan yet, re-check this long before arriving</span>
         <input type="number" step="1" data-field="schedule.fallbackMinutes"></label>
     </details>
@@ -525,7 +532,8 @@ header .titles { flex: 1; min-width: 0; }
     var boxes = qsa(row, 'input[name=day]');
     for (var i = 0; i < boxes.length; i++) if (boxes[i].checked) days.push(+boxes[i].value);
     var en = qs(row, 'input[name=enabled]');
-    return { id: rowValue(row, 'id'), name: rowValue(row, 'name'), lat: rowValue(row, 'lat'), lon: rowValue(row, 'lon'),
+    return { id: rowValue(row, 'id'), name: rowValue(row, 'name'), address: rowValue(row, 'address'),
+             lat: rowValue(row, 'lat'), lon: rowValue(row, 'lon'),
              arriveBy: rowValue(row, 'arriveBy'), days: days, enabled: en ? en.checked : true };
   }
 
@@ -1182,6 +1190,67 @@ header .titles { flex: 1; min-width: 0; }
     return text ? 'Planned: ' + text : '';
   }
 
+  // ---- addresses (geocode.js: Photon / OpenStreetMap, no key) ----------------------------------------------------
+  // where to look first: the trip's own position, else the fixed location, else the first system's coverage centre
+  function nearFor(row) {
+    var la = parseFloat(qs(row, 'input[name=lat]').value), lo = parseFloat(qs(row, 'input[name=lon]').value);
+    if (isFinite(la) && isFinite(lo) && (la || lo)) return { lat: la, lon: lo };
+    var c = readForm();
+    if (c.location.mode === 'fixed' && (c.location.lat || c.location.lon)) return { lat: c.location.lat, lon: c.location.lon };
+    for (var i = 0; i < c.providers.length; i++) {
+      var area = view.coverage(c, c.providers[i].id);
+      if (area) return area;
+    }
+    return null;
+  }
+  function rowStatus(row) { return qs(row, '.line .status'); }
+  function findAddress(row) {
+    var q = trim(qs(row, 'input[name=address]').value), list = qs(row, '.address-results'), status = rowStatus(row);
+    clear(list);
+    if (!q) { setStatus(status, 'Type an address first.', true); return; }
+    setStatus(status, 'Looking up the address…');
+    var token = row.geoToken = (row.geoToken || 0) + 1;
+    BW.geocode.search(http, q, nearFor(row), function (err, places) {
+      if (token !== row.geoToken) return;
+      if (err) return setStatus(status, "Couldn't look up the address: " + errText(err), true);
+      if (!places.length) return setStatus(status, 'No place found for “' + q + '”.', true);
+      setStatus(status, places.length > 1 ? 'Pick the right place:' : '');
+      for (var i = 0; i < places.length; i++) {
+        (function (pl) {
+          var b = el('button', 'result');
+          b.appendChild(el('span', 'r-name', pl.name));
+          b.appendChild(el('span', 'r-detail', pl.address));
+          b.onclick = function () { usePlace(row, pl); };
+          list.appendChild(b);
+        })(places[i]);
+      }
+      if (places.length === 1) usePlace(row, places[0]);
+    });
+  }
+  function usePlace(row, pl) {
+    qs(row, 'input[name=lat]').value = coord(pl.lat);
+    qs(row, 'input[name=lon]').value = coord(pl.lon);
+    qs(row, 'input[name=address]').value = pl.address;
+    var name = qs(row, 'input[name=name]');
+    if (!trim(name.value)) name.value = pl.name;
+    clear(qs(row, '.address-results'));
+    setStatus(rowStatus(row), '');
+  }
+  // a blank name (and blank address) from what is at the trip's position (reverse geocoding); `quiet` hides errors
+  function nameFromPosition(row, quiet) {
+    var name = qs(row, 'input[name=name]'), address = qs(row, 'input[name=address]');
+    if (trim(name.value) && trim(address.value)) return;
+    var la = parseFloat(qs(row, 'input[name=lat]').value), lo = parseFloat(qs(row, 'input[name=lon]').value);
+    if (!isFinite(la) || !isFinite(lo)) return;
+    var token = row.geoToken = (row.geoToken || 0) + 1;
+    BW.geocode.reverse(http, { lat: la, lon: lo }, function (err, pl) {
+      if (token !== row.geoToken) return;
+      if (err || !pl) { if (!quiet && err) setStatus(rowStatus(row), "Couldn't name the place: " + errText(err), true); return; }
+      if (!trim(name.value)) name.value = pl.name;
+      if (!trim(address.value)) address.value = pl.address;
+    });
+  }
+
   function addDestination(values) {
     if (destinationRows().length >= MAX_DESTINATIONS) return null;
     values = values || { name: '', lat: '', lon: '', arriveBy: '09:00', days: [], enabled: true };
@@ -1189,10 +1258,26 @@ header .titles { flex: 1; min-width: 0; }
     row.appendChild(makeInput('id', 'hidden', values.id || ''));
     var name = makeInput('name', 'text', values.name);
     name.autocapitalize = 'words';
-    name.placeholder = 'e.g. Work';
+    name.placeholder = 'blank = the name of the place';
     row.appendChild(labelled('c-name', 'Name', name));
-    row.appendChild(labelled('c-lat', 'Latitude', makeInput('lat', 'number', values.lat)));
-    row.appendChild(labelled('c-lon', 'Longitude', makeInput('lon', 'number', values.lon)));
+    // address → position (geocoding); results to pick from appear under it
+    var address = makeInput('address', 'text', values.address || '');
+    address.placeholder = 'e.g. 600 Hennepin Ave, Minneapolis';
+    address.setAttribute('enterkeyhint', 'search');
+    var addrLabel = labelled('c-address', 'Address', address);
+    var find = el('button', 'find-address small', 'Find');
+    addrLabel.appendChild(find);
+    row.appendChild(addrLabel);
+    var results = el('div', 'search-results address-results');
+    row.appendChild(results);
+    find.onclick = function () { findAddress(row); };
+    address.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); findAddress(row); } });
+    var lat = makeInput('lat', 'number', values.lat), lon = makeInput('lon', 'number', values.lon);
+    row.appendChild(labelled('c-lat', 'Latitude', lat));
+    row.appendChild(labelled('c-lon', 'Longitude', lon));
+    // coordinates typed by hand: name the place when the name is blank
+    lat.addEventListener('change', function () { nameFromPosition(row); });
+    lon.addEventListener('change', function () { nameFromPosition(row); });
     row.appendChild(labelled('c-arriveBy', 'Arrive by', makeInput('arriveBy', 'time', values.arriveBy)));
     var en = makeInput('enabled', 'checkbox', '');
     en.checked = values.enabled !== false;
@@ -1230,9 +1315,10 @@ header .titles { flex: 1; min-width: 0; }
     };
     var here = el('button', 'here small', 'Use my position');
     here.onclick = function () {
-      locate(status, function (lat, lon) {
-        qs(row, 'input[name=lat]').value = coord(lat);
-        qs(row, 'input[name=lon]').value = coord(lon);
+      locate(status, function (la, lo) {
+        qs(row, 'input[name=lat]').value = coord(la);
+        qs(row, 'input[name=lon]').value = coord(lo);
+        nameFromPosition(row, true);
       });
     };
     line.appendChild(pick);
