@@ -16,50 +16,53 @@ static void test_fits(void) {
   CHECK_EQ(bus_marquee_offset(80, 100, 0, NULL), 0);
 }
 
-static void test_cycle(void) {
-  // 70 px too wide at 35 px/s: hold 1 s, scroll 2 s, hold 1 s
+static void test_loop(void) {
+  // 170 px of text in a 100 px box: hold 1 s, then 170 + 24 = 194 px at 35 px/s (5543 ms, rounded up)
   uint32_t w;
-  CHECK_EQ(bus_marquee_cycle_ms(170, 100), 4000);
+  uint32_t cycle = bus_marquee_cycle_ms(170, 100);
+  CHECK_EQ(cycle, 1000 + 5543);
   CHECK_EQ(bus_marquee_offset(170, 100, 0, &w), 0);    CHECK_EQ(w, 1000);
   CHECK_EQ(bus_marquee_offset(170, 100, 600, &w), 0);  CHECK_EQ(w, 400);
   CHECK_EQ(bus_marquee_offset(170, 100, 1000, &w), 0); CHECK(w >= 1 && w <= 29);
   CHECK_EQ(bus_marquee_offset(170, 100, 2000, &w), 35);
-  CHECK_EQ(bus_marquee_offset(170, 100, 3000, &w), 70); CHECK_EQ(w, 1000);  // end hold
-  CHECK_EQ(bus_marquee_offset(170, 100, 3999, &w), 70); CHECK_EQ(w, 1);
-  CHECK_EQ(bus_marquee_offset(170, 100, 4000, &w), 0);  CHECK_EQ(w, 1000);  // jump back, next cycle
-  CHECK_EQ(bus_marquee_offset(170, 100, 6000, &w), 35);
-  // after the last cycle: at rest, no timer
-  CHECK_EQ(bus_marquee_offset(170, 100, BUS_MARQUEE_CYCLES * 4000, &w), 0); CHECK_EQ(w, 0);
-  CHECK_EQ(bus_marquee_offset(170, 100, 1000000, &w), 0); CHECK_EQ(w, 0);
+  CHECK_EQ(bus_marquee_offset(170, 100, 3000, &w), 70);
+  // it doesn't stop at the end of the text: it keeps going through the gap until the copy is where the text began
+  CHECK_EQ(bus_marquee_offset(170, 100, 1000 + 5000, &w), 175);
+  CHECK(bus_marquee_offset(170, 100, cycle - 30, &w) >= 192);
+  CHECK(w > 0);
+  // ...then holds at the start and loops again, forever
+  CHECK_EQ(bus_marquee_offset(170, 100, cycle, &w), 0);         CHECK_EQ(w, 1000);
+  CHECK_EQ(bus_marquee_offset(170, 100, cycle + 2000, &w), 35);
+  CHECK_EQ(bus_marquee_offset(170, 100, 50 * cycle + 3000, &w), 70);  CHECK(w > 0);
+  CHECK_EQ(bus_marquee_offset(170, 100, 1000 * cycle, &w), 0);  CHECK_EQ(w, 1000);
 }
 
 static void test_smooth(void) {
-  // offset never decreases within the scroll, moves at most 1 px per wait step, and wait points at the next change
-  int over = 53;
-  int prev = 0;
-  uint32_t t = 0, w;
-  int steps = 0;
-  while (t < bus_marquee_cycle_ms(100 + over, 100) - 1) {
-    int off = bus_marquee_offset(100 + over, 100, t, &w);
-    CHECK(off >= prev);
-    CHECK(off - prev <= 1);
-    CHECK(off >= 0 && off <= over);
+  // over two loops: offsets step by at most 1 px, stay in [0, text + gap), each wait points at the next change
+  int text = 153, box = 100, travel = text + BUS_MARQUEE_GAP;
+  uint32_t cycle = bus_marquee_cycle_ms(text, box), t = 0, w;
+  int prev = 0, steps = 0, wraps = 0, max = 0;
+  while (t <= 2 * cycle) {   // the second wrap is at exactly 2 * cycle
+    int off = bus_marquee_offset(text, box, t, &w);
+    CHECK(off >= 0 && off < travel);
+    if (off < prev) { wraps++; CHECK_EQ(off, 0); CHECK(prev >= travel - 2); }   // only the seamless wrap goes back
+    else CHECK(off - prev <= 1);
+    if (off > max) max = off;
     CHECK(w > 0);
     if (w == 0) break;
-    if (t + w < bus_marquee_cycle_ms(100 + over, 100)) {
-      CHECK(bus_marquee_offset(100 + over, 100, t + w - 1, NULL) == off);  // unchanged until then
-    }
+    CHECK(bus_marquee_offset(text, box, t + w - 1, NULL) == off);  // unchanged until then
     prev = off;
     t += w;
     steps++;
   }
-  CHECK_EQ(prev, over);
-  CHECK(steps >= over);
+  CHECK_EQ(wraps, 2);
+  CHECK(max >= travel - 1);
+  CHECK(steps >= 2 * (travel - 1));
 }
 
 int main(void) {
   test_fits();
-  test_cycle();
+  test_loop();
   test_smooth();
   printf("%d checks, %d failures\n", checks, failures);
   return failures ? 1 : 0;

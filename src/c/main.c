@@ -203,6 +203,9 @@ static void draw_marquee(GContext *ctx, const char *text, GFont font, int16_t bx
   if (s_test_marquee >= 0) wait = 0;
   if (wait && (!s_marquee_wait || wait < s_marquee_wait)) s_marquee_wait = wait;
   draw_line(ctx, text, font, bx - off, tw + 4, cy, GTextAlignmentLeft);
+  // the loop's next copy, following the text after a gap (bus_marquee): it comes round to where the text started
+  int16_t x2 = bx - off + tw + BUS_MARQUEE_GAP;
+  if (x2 < bx + bw) draw_line(ctx, text, font, x2, tw + 4, cy, GTextAlignmentLeft);
   fill_span(ctx, inner, mx0, bx, y0, y1);
   fill_span(ctx, inner, bx + bw, mx1, y0, y1);
   fill_span(ctx, GColorWhite, 0, mx0, y0, y1);
@@ -353,23 +356,30 @@ static void draw_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
   if (mode == 'A') {
     int16_t colw = (has_arrow || has_dist) ? ARROW_COL_W : 0, lw = iw - colw;
     int16_t walk_cy = two ? line1_cy : (line1_cy + line2_cy) / 2;   // lane 0 is the stop the time is for
-    if (walk_w) {
-      graphics_context_set_text_color(ctx, detail_color);
-      draw_line(ctx, walk, s_f14, ix + lw - walk_w - 2, walk_w + 2, walk_cy, GTextAlignmentRight);
-    }
     int16_t lw1 = walk_w ? lw - walk_w - 6 : lw;   // the times line that carries the walking time
+    // Times lines that don't fit scroll in a loop like the title (level 0 is the selected row). The marquee repaints
+    // its rows outside the box, so the walking time and the arrow column are drawn after them.
+    int16_t half = dfi.cap / 2 + 4;
+#define CLIP0(cy) ((cy) - half < lower_top ? lower_top : (cy) - half)
+#define CLIP1(cy) ((cy) + half > bottom ? bottom : (cy) + half)
     graphics_context_set_text_color(ctx, detail_color);
     if (two) {
       char lane[40];
       bus_format_lane(it->t, now, lane, sizeof lane);
       snprintf(buf, sizeof buf, "%s%s%s", bus_dir_name(it->dir), it->dir[0] ? " " : "", lane);
-      draw_line(ctx, buf, detail_font, ix, lw1, line1_cy, GTextAlignmentLeft);
+      draw_marquee(ctx, buf, detail_font, ix, lw1, line1_cy, CLIP0(line1_cy), CLIP1(line1_cy), x, x + w, GColorWhite, width);
       bus_format_lane(it->u, now, lane, sizeof lane);
       snprintf(buf, sizeof buf, "%s%s%s", bus_dir_name(it->dir2), it->dir2[0] ? " " : "", lane);
-      draw_line(ctx, buf, detail_font, ix, lw, line2_cy, GTextAlignmentLeft);
+      draw_marquee(ctx, buf, detail_font, ix, lw, line2_cy, CLIP0(line2_cy), CLIP1(line2_cy), x, x + w, GColorWhite, width);
     } else {
       bus_format_detail(it, now, clock_is_24h_style(), buf, sizeof buf);
-      draw_line(ctx, buf, detail_font, ix, lw1, walk_cy, GTextAlignmentLeft);
+      draw_marquee(ctx, buf, detail_font, ix, lw1, walk_cy, CLIP0(walk_cy), CLIP1(walk_cy), x, x + w, GColorWhite, width);
+    }
+#undef CLIP0
+#undef CLIP1
+    if (walk_w) {
+      graphics_context_set_text_color(ctx, detail_color);
+      draw_line(ctx, walk, s_f14, ix + lw - walk_w - 2, walk_w + 2, walk_cy, GTextAlignmentRight);
     }
     if (colw) {
       int16_t cx = ix + iw - colw / 2, dist_cy = line2_cy + 1;

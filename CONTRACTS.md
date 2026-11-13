@@ -721,6 +721,11 @@ at most 8. main.c then `wakeup_cancel_all()` and `wakeup_schedule(time, cookie, 
 - **Arrow + distance** on every stop tile (levels 0 and 1): an arrow filled with the route color (black on B&W) pointing at the stop,
   rotated by the compass heading when `compass_service` reports a valid heading (north-up otherwise), with `dist` drawn under it
   (GOTHIC_14). Drop-off tiles: same arrow, `dist` = distance left to ride, and the detail line shows the ETA.
+- **Scrolling text** (`bus_marquee.h`, pure): on the selected row, the title, the route-name band and the times lines (each lane's line on
+  a two-lane tile) scroll when wider than their box: hold `BUS_MARQUEE_HOLD_MS` (1 s) at the start, then move left at
+  `BUS_MARQUEE_SPEED` (35 px/s) through the text and a `BUS_MARQUEE_GAP` (24 px) gap while a second copy follows, so the loop is seamless,
+  and repeat for as long as the row is selected. `bus_marquee_offset(text_w, box_w, elapsed_ms, &wait)` → offset in `[0, text_w + gap)`
+  and the ms until it next changes (0 only when the text fits); `bus_marquee_cycle_ms` → one loop. Other rows cut text with "…".
 - **Walking time**: `walk` (ITEM_WALK, −1 = none) → `bus_format_walk` (`"<1m walk"`, `"4m walk"` rounded up, `"1h05 walk"`) in GOTHIC_14,
   right-aligned in the times line just left of the arrow column: level 0 on the (single) detail line or on lane 0's line of a two-lane
   tile (that line's times get the rest of the width); level 1 between the times and the arrow when at least 24 px of times stay.
