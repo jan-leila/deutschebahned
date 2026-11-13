@@ -9,10 +9,10 @@
 # test/screenshots/diff/, a table is printed, and the exit status is non-zero when any image differs by more than
 # F (fraction of pixels, default 0.001) or is missing.
 #
-# Determinism: the fixture's times are relative to its FIXED_NOW and the emulator clock is pinned to it
-# (`pebble emu-set-time`) before every shot; the compass is set explicitly; the marquee and scroll animation are
-# frozen through the watch's test hook (the fixture's STEPS, advanced by a long SELECT each), so no frame depends
-# on when the screenshot happens to be taken.
+# Determinism: the fixture's times are relative to its FIXED_NOW, and each test hook also pins the watch's display
+# clock to it (TEST_NOW; `pebble emu-set-time` is ignored while the app runs, so it only pins the clock at install);
+# the compass is set explicitly; the marquee and scroll animation are frozen through the watch's test hook (the
+# fixture's STEPS, advanced by a long SELECT each), so no frame depends on when the screenshot happens to be taken.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

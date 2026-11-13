@@ -47,7 +47,8 @@
       "NOTIFY_TITLE",
       "NOTIFY_BODY",
       "NOTIFY_COLOR",
-      "ITEM_ROUTE"
+      "ITEM_ROUTE",
+      "TEST_NOW"
     ],
     "capabilities": ["configurable", "location"],
     "resources": {

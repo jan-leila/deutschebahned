@@ -4,8 +4,10 @@
 // decodeWatchMessage. The newer ITEM_* keys (bearing, distance, lanes, full title, route name), the WAKEUP_* list and
 // the NOTIFY_* message are built here directly so the fixture does not depend on newer protocol encoders.
 //
-// Deterministic: every time is relative to FIXED_NOW (not the phone clock); the scripts pin the emulator clock to it
-// with `pebble emu-set-time FIXED_NOW` (times carry +20 s so a few seconds of drift change nothing on screen).
+// Deterministic: every time is relative to FIXED_NOW (not the phone clock). The scripts pin the emulator clock to it
+// with `pebble emu-set-time FIXED_NOW` before installing (the wakeups rely on that), but the emulator ignores later
+// emu-set-time calls while the app runs, so the clock drifts during a run; every test hook therefore also sends
+// {TEST_NOW: FIXED_NOW}, which the watch then shows its times against (times carry +20 s of slack).
 //
 // On 'ready': the main list + a wakeup list (cookie 1 fires at FIXED_NOW + 70 s; reported back as 'UI-FIXTURE wakeup 1').
 // Every REFRESH (long SELECT) from the watch logs 'UI-FIXTURE refresh' and runs the next entry of STEPS; a step can set
@@ -131,7 +133,8 @@ function sendNotify() {
   }]);
 }
 
-function hook(v) { sender.sendAll([{ REFRESH: v }]); }
+// Every hook also pins the watch's display clock to FIXED_NOW (TEST_NOW): emu-set-time doesn't stick while an app runs.
+function hook(v) { sender.sendAll([{ REFRESH: v, TEST_NOW: FIXED_NOW }]); }
 
 // One entry per REFRESH, in order (tools/screenshots.sh relies on this order).
 var STEPS = [

@@ -55,6 +55,9 @@ static bool s_focused = true;
 // v ms (TEST_MARQUEE_END = at the end of its scroll) and moves jump without animating; <= -1000 = wheel frozen at
 // (selection + (-v - 1000)/1000) rows, i.e. a mid-animation frame.
 static int32_t s_test_marquee = -1;
+// Test clock ({TEST_NOW: unix seconds} from the UI fixture): the "now" the rows' times are shown against, 0 = the
+// real clock. The emulator ignores `pebble emu-set-time` while an app is running, so screenshots can't pin it there.
+static int32_t s_test_now;
 
 // ---- Animation --------------------------------------------------------------
 
@@ -339,7 +342,7 @@ static void draw_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
   if (show_dir) draw_dir(ctx, it->dir, dir_font, bx + (bw ? bw + 4 : 0), title_cy, s->level == 0 ? fg : dim);
   if (mode == 'C') return;
 
-  int32_t now = (int32_t)time(NULL);
+  int32_t now = s_test_now ? s_test_now : (int32_t)time(NULL);
   char buf[48];
   GColor detail_color = s->level == 0 ? GColorBlack : dim;
   if (mode == 'A') {
@@ -680,6 +683,11 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
   }
   Tuple *hook = dict_find(iter, MESSAGE_KEY_REFRESH);  // phone -> watch REFRESH = test hook (see s_test_marquee)
   if (hook) apply_test_hook(tuple_int(hook));
+  Tuple *test_now = dict_find(iter, MESSAGE_KEY_TEST_NOW);
+  if (test_now) {
+    s_test_now = tuple_int(test_now);
+    redraw();
+  }
   if (wcount) bus_wakeup_begin(&s_wakeups, (int)tuple_int(wcount));
   if (windex) {
     bus_wakeup_set(&s_wakeups, (int)tuple_int(windex), tuple_int(dict_find(iter, MESSAGE_KEY_WAKEUP_TIME)),
