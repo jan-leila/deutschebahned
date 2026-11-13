@@ -1,0 +1,59 @@
+{
+  "name": "bus-watch",
+  "author": "leyla",
+  "version": "0.1.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "scripts": {
+    "test": "node tools/run-tests.js",
+    "test:unit": "node --test test/",
+    "build:config": "node tools/build-config.js"
+  },
+  "pebble": {
+    "displayName": "Bus Watch",
+    "uuid": "7df2b6a7-ddc2-40db-951f-26fc5dbdf5d5",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": ["aplite", "basalt", "chalk", "diorite", "emery"],
+    "watchapp": { "watchface": false },
+    "messageKeys": [
+      "LIST_ID",
+      "ITEM_COUNT",
+      "ITEM_INDEX",
+      "ITEM_KIND",
+      "ITEM_TITLE",
+      "ITEM_T0",
+      "ITEM_T1",
+      "ITEM_T2",
+      "ITEM_BADGE",
+      "ITEM_COLOR",
+      "STATUS",
+      "SELECT_INDEX",
+      "REFRESH",
+      "ITEM_BEARING",
+      "ITEM_DIST",
+      "ITEM_DIR",
+      "ITEM_LANES",
+      "ITEM_DIR2",
+      "ITEM_U0",
+      "ITEM_U1",
+      "ITEM_U2",
+      "WAKEUP_COUNT",
+      "WAKEUP_INDEX",
+      "WAKEUP_TIME",
+      "WAKEUP_COOKIE",
+      "WAKEUP_FIRED",
+      "NOTIFY_TITLE",
+      "NOTIFY_BODY",
+      "NOTIFY_COLOR",
+      "ITEM_ROUTE"
+    ],
+    "capabilities": ["configurable", "location"],
+    "resources": {
+      "media": [
+        { "type": "bitmap", "name": "IMAGE_MENU_ICON", "file": "icon.png", "menuIcon": true }
+      ]
+    }
+  }
+}

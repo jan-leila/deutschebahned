@@ -1,0 +1,25 @@
+{
+  "pins": {
+    "nixpkgs": {
+      "type": "Channel",
+      "name": "nixos-unstable",
+      "artifact": "nixexprs.tar.xz",
+      "url": "https://releases.nixos.org/nixos/unstable/nixos-26.11pre1113206.f4a03c008967/nixexprs.tar.xz",
+      "hash": "sha256-VZ8WvA9m3XN36juXyg/GwbDRU2OezOHJlXpJCXkccv0="
+    },
+    "pebble.nix": {
+      "type": "Git",
+      "repository": {
+        "type": "GitHub",
+        "owner": "pebble-dev",
+        "repo": "pebble.nix"
+      },
+      "branch": "main",
+      "submodules": false,
+      "revision": "e6086f2790f17968dcd5b89935100b20d3313a5c",
+      "url": "https://github.com/pebble-dev/pebble.nix/archive/e6086f2790f17968dcd5b89935100b20d3313a5c.tar.gz",
+      "hash": "sha256-hFyD0wrjQzZoJ+qFsouFAQhDa9iM/ncsq27kCAlNO4Y="
+    }
+  },
+  "version": 8
+}
