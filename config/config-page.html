@@ -1039,7 +1039,8 @@ header .titles { flex: 1; min-width: 0; }
       b.appendChild(el('span', 'r-name', 'Use ' + (hit.kind === 'route' ? 'route' : 'stop') + ' id “' + hit.id + '”'));
       b.appendChild(el('span', 'r-id', sys));
     } else {
-      b.appendChild(el('span', 'r-name', hit.name));
+      // a stop's travel direction tells same-name stops (opposite sides of a street) apart
+      b.appendChild(el('span', 'r-name', hit.name + (hit.dir ? ' · ' + dirWord(hit.dir) : '')));
       b.appendChild(el('span', 'r-id', (hit.kind === 'stop' ? '#' : '') + hit.id + (sys ? ' · ' + sys : '')));
       var detail = hit.kind === 'stop' ? (hit.detail ? 'Routes ' + hit.detail : '') : hit.detail;
       if (detail) b.appendChild(el('span', 'r-detail', detail));
@@ -1105,7 +1106,13 @@ header .titles { flex: 1; min-width: 0; }
     $('stops').appendChild(row);
     return row;
   }
-  // which routes serve each stop (from its system's index) and whether a saved route is among them
+  // 'NB' → 'Northbound' (… 'Westbound'); other codes as they are
+  function dirWord(code) {
+    var full = BW.directions.fullName(code);
+    return full ? full + 'bound' : String(code);
+  }
+
+  // which routes serve each stop (from its system's index), its direction, and whether a saved route is among them
   function renderStopMeta() {
     var rows = qsa(document, '#stops .stop-row'), c = readForm();
     for (var i = 0; i < rows.length; i++) {
@@ -1118,6 +1125,7 @@ header .titles { flex: 1; min-width: 0; }
       var saved = {};
       for (k = 0; k < c.routes.length; k++) if (c.routes[k].providerId === pid) saved[c.routes[k].id] = true;
       var any = false;
+      if (s.dir) meta.appendChild(document.createTextNode(dirWord(s.dir) + ' · '));
       meta.appendChild(document.createTextNode(s.routeIds.length ? 'Routes ' : 'No routes listed'));
       for (k = 0; k < s.routeIds.length; k++) {
         if (k) meta.appendChild(document.createTextNode(', '));

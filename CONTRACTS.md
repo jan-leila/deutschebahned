@@ -460,6 +460,14 @@ inside the name 520; every query word inside 450; typos (each word within 1 edit
 Routes match id, `shortName`, `longName` (−20); stops match id and name, `detail` = the serving routes' short names. Best first, ties:
 shorter name, then id. Stop hits carry `routeIds` and the position if known; route hits `detail` = `longName`. Tests: `test/catalog.test.js`.
 
+**Stop directions**: a catalog stop may carry `dir` (the direction buses travel there: `'Northbound'`, `'NB'`, `'N'` …), stored as
+`directions.abbreviate(dir)` (`NB SB EB WB`; anything else dropped) after the position (`[id, name, idx, lat|null, lon|null, dir]`; text form
+`…!lat!lon!dir`, `''` for no position). Sources fill it where they know it: Metro Transit (the direction a stop list belongs to), OneBusAway /
+MTA (the stop's `direction`), CTA (the pattern's `rtdir`), mock (each line's compass quadrant); a stop served in two differing directions
+gets none. Stop hits carry `dir`. A query word `…bound` or `nb`/`sb`/`eb`/`wb` filters: stops with another `dir` are left out, stops with
+that `dir` rank first, and the word is not matched against names (a bare `north` stays a name word: North Ave). The settings page shows it
+as `name · Northbound` in the suggestions and as `Northbound · Routes …` on a saved stop.
+
 ## 4. `src/common/planner.js` — which pickups / drop-offs to show
 
 ```js

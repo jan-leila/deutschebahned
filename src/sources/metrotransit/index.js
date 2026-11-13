@@ -504,12 +504,14 @@ function createMetroTransit(opts, http, deps) {
       list = list || [];
       var total = list.length, count = 0, routes = [], stops = {}, order = [];
       if (!total) return cb(null, { routes: [], stops: [] });
-      function addStop(id, name, routeId, c) {
+      // dir: the direction name the stop is listed under ('Northbound'); a stop listed under two differing names gets none
+      function addStop(id, name, routeId, c, dir) {
         if (!stops.hasOwnProperty(id)) { stops[id] = { id: id, name: name, routeIds: [] }; order.push(id); }
         var s = stops[id];
         if (!s.name && name) s.name = name;
         if (s.routeIds.indexOf(routeId) < 0) s.routeIds.push(routeId);
         if (c && typeof c.lat === 'number' && s.lat === undefined) { s.lat = c.lat; s.lon = c.lon; }
+        if (dir) s.dir = s.dir === undefined || s.dir === dir ? dir : '';
       }
       function finished() {
         count++;
@@ -530,7 +532,7 @@ function createMetroTransit(opts, http, deps) {
               var ids = built.directions[d].stopIds || [];
               for (var k = 0; k < ids.length; k++) {
                 var bs = built.stops[ids[k]];
-                if (bs) addStop(ids[k], bs.name, id, bs);
+                if (bs) addStop(ids[k], bs.name, id, bs, built.directions[d].name);
               }
             }
             return setTimeout(finished, 0);
@@ -542,7 +544,7 @@ function createMetroTransit(opts, http, deps) {
                 var l = details.lists[d] || [];
                 for (var k = 0; k < l.length; k++) {
                   var c = stopCoords.done.hasOwnProperty(l[k].id) ? stopCoords.done[l[k].id] : null;
-                  addStop(l[k].id, l[k].name, id, c);
+                  addStop(l[k].id, l[k].name, id, c, details.dirs[d] && details.dirs[d].name);
                 }
               }
             }

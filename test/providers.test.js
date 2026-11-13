@@ -453,7 +453,7 @@ test('mock catalog(): every route and stop of the network, with positions', asyn
   assert.deepEqual(cat.routes[0], { id: 'R1', shortName: 'One', longName: 'One via Mock Av - Centre - Station R1' });
   assert.equal(cat.stops.length, 5 * 16);
   const r1 = await call(p.route, 'R1');
-  assert.deepEqual(cat.stops[3], Object.assign({}, r1.stops['R1:s3'], { routeIds: ['R1'] }));
+  assert.deepEqual(cat.stops[3], Object.assign({}, r1.stops['R1:s3'], { routeIds: ['R1'], dir: 'Northbound' }), 'route i = 0 runs north');
   assert.deepEqual(progress, [[5, 5]]);
 });
 
@@ -470,7 +470,7 @@ test('metrotransit catalog(): route list, then each route\'s stop lists; failing
   const listed = new Set([...fixture('mt-stoplist-2-1.json'), ...fixture('mt-stoplist-2-2.json')].map(s => String(s.stop_id)));
   assert.deepEqual(new Set(cat.stops.map(s => s.id)), listed);
   const franklin = cat.stops.find(s => s.id === '13337');
-  assert.deepEqual(franklin, { id: '13337', name: 'Franklin Ave and Hennepin Ave', routeIds: ['2'] });
+  assert.deepEqual(franklin, { id: '13337', name: 'Franklin Ave and Hennepin Ave', routeIds: ['2'], dir: 'Eastbound' });
   assert.deepEqual(progress.map(p => p[1]), [3, 3, 3]);
   assert.ok(!urls.some(u => /\/nextrip\/\d+$/.test(u)), 'no per-stop coordinate lookups');
 });

@@ -132,3 +132,27 @@ test('text form for the page: round trip, URI-friendly, packed input accepted as
   assert.equal(catalog.fromText({ v: 1 }), null);
   assert.equal(catalog.fromText(null), null);
 });
+
+test('stop directions: normalized to NB/SB/EB/WB, kept with or without a position, shown and searchable', () => {
+  const data = { routes: [{ id: '2', shortName: '2' }], stops: [
+    { id: 'a', name: 'Franklin Ave & Lyndale', routeIds: ['2'], lat: 44.96, lon: -93.28, dir: 'Eastbound' },
+    { id: 'b', name: 'Franklin Ave & Lyndale', routeIds: ['2'], dir: 'W' },
+    { id: 'c', name: 'Franklin Ave & Nicollet', routeIds: ['2'], dir: 'Downtown' },   // not a compass direction
+    { id: 'd', name: 'Franklin Ave & Chicago', routeIds: ['2'], dir: '' }] };
+  const p = catalog.pack(data, { t: 1, sig: 's' });
+  assert.deepEqual(p.stops[0].slice(3), [44.96, -93.28, 'EB']);
+  assert.deepEqual(p.stops[1].slice(3), [null, null, 'WB'], 'no position: null placeholders');
+  assert.equal(p.stops[2].length, 3);
+  assert.equal(p.stops[3].length, 3);
+  for (const packed of [p, catalog.fromText(JSON.parse(JSON.stringify(catalog.toText(p))))]) {
+    assert.deepEqual(packed, p);
+    const idx = catalog.unpack(packed);
+    assert.deepEqual([idx.stops[0].dir, idx.stops[1].dir, idx.stops[2].dir], ['EB', 'WB', undefined]);
+    assert.equal(idx.stops[1].lat, undefined);
+  }
+  const idx = catalog.unpack(p);
+  const hits = catalog.search(idx, 'franklin lyndale', { kind: 'stop' });
+  assert.deepEqual(hits.map(h => [h.id, h.dir]), [['a', 'EB'], ['b', 'WB']], 'same names, told apart by direction');
+  assert.deepEqual(catalog.search(idx, 'franklin lyndale westbound', { kind: 'stop' }).map(h => h.id), ['b']);
+  assert.deepEqual(catalog.search(idx, 'lyndale eb', { kind: 'stop' }).map(h => h.id)[0], 'a');
+});

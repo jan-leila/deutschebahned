@@ -149,6 +149,12 @@ function createMock(config, clock) {
   }
 
   // every route and stop of the network (search index)
+  // the compass quadrant a line travels in (its stops' direction in the search index)
+  function quadrant(bearing) {
+    var d = ((bearing % 360) + 360) % 360;
+    return d >= 315 || d < 45 ? 'Northbound' : d < 135 ? 'Eastbound' : d < 225 ? 'Southbound' : 'Westbound';
+  }
+
   function catalog(cb, onProgress) {
     var routesOut = [], stopsOut = [];
     for (var i = 0; i < routeOrder.length; i++) {
@@ -156,7 +162,7 @@ function createMock(config, clock) {
       routesOut.push({ id: r.id, shortName: r.name, longName: r.name + ' via Mock Av - Centre - Station ' + r.id });
       for (var k = 0; k < r.stops.length; k++) {
         var s = r.stops[k];
-        stopsOut.push({ id: s.id, name: s.name, lat: s.lat, lon: s.lon, routeIds: [r.id] });
+        stopsOut.push({ id: s.id, name: s.name, lat: s.lat, lon: s.lon, routeIds: [r.id], dir: quadrant(r.bearing) });
       }
     }
     if (typeof onProgress === 'function') onProgress(routeOrder.length, routeOrder.length);

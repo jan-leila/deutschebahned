@@ -1,10 +1,12 @@
 // The route / stop index of each transit system, for type-to-search in the settings page (CONTRACTS.md §3b). ES5.
 //
 // A source with a `catalog(cb, onProgress)` method lists everything it knows: cb(err, {routes, stops}) with
-// routes [{id, shortName, longName}] and stops [{id, name, routeIds, lat?, lon?}]. The phone builds each system's
-// index in the background, keeps it in storage for TTL (7 days) and hands it to the settings page, which can also
-// build one itself (e.g. for a system added on the page). Stored packed: routes [id, shortName, longName],
-// stops [id, name, [route index...], lat?, lon?].
+// routes [{id, shortName, longName}] and stops [{id, name, routeIds, lat?, lon?, dir?}] (dir: the direction buses travel
+// at the stop, 'Northbound' / 'NB' / 'N' ..., to tell same-name stops apart). The phone builds each system's index in
+// the background, keeps it in storage for TTL (7 days) and hands it to the settings page, which can also build one itself
+// (e.g. for a system added on the page). Stored packed: routes [id, shortName, longName],
+// stops [id, name, [route index...]] + [lat, lon] (when known) + [dir code] (when known; lat/lon null without a position).
+var directions = require('./directions');
 
 var TTL = 7 * 86400;
 var PREFIX = 'busWatch.catalog.';
@@ -42,9 +44,10 @@ function pack(data, meta) {
       if (idx.indexOf(at[r]) < 0) idx.push(at[r]);
     }
     var row = [sid, str(s.name || sid), idx];
-    if (typeof s.lat === 'number' && typeof s.lon === 'number' && isFinite(s.lat) && isFinite(s.lon) && !(s.lat === 0 && s.lon === 0)) {
-      row.push(round6(s.lat), round6(s.lon));
-    }
+    var pos = typeof s.lat === 'number' && typeof s.lon === 'number' && isFinite(s.lat) && isFinite(s.lon) && !(s.lat === 0 && s.lon === 0);
+    var dir = directions.abbreviate(str(s.dir));
+    if (pos || dir) row.push(pos ? round6(s.lat) : null, pos ? round6(s.lon) : null);
+    if (dir) row.push(dir);
     stops.push(row);
   }
   meta = meta || {};
@@ -66,6 +69,7 @@ function unpack(p) {
     for (var k = 0; s[2] instanceof Array && k < s[2].length; k++) if (routes[s[2][k]]) ids.push(routes[s[2][k]].id);
     var stop = { id: str(s[0]), name: str(s[1]), routeIds: ids };
     if (typeof s[3] === 'number' && typeof s[4] === 'number') { stop.lat = s[3]; stop.lon = s[4]; }
+    if (typeof s[5] === 'string' && s[5]) stop.dir = s[5];
     stops.push(stop);
   }
   return { t: +p.t || 0, sig: str(p.sig), routes: routes, stops: stops };
@@ -75,7 +79,7 @@ function unpack(p) {
 // The settings page is opened as a data: URI, percent-encoded, so the index travels as text whose separators are
 // characters encodeURIComponent leaves alone: records '~', fields '!', route indexes '.', spaces as '_'; '_' '~' '!' '*'
 // inside a field as '*' + 2 hex digits. About half the size of the encoded JSON.
-//   {v: 1, t, sig, text: routes '~~' stops}  route = id!short!long   stop = id!name!i.j.k[!lat!lon]
+//   {v: 1, t, sig, text: routes '~~' stops}  route = id!short!long   stop = id!name!i.j.k[!lat!lon[!dir]] (lat/lon '' = none)
 function esc(v) {
   return str(v).replace(/[_~!*]/g, function (c) { return '*' + c.charCodeAt(0).toString(16).toUpperCase(); }).replace(/ /g, '_');
 }
@@ -88,7 +92,8 @@ function toText(p) {
   for (i = 0; i < p.routes.length; i++) routes.push(esc(p.routes[i][0]) + '!' + esc(p.routes[i][1]) + '!' + esc(p.routes[i][2]));
   for (i = 0; i < p.stops.length; i++) {
     var s = p.stops[i];
-    stops.push(esc(s[0]) + '!' + esc(s[1]) + '!' + (s[2] || []).join('.') + (s.length > 4 ? '!' + s[3] + '!' + s[4] : ''));
+    stops.push(esc(s[0]) + '!' + esc(s[1]) + '!' + (s[2] || []).join('.') +
+      (s.length > 4 ? '!' + (s[3] == null ? '' : s[3]) + '!' + (s[4] == null ? '' : s[4]) : '') + (s.length > 5 ? '!' + esc(s[5]) : ''));
   }
   return { v: 1, t: p.t, sig: p.sig, text: routes.join('~') + '~~' + stops.join('~') };
 }
@@ -108,7 +113,8 @@ function fromText(o) {
     var raw = f[2] ? f[2].split('.') : [];
     for (var k = 0; k < raw.length; k++) idx.push(+raw[k]);
     var row = [unesc(f[0]), unesc(f[1] || ''), idx];
-    if (f.length > 4) row.push(+f[3], +f[4]);
+    if (f.length > 4) row.push(f[3] === '' ? null : +f[3], f[4] === '' ? null : +f[4]);
+    if (f.length > 5 && f[5]) row.push(unesc(f[5]));
     stops.push(row);
   }
   return { v: 1, t: +o.t || 0, sig: str(o.sig), routes: routes, stops: stops };
@@ -275,14 +281,26 @@ function search(index, query, opts) {
   } else {
     var names = {};
     for (i = 0; i < index.routes.length; i++) names[index.routes[i].id] = index.routes[i].shortName || index.routes[i].id;
+    // a direction word in the query ('westbound', 'wb'; not a bare 'west', which is often part of a street name) filters
+    // by direction: stops going another way are left out, and the word isn't matched against names
+    var qDir = '', rest = [];
+    for (i = 0; i < qt.length; i++) {
+      var code = /bound$|^[nsew]b$/.test(qt[i]) ? directions.abbreviate(qt[i]) : '';
+      if (code && !qDir) qDir = code;
+      else rest.push(qt[i]);
+    }
+    var qn = qDir ? rest.join(' ') : q, qnt = qDir ? rest : qt;
     for (i = 0; i < index.stops.length; i++) {
       var s = index.stops[i];
-      var ss = Math.max(idScore(q, s.id), textScore(q, qt, norm(s.name)));
+      if (qDir && s.dir && s.dir !== qDir) continue;
+      var ss = qn ? Math.max(idScore(qn, s.id), textScore(qn, qnt, norm(s.name))) : (s.dir === qDir ? 200 : 0);
+      if (qDir && s.dir === qDir && ss > 0) ss += 5;   // the asked-for direction first
       if (ss <= 0) continue;
       var labels = [];
       for (var k = 0; k < s.routeIds.length; k++) labels.push(names[s.routeIds[k]] || s.routeIds[k]);
       var hit = { kind: 'stop', id: s.id, name: s.name || s.id, detail: labels.join(', '), routeIds: s.routeIds.slice(), score: ss };
       if (typeof s.lat === 'number') { hit.lat = s.lat; hit.lon = s.lon; }
+      if (s.dir) hit.dir = s.dir;
       found.push(hit);
     }
   }

@@ -203,6 +203,7 @@ function createOneBusAway(opts, http) {
                 var id = String(s.id);
                 if (!stops.hasOwnProperty(id)) {
                   stops[id] = { id: id, name: s.name || '', lat: +s.lat, lon: +s.lon, routeIds: [] };
+                  if (s.direction) stops[id].dir = String(s.direction);   // 'N' / 'S' / 'E' / 'W' (compass, from OBA)
                   order.push(id);
                 }
                 if (stops[id].routeIds.indexOf(r.id) < 0) stops[id].routeIds.push(r.id);
