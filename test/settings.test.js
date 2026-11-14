@@ -97,12 +97,12 @@ test('numbers: strings coerced, garbage -> default, clamped, integers rounded', 
 
 test('RANGES describes every numeric top-level field', () => {
   for (const f of ['stopRadius', 'routeRadius', 'recentWindow', 'lookahead', 'dropoffHorizon', 'maxStops',
-    'pickupsPerItem', 'maxItems', 'refreshInterval', 'vehicleRadius', 'walkDeadZone']) {
+    'pickupsPerItem', 'maxItems', 'refreshInterval', 'vehicleRadius', 'voiceRadius', 'walkDeadZone']) {
     const r = settings.RANGES[f];
     assert.ok(r && typeof r.min === 'number' && typeof r.max === 'number', f);
   }
   assert.deepEqual(settings.RANGES.stopRadius, { min: 10, max: 5000, integer: true });
-  assert.deepEqual(Object.keys(settings.RANGES).length, 11);
+  assert.deepEqual(Object.keys(settings.RANGES).length, 12);
 });
 
 test('training fields validated', () => {
@@ -261,4 +261,11 @@ test('showWeather: boolean, default off', () => {
   assert.equal(settings.normalize({ version: 2, providers: P, showWeather: 'true' }).showWeather, true);
   assert.equal(settings.normalize({ version: 2, providers: P, showWeather: 1 }).showWeather, true);
   assert.equal(settings.normalize({ showWeather: 'maybe' }).showWeather, false);
+});
+
+test('voiceRadius: default and range', () => {
+  assert.equal(settings.defaults().voiceRadius, 2000);
+  assert.equal(settings.normalize({ voiceRadius: '5' }).voiceRadius, 50);
+  assert.equal(settings.normalize({ voiceRadius: 1e9 }).voiceRadius, 50000);
+  assert.equal(settings.normalize({ voiceRadius: 750.4 }).voiceRadius, 750);
 });

@@ -75,6 +75,7 @@ Config shape and defaults (distances are always **meters**, speeds m/s; the sett
 | `showArrow` | `true` | boolean — the watch shows the arrow pointing at the stop (off: ITEM_BEARING −1) |
 | `showWeather` | `false` | boolean — the watch shows the weather panel above the first row (§17; fetched from Open-Meteo at your position) |
 | `vehicleRadius` | 250 | 10..2000 integer — meters: a live bus position reported this close to you (within `recentWindow`) is "the bus you're on" |
+| `voiceRadius` | 2000 | 50..50000 integer — meters: a saved route (by its nearest stop) or stop asked for by voice (§20) must be this close |
 | `routes` | `[]` | `[{providerId, id, name, scale, color}]` — `scale` −1000..1000, default **0**; `color` is `'RRGGBB'` or `''` (= provider color / default) |
 | `stops` | `[]` | `[{providerId, id, name, lat, lon, walkScale, rideScale}]` — the stops you care about; `lat`/`lon` numbers or both `null`; scales −1000..1000, default **0** |
 | `destinations` | `[]` | ≤ 8 × `{id, name, lat, lon, address, arriveBy: 'HH:MM', days: [0..6], enabled}` — see below (`address`: trimmed string, default `''`; shown again on the page, the position is what counts) |
@@ -708,6 +709,8 @@ and every `refreshInterval` s; `showConfiguration` opens the settings page as a 
 Sources: `registry = createRegistry(require('../sources/all'))`; `createProvider(config)` = `federation.fromConfig(registry, config,
 {http, clock, storage: localStorage})`, memoized per (providers, routes, stops, location) so the session and the scheduler share one provider.
 The scheduler's `getConfig` = `session.runtimeConfig(null)` (every system; it picks by coverage itself, §15).
+**Spoken commands** (§20): on `ready`, `Pebble.setRouters(voice.ROUTERS)` where the phone app has it; a `route` event → `voice.handle(e.router, e.payload)`;
+every refresh that ran (not one skipped as busy) → `voice.flush()`.
 **Search indexes**: 15 s after `ready` and after settings are saved, each system whose stored index is missing, stale or for other settings
 is indexed in turn (`catalog.build` with its own `registry.createFor` provider) and saved; failures only logged.
 `session` gets `locale: navigator.language`. Scheduler: `createScheduler({..., sendWakeups: w => sender.sendAll(encodeWakeups(w)),
@@ -1191,3 +1194,35 @@ from the chosen key and the saved routes / stops / places), weekday, date, time,
 removes it, and Save then sends `samples` (§8). The learned table names context keys ("44 at Home on Mondays", "… when rain is
 likely"); **Bake** keeps them learned (there is no scale for them). "Learn from the weather" = `training.useWeather`.
 
+
+## 20. Spoken commands — `src/common/voice.js` (phone app text routing: Gravel's `Pebble.setRouters` / `route` event)
+
+The phone app (Gravel) can send transcribed speech to a watch app that declares **routers**; delivering one opens the app on the watch.
+The app declares four (`voice.ROUTERS`): `open` (nothing more than being opened), and `route`, `stop`, `location` (param `query`):
+navigate to the saved route / stop / saved location (§19 `places`) whose name is closest to what was said.
+
+```js
+ROUTERS                       // [{id, name, description, params?}] within the phone app's limits (ids [a-z0-9-], ≤ 16 routers)
+query(payload)                // payload object (or its JSON): fields.query, else unmatched_text, else text → trimmed string ('' = none)
+candidates(kind, cfg, data, pos) // kind 'route'|'stop'|'location'; cfg a runtime view, data the planner Data, pos → [{kind, entry, names, distance, near?}]
+match(q, candidates)          // → the best candidate | null
+target(hit, items)            // → the tile to navigate to (nav.startItem)
+createVoice({getList, startNav(item, data), status(text), log?}) → {handle(routerId, payload), flush()}
+```
+
+- **Candidates**: a saved route counts when it is loaded in `data.routes` and its nearest stop (`near = {id, stop, distance}`) is within
+  `cfg.voiceRadius` of `pos`; a saved stop when it has a position within `voiceRadius`; every saved location with a position, at any
+  distance. Without `pos` there are no routes or stops. `names`: route `name`, source id, `shortName`, `longName`; stop `name`; location
+  `name`, `address`.
+- **Match**: `catalog.score(query, text)` (the settings page's text scoring: exact > prefix > words > typos, 0 = no match) over the names,
+  for the query as said and with the filler words (`the a an my to bus line route stop station`) dropped when something is left; the
+  highest score wins, the nearer candidate on a tie; nothing above 0 → `null`.
+- **Target**: a route → its first pickup tile in the list (ranked: the most accessible stop), else a pickup at its nearest stop without
+  times ("Walk to …", "Wait for the 44", "No times"); a stop → the first pickup tile it is the stop or a lane of, else a walk to it; a
+  location → a walk to it (a `place` tile, §18).
+- `handle`: `open` → `'open'`; an unknown router → `'unknown'`; no query → status `Which stop?` → `'none'`; no list yet (the delivery
+  just opened the app) → the command waits → `'waiting'`; else match within the last list (`{items, pos, cfg, data}`): `startNav(target,
+  data)` → `'started'`, or status `No stop like "…"` → `'none'`.
+- `flush()` (after a refresh): runs the waiting command against the list; with no list (the refresh failed) the command is dropped.
+- `nav.startItem(item, data)` starts navigation to a tile given directly (same steps as `start`; `null` → `false`, guidance stopped).
+- Tests: `test/voice.test.js`, `test/nav.test.js`, `test/pkjs-glue.test.js`.

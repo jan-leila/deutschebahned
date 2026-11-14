@@ -254,6 +254,12 @@ function textScore(q, qt, t) {
   return 300 - 30 * edits - Math.min(60, tw.length * 3);
 }
 
+// how well a free query matches one text (both as typed): 0 = not at all; exact > prefix > words > typos, as in search
+function score(query, text) {
+  var q = norm(query);
+  return q === '' ? 0 : textScore(q, words(q), norm(text));
+}
+
 function idScore(q, id) {
   var n = norm(id);
   if (n === q) return 1000;
@@ -322,5 +328,5 @@ module.exports = {
   TTL: TTL, PREFIX: PREFIX,
   signature: signature, pack: pack, unpack: unpack, toText: toText, fromText: fromText,
   loadPacked: loadPacked, fresh: fresh, save: save, remove: remove, build: build,
-  norm: norm, editDistance: editDistance, search: search, stop: stop
+  norm: norm, editDistance: editDistance, score: score, search: search, stop: stop
 };

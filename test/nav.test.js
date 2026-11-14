@@ -250,3 +250,13 @@ test('place: walk to the saved location, then arrive (from the places list)', ()
   assert.equal(sent.find(m => 'NAV_STATE' in m).NAV_LDIST, '400m');
   assert.deepEqual(nav.buildSteps({ kind: 'place', title: 'X' }, {}).map(st => st.type), ['info']);
 });
+
+test('startItem: navigates to a tile given directly, replacing what was running', () => {
+  const h = harness();
+  assert.equal(h.n.start(5, 1), true);
+  h.sent.length = 0;
+  assert.equal(h.n.startItem({ kind: 'pickup', routeId: 'r1', stopId: 's1', badge: '44', title: 'First', color: '', times: [] }, data), true);
+  assert.deepEqual(h.sent.filter(m => 'NAV_INDEX' in m).map(m => m.NAV_TEXT), ['Walk to First', 'Wait for the 44']);
+  assert.equal(h.n.startItem(null, data), false);
+  assert.equal(h.running(), false, 'nothing to navigate to: the old guidance is over too');
+});

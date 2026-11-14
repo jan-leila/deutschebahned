@@ -263,13 +263,24 @@ function createNav(deps) {
       log('nav: nothing to navigate to');
       return false;
     }
-    var item = list.items[index], cfg = deps.getConfig(), now = deps.clock();
+    return begin(list.items[index], list.data);
+  }
+
+  // item: a tile (as in a list) to navigate to; data: the planner Data its stop coordinates come from
+  function startItem(item, data) {
+    stop(true);
+    if (!item) return false;
+    return begin(item, data);
+  }
+
+  function begin(item, data) {
+    var cfg = deps.getConfig(), now = deps.clock();
     var dest = null, plan = null, i;
     if (item.kind === 'trip') {
       plan = deps.getPlan(item.destinationId);
       for (i = 0; i < (cfg.destinations || []).length; i++) if (cfg.destinations[i].id === item.destinationId) dest = cfg.destinations[i];
     }
-    var steps = buildSteps(item, { data: list.data, now: now, clock24: cfg.clock24, plan: plan, destination: dest });
+    var steps = buildSteps(item, { data: data, now: now, clock24: cfg.clock24, plan: plan, destination: dest });
     active = { steps: steps.slice(0, MAX_STEPS), i: 0, item: item, startedAt: now, locating: false, listKey: '', liveKey: '',
                described: false, timer: null };
     active.timer = setIv(poll, POLL_MS);
@@ -277,7 +288,7 @@ function createNav(deps) {
     return true;
   }
 
-  return { start: start, stop: stop, active: function () { return !!active; } };
+  return { start: start, startItem: startItem, stop: stop, active: function () { return !!active; } };
 }
 
 module.exports = { createNav: createNav, buildSteps: buildSteps, stepDone: stepDone, POLL_MS: POLL_MS };

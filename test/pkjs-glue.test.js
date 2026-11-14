@@ -11,6 +11,7 @@ function installFakes(storedConfig) {
   const messages = [];
   const opened = [];
   const intervals = [];
+  const declared = [];
   const store = new Map(storedConfig ? [['busWatch.config', JSON.stringify(storedConfig)]] : []);
   globalThis.Pebble = {
     addEventListener: (name, fn) => { (handlers[name] = handlers[name] || []).push(fn); },
@@ -19,6 +20,7 @@ function installFakes(storedConfig) {
     getActiveWatchInfo: () => ({ platform: 'basalt' }),
     getWatchToken: () => 'token',
     getAccountToken: () => 'acct',
+    setRouters: routers => { declared.push(routers); return true; },
   };
   globalThis.localStorage = {
     getItem: k => (store.has(k) ? store.get(k) : null),
@@ -36,7 +38,7 @@ function installFakes(storedConfig) {
   globalThis.setInterval = (fn, ms) => { intervals.push({ fn, ms }); return intervals.length; };
   globalThis.clearInterval = () => {};
   const fire = (name, e) => (handlers[name] || []).forEach(fn => fn(e || {}));
-  return { handlers, messages, opened, intervals, store, fire, restore: () => { globalThis.setInterval = realSetInterval; } };
+  return { handlers, messages, opened, intervals, declared, store, fire, restore: () => { globalThis.setInterval = realSetInterval; } };
 }
 
 test('pkjs glue: ready -> list, select -> sample, settings page open/close', async () => {
@@ -112,6 +114,19 @@ test('pkjs glue: ready -> list, select -> sample, settings page open/close', asy
     assert.ok(JSON.parse(html2.match(/window\.__params = (\{.*?\});<\/script>/s)[1]).plans.work, 'plans passed to the page');
     fakes.fire('appmessage', { payload: { WAKEUP_FIRED: 1 } }); // routed to the scheduler: no crash
     await tick(100);
+
+    // a spoken command routed by the phone app: the saved route closest to the query is navigated to
+    assert.deepEqual(fakes.declared.map(r => r.map(x => x.id)), [['open', 'route', 'stop', 'location']], 'routers declared on ready');
+    fakes.messages.length = 0;
+    fakes.fire('route', { router: 'open', payload: { text: 'open the bus app' } });
+    fakes.fire('route', { router: 'route', payload: { text: 'navigate to route one', unmatched_text: '', fields: { query: 'one' } } });
+    await tick(100);
+    assert.ok(fakes.messages.some(m => /^Wait for the One/.test(m.NAV_TEXT || '')), 'navigation steps sent: ' + JSON.stringify(fakes.messages));
+    assert.equal(fakes.messages.filter(m => 'NAV_STATE' in m).pop().NAV_STATE, 1);
+    fakes.messages.length = 0;
+    fakes.fire('route', { router: 'stop', payload: { text: 'nowhere at all' } });
+    await tick(50);
+    assert.ok(fakes.messages.some(m => m.STATUS === 'No stop like "nowhere at all"'), JSON.stringify(fakes.messages));
 
     fakes.fire('webviewclosed', { response: '' }); // cancelled settings page: no crash
     fakes.fire('appmessage', { payload: { NAV_STOP: 1 } });

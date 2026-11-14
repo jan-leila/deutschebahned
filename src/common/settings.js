@@ -23,6 +23,7 @@ var RANGES = {
   maxItems: { min: 1, max: 12, integer: true },
   refreshInterval: { min: 15, max: 3600, integer: true },
   vehicleRadius: { min: 10, max: 2000, integer: true },
+  voiceRadius: { min: 50, max: 50000, integer: true },
   walkDeadZone: { min: 0, max: 600, integer: true }
 };
 var SCALE_RANGE = { min: -1000, max: 1000, integer: false };
@@ -63,6 +64,7 @@ function defaults() {
     maxItems: 10,
     refreshInterval: 60,
     vehicleRadius: 250,
+    voiceRadius: 2000, // a route or stop asked for by voice (voice.js) must be this close
     walkDeadZone: 60,  // watch: a pickup time sooner than the walk to the stop plus this many seconds is highlighted
     routingUrl: '',    // optional walking-route service for navigation (routing.js): URL template with {fromLat} {fromLon} {toLat} {toLon}
     showWalk: true,    // watch: walking time to a stop, right-aligned in the tile's times line

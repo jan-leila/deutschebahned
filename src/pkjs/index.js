@@ -11,6 +11,7 @@ var catalog = require('../common/catalog');
 var weather = require('../common/weather');
 var routing = require('../common/routing');
 var navModule = require('../common/nav');
+var voiceModule = require('../common/voice');
 // Data sources are plug-ins: this composition root is the only place that picks them.
 var sources = require('../sources/registry').createRegistry(require('../sources/all'));
 
@@ -237,6 +238,14 @@ var nav = navModule.createNav({
   log: log
 });
 
+// spoken commands routed here by the phone app (Gravel): open, or navigate to a saved route / stop / location
+var voice = voiceModule.createVoice({
+  getList: function () { return session.lastList(); },
+  startNav: function (item, data) { nav.startItem(item, data); },
+  status: function (text) { sender.sendAll([protocol.encodeStatus(text)]); },
+  log: log
+});
+
 function checkDue(then) {
   scheduler.checkDue(function (err, sent) {
     if (err) log('schedule check error: ' + (err.message || err));
@@ -264,6 +273,8 @@ function refresh() {
   session.refresh(function (err, items) {
     if (err) log('refresh error: ' + (err.message || err));
     else if (items) log('sent ' + items.length + ' items');
+    // a refresh skipped because one is running calls back with neither: the command keeps waiting for that one
+    if (err || items) voice.flush();
   });
 }
 
@@ -284,6 +295,8 @@ function armTimer() {
 
 Pebble.addEventListener('ready', function () {
   log('PebbleKit JS ready');
+  // a phone app with text routing (Gravel) lists these as places to send spoken text
+  if (typeof Pebble.setRouters === 'function') Pebble.setRouters(voiceModule.ROUTERS);
   session.load();
   scheduler.load();
   refresh();
@@ -298,6 +311,11 @@ Pebble.addEventListener('appmessage', function (e) {
   if (msg && msg.type === 'wakeup') scheduler.handleWakeup(msg.cookie);
   else if (msg && msg.type === 'navStart') nav.start(msg.listId, msg.index, !!msg.places);
   else if (msg && msg.type === 'navStop') nav.stop(true);
+});
+
+Pebble.addEventListener('route', function (e) {
+  log('routed: ' + (e && e.router));
+  if (e) voice.handle(e.router, e.payload);
 });
 
 Pebble.addEventListener('showConfiguration', function () {
