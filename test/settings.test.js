@@ -75,12 +75,12 @@ test('numbers: strings coerced, garbage -> default, clamped, integers rounded', 
 
 test('RANGES describes every numeric top-level field', () => {
   for (const f of ['stopRadius', 'routeRadius', 'recentWindow', 'lookahead', 'dropoffHorizon', 'maxStops',
-    'pickupsPerItem', 'maxItems', 'refreshInterval', 'vehicleRadius']) {
+    'pickupsPerItem', 'maxItems', 'refreshInterval', 'vehicleRadius', 'walkDeadZone']) {
     const r = settings.RANGES[f];
     assert.ok(r && typeof r.min === 'number' && typeof r.max === 'number', f);
   }
   assert.deepEqual(settings.RANGES.stopRadius, { min: 10, max: 5000, integer: true });
-  assert.deepEqual(Object.keys(settings.RANGES).length, 10);
+  assert.deepEqual(Object.keys(settings.RANGES).length, 11);
 });
 
 test('training fields validated', () => {
@@ -220,6 +220,12 @@ test('destinations: validated, ids kept or generated, max 8', () => {
   const many = settings.normalize({ destinations: Array.from({ length: 12 }, (_, i) => ({ lat: 1, lon: 1, arriveBy: '08:' + String(i).padStart(2, '0') })) });
   assert.equal(many.destinations.length, settings.MAX_DESTINATIONS);
   assert.equal(new Set(many.destinations.map(d => d.id)).size, 8);
+});
+
+test('walkDeadZone: default 60, clamped 0..600', () => {
+  assert.equal(settings.defaults().walkDeadZone, 60);
+  assert.equal(settings.normalize({ version: 2, providers: P, walkDeadZone: 9999 }).walkDeadZone, 600);
+  assert.equal(settings.normalize({ version: 2, providers: P, walkDeadZone: 0 }).walkDeadZone, 0);
 });
 
 test('showWalk / showArrow: booleans, default on', () => {

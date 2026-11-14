@@ -30,6 +30,7 @@ typedef struct {
   char dir2[BUS_DIR_LEN];     // lane 2 direction (lanes == 2)
   int32_t u[3];               // lane 2 times (lanes == 2)
   int32_t walk;               // seconds to walk to the stop (ITEM_WALK), -1 = none / not shown
+  int32_t lead;               // pickup times sooner than this many seconds from now are highlighted (ITEM_LEAD), -1 = none
 } BusItem;
 
 typedef struct {
@@ -51,6 +52,8 @@ bool bus_model_set_geo(BusModel *m, int32_t list_id, int index, int32_t bearing,
 bool bus_model_set_route(BusModel *m, int32_t list_id, int index, const char *route);
 // Walking time (s) of an item already set (set_item resets it to -1); negative -> -1. Same list/index rules.
 bool bus_model_set_walk(BusModel *m, int32_t list_id, int index, int32_t walk);
+// Highlight threshold (s from now: walk + dead zone) of an item already set (set_item resets it to -1); negative -> -1.
+bool bus_model_set_lead(BusModel *m, int32_t list_id, int index, int32_t lead);
 void bus_model_set_status(BusModel *m, const char *status);
 int bus_model_row_count(const BusModel *m);
 const BusItem *bus_model_item(const BusModel *m, int index);

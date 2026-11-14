@@ -70,6 +70,7 @@ Config shape and defaults (distances are always **meters**, speeds m/s; the sett
 | `maxItems` | 10 | 1..12 integer |
 | `refreshInterval` | 60 | 15..3600 integer — seconds |
 | `showWalk` | `true` | boolean — the watch shows the walking time to a stop (ITEM_WALK) |
+| `walkDeadZone` | 60 | 0..600 integer — seconds; a pickup time sooner than the walk to the stop plus this is highlighted on the watch (ITEM_LEAD) |
 | `showArrow` | `true` | boolean — the watch shows the arrow pointing at the stop (off: ITEM_BEARING −1) |
 | `showWeather` | `false` | boolean — the watch shows the weather panel above the first row (§17; fetched from Open-Meteo at your position) |
 | `vehicleRadius` | 250 | 10..2000 integer — meters: a live bus position reported this close to you (within `recentWindow`) is "the bus you're on" |
@@ -594,7 +595,7 @@ train(samples, priorFn, opts)            // → { weights: {key: number}, before
 ## 7. `src/common/protocol.js` — phone ⇄ watch messages
 
 Message keys (`package.json` `messageKeys`): `LIST_ID ITEM_COUNT ITEM_INDEX ITEM_KIND ITEM_TITLE ITEM_T0 ITEM_T1 ITEM_T2 ITEM_BADGE ITEM_COLOR STATUS SELECT_INDEX REFRESH
-ITEM_BEARING ITEM_DIST ITEM_DIR ITEM_LANES ITEM_DIR2 ITEM_U0 ITEM_U1 ITEM_U2 WAKEUP_COUNT WAKEUP_INDEX WAKEUP_TIME WAKEUP_COOKIE WAKEUP_FIRED NOTIFY_TITLE NOTIFY_BODY NOTIFY_COLOR ITEM_ROUTE TEST_NOW WATCH_PREFS ITEM_WALK
+ITEM_BEARING ITEM_DIST ITEM_DIR ITEM_LANES ITEM_DIR2 ITEM_U0 ITEM_U1 ITEM_U2 WAKEUP_COUNT WAKEUP_INDEX WAKEUP_TIME WAKEUP_COOKIE WAKEUP_FIRED NOTIFY_TITLE NOTIFY_BODY NOTIFY_COLOR ITEM_ROUTE TEST_NOW WATCH_PREFS ITEM_WALK ITEM_LEAD
 WEATHER_COUNT WEATHER_START WEATHER_NOW WEATHER_HI WEATHER_LO WEATHER_TEMPS WEATHER_RAIN`.
 `TEST_NOW` (test only, sent by `src/pkjs/ui-fixture.js`): unix seconds the watch shows its times against instead of its clock.
 
@@ -614,6 +615,8 @@ encodeList(listId, items, status, opts) // opts = {units} ('imperial' default). 
                                    //   ITEM_DIST    = format.distance(distance, units) ('' when null)  (≤ DIST_MAX_BYTES 7); units other than 'metric' → imperial
                                    //   ITEM_WALK    = round(item.walk) — seconds to walk to the stop (pickups, trip boarding) — only when it is a
                                    //                  number ≥ 0 and opts.showWalk !== false
+                                   //   ITEM_LEAD    = round(item.walk + opts.deadZone) for pickups with a walk (independent of showWalk); the watch draws
+                                   //                  each time sooner than that many seconds from now as a route-color pill like the badge
                                    //   opts.showArrow === false → ITEM_BEARING = -1 (no arrow) for every item
                                    //   ITEM_DIR     = lanes[0].dir || dir || ''                         (truncated to DIR_MAX_BYTES 3)
                                    //   ITEM_LANES   = 2 if item.lanes has ≥ 2 entries, else 1
@@ -820,6 +823,7 @@ const BusItem *bus_model_item(const BusModel *m, int index);  // NULL unless 0 <
 int  bus_model_clamp_selection(const BusModel *m, int sel);   // into 0..row_count-1
 bool bus_color_prefers_dark_text(int32_t rgb);                // 0.299R + 0.587G + 0.114B > 150 (integer math); -1 → false
 bool bus_model_set_walk(BusModel *m, int32_t list_id, int index, int32_t walk); // set_item resets walk to −1; negative → −1
+bool bus_model_set_lead(BusModel *m, int32_t list_id, int index, int32_t lead); // set_item resets lead to −1; negative → −1
 void bus_format_walk(int32_t seconds, char *buf, size_t n);  // "<1m walk" | "4m walk" (rounded up) | "1h05 walk"; negative → ""
 const char *bus_dir_name(const char *code);                   // "NB" → "North", "SB" → "South", "EB" → "East", "WB" → "West"; else code (NULL → "")
 void bus_format_relative(int32_t seconds, char *buf, size_t n);  // <= 30 → "now"; < 3600 → "%dm" (floor, min 1);

@@ -74,6 +74,8 @@ function encodeList(listId, items, status, opts) {
   items = items || [];
   var units = opts && opts.units === 'metric' ? 'metric' : 'imperial';
   var showWalk = !(opts && opts.showWalk === false), showArrow = !(opts && opts.showArrow === false);
+  var dz = opts && opts.deadZone;
+  var deadZone = typeof dz === 'number' && isFinite(dz) && dz > 0 ? dz : 0;
   var n = Math.min(items.length, MAX_ITEMS);
   var out = [{ LIST_ID: listId, ITEM_COUNT: n, STATUS: truncateUtf8(status, STATUS_MAX_BYTES) }];
   for (var i = 0; i < n; i++) {
@@ -99,6 +101,10 @@ function encodeList(listId, items, status, opts) {
     };
     // a tile you walk to (pickup, trip boarding): whole seconds to walk there, shown right-aligned in its times line
     if (showWalk && typeof it.walk === 'number' && isFinite(it.walk) && it.walk >= 0) msg.ITEM_WALK = Math.round(it.walk);
+    // pickups: seconds from now a bus must be later than to be catchable (walk + dead zone); sooner times are highlighted
+    if (it.kind === 'pickup' && typeof it.walk === 'number' && isFinite(it.walk) && it.walk >= 0) {
+      msg.ITEM_LEAD = Math.round(it.walk + deadZone);
+    }
     if (lanes.length >= 2) {
       var lane1 = lanes[1] || {};
       var u = lane1.times || [];

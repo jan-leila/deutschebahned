@@ -280,6 +280,8 @@ header .titles { flex: 1; min-width: 0; }
     <h2>On the watch</h2>
     <label class="field check"><span class="name">Walking time</span><span class="hint">how long to walk to a stop, next to its bus times</span>
       <input type="checkbox" data-field="showWalk"></label>
+    <label class="field"><span class="name">Walking dead zone</span><span class="hint">seconds · a bus time sooner than the walk plus this is highlighted in the stop's color</span>
+      <input type="number" step="1" data-field="walkDeadZone"></label>
     <label class="field check"><span class="name">Direction arrow</span><span class="hint">the arrow pointing at the stop</span>
       <input type="checkbox" data-field="showArrow"></label>
     <label class="field check"><span class="name">Weather</span><span class="hint">above the first row: now, high / low, next 24 h with chance of rain (Open-Meteo)</span>

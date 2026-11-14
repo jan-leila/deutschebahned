@@ -29,6 +29,7 @@ static void clear_geo(BusItem *it) {
   it->dist[0] = it->dir[0] = it->dir2[0] = 0;
   it->u[0] = it->u[1] = it->u[2] = 0;
   it->walk = -1;
+  it->lead = -1;
 }
 
 void bus_model_init(BusModel *m) {
@@ -92,6 +93,12 @@ bool bus_model_set_geo(BusModel *m, int32_t list_id, int index, int32_t bearing,
     it->dir2[0] = 0;
     it->u[0] = it->u[1] = it->u[2] = 0;
   }
+  return true;
+}
+
+bool bus_model_set_lead(BusModel *m, int32_t list_id, int index, int32_t lead) {
+  if (list_id != m->list_id || index < 0 || index >= m->count) return false;
+  m->items[index].lead = lead >= 0 ? lead : -1;
   return true;
 }
 

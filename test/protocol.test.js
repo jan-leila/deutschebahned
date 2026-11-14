@@ -289,6 +289,16 @@ test('encodeList: ITEM_ROUTE carries the route full name, long titles kept up to
   assert.equal(Buffer.byteLength(n.NOTIFY_TITLE), 31);
 });
 
+test('encodeList: ITEM_LEAD = walk + dead zone for pickups, even with showWalk off', () => {
+  const base = { kind: 'pickup', key: 'p', badge: '2', title: 'Pine', times: [100], walk: 250, lanes: [] };
+  const lead = (o, it) => protocol.encodeList(1, [Object.assign({}, base, it)], 's', o)[1].ITEM_LEAD;
+  assert.equal(lead({ deadZone: 60 }), 310);
+  assert.equal(lead({}), 250);
+  assert.equal(lead({ deadZone: 60, showWalk: false }), 310);
+  assert.equal(lead({ deadZone: 60 }, { walk: null }), undefined);
+  assert.equal(lead({ deadZone: 60 }, { kind: 'dropoff' }), undefined);
+});
+
 test('encodeList: ITEM_WALK carries the walking time; showWalk / showArrow false leave out the time / the arrow', () => {
   const base = { kind: 'pickup', key: 'p', badge: '2', title: 'Pine', times: [100], distance: 350, bearing: 10, lanes: [] };
   const [, walk] = protocol.encodeList(1, [Object.assign({ walk: 249.6 }, base)], 's', { units: 'metric' });

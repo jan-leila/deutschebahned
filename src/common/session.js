@@ -95,7 +95,7 @@ function createSession(deps) {
 
   function sendList(items, status) {
     listId++;
-    send(protocol.encodeList(listId, items, status, { units: prefs.units, showWalk: config.showWalk, showArrow: config.showArrow }));
+    send(protocol.encodeList(listId, items, status, { units: prefs.units, showWalk: config.showWalk, deadZone: config.walkDeadZone, showArrow: config.showArrow }));
     return listId;
   }
 

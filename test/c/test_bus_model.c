@@ -149,6 +149,12 @@ static void test_walk(void) {
   CHECK(bus_model_set_walk(&m, 3, 0, -7));
   CHECK(bus_model_item(&m, 0)->walk == -1);
   CHECK(!bus_model_set_walk(&m, 4, 0, 10));
+  CHECK(bus_model_item(&m, 0)->lead == -1);
+  CHECK(bus_model_set_lead(&m, 3, 0, 310));
+  CHECK(bus_model_item(&m, 0)->lead == 310);
+  CHECK(bus_model_set_lead(&m, 3, 0, -1));
+  CHECK(bus_model_item(&m, 0)->lead == -1);
+  CHECK(!bus_model_set_lead(&m, 4, 0, 10));
   CHECK(!bus_model_set_walk(&m, 3, 1, 10));
   bus_model_set_walk(&m, 3, 0, 99);
   CHECK(bus_model_set_item(&m, 3, 0, BUS_KIND_PICKUP, "2", "A", -1, 1, 0, 0));

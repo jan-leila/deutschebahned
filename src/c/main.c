@@ -215,6 +215,58 @@ static void draw_marquee(GContext *ctx, const char *text, GFont font, int16_t bx
   fill_span(ctx, GColorWhite, mx1, layer_w, y0, y1);
 }
 
+// A pickup time sooner than the walk to the stop plus the dead zone (it->lead): the bus can't be caught.
+static bool time_hurried(const BusItem *it, int32_t t, int32_t now) {
+  return it->kind == BUS_KIND_PICKUP && it->lanes != 2 && it->lead >= 0 && t && t - now < it->lead;
+}
+
+// The pickup times line ("now, 12m, 1h05"), each hurried time in a route-color pill like the badge. Pills don't
+// scroll: returns false (nothing drawn) when no time is hurried or the line is wider than w.
+static bool draw_times(GContext *ctx, const BusItem *it, int32_t now, GFont font, int16_t x, int16_t w, int16_t cy,
+                       GColor fg) {
+  FontMetrics fi = font_info(font);
+  const int16_t pad = 2;
+  char s[3][12];
+  bool hurried[3], any_hurried = false, any = false;
+  int16_t total = 0;
+  for (int i = 0; i < 3; i++) {
+    s[i][0] = 0;
+    hurried[i] = false;
+    if (!it->t[i]) continue;
+    bus_format_relative(it->t[i] - now, s[i], sizeof s[i]);
+    hurried[i] = time_hurried(it, it->t[i], now);
+    any_hurried |= hurried[i];
+    total += text_width(s[i], font) + (hurried[i] ? 2 * pad : 0) + (any ? text_width(", ", font) : 0);
+    any = true;
+  }
+  if (!any_hurried || total > w) return false;
+  int16_t cx = x;
+  bool first = true;
+  for (int i = 0; i < 3; i++) {
+    if (!s[i][0]) continue;
+    if (!first) {
+      graphics_context_set_text_color(ctx, fg);
+      int16_t sw = text_width(", ", font);
+      draw_line(ctx, ", ", font, cx, sw + 2, cy, GTextAlignmentLeft);
+      cx += sw;
+    }
+    first = false;
+    int16_t tw = text_width(s[i], font);
+    if (hurried[i]) {
+      graphics_context_set_fill_color(ctx, route_color(it->color));
+      graphics_fill_rect(ctx, GRect(cx, cy - (fi.cap + 5) / 2, tw + 2 * pad, fi.cap + 5), 3, GCornersAll);
+      graphics_context_set_text_color(ctx, badge_text_color(it->color));
+      draw_line(ctx, s[i], font, cx + pad, tw + 2, cy, GTextAlignmentLeft);
+      cx += tw + 2 * pad;
+    } else {
+      graphics_context_set_text_color(ctx, fg);
+      draw_line(ctx, s[i], font, cx, tw + 2, cy, GTextAlignmentLeft);
+      cx += tw;
+    }
+  }
+  return true;
+}
+
 // Arrow pointing at a stop, filled with the route color (black on B&W), outlined when the color is light.
 static void draw_arrow(GContext *ctx, const BusItem *it, int16_t cx, int16_t cy, int16_t r) {
   BusPoint p[4];
@@ -375,8 +427,10 @@ static void draw_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
       snprintf(buf, sizeof buf, "%s%s%s", bus_dir_name(it->dir2), it->dir2[0] ? " " : "", lane);
       draw_marquee(ctx, buf, detail_font, ix, lw, line2_cy, CLIP0(line2_cy), CLIP1(line2_cy), x, x + w, GColorWhite, width);
     } else {
-      bus_format_detail(it, now, clock_is_24h_style(), buf, sizeof buf);
-      draw_marquee(ctx, buf, detail_font, ix, lw1, walk_cy, CLIP0(walk_cy), CLIP1(walk_cy), x, x + w, GColorWhite, width);
+      if (!draw_times(ctx, it, now, detail_font, ix, lw1, walk_cy, detail_color)) {
+        bus_format_detail(it, now, clock_is_24h_style(), buf, sizeof buf);
+        draw_marquee(ctx, buf, detail_font, ix, lw1, walk_cy, CLIP0(walk_cy), CLIP1(walk_cy), x, x + w, GColorWhite, width);
+      }
     }
 #undef CLIP0
 #undef CLIP1
@@ -416,9 +470,11 @@ static void draw_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
       draw_line(ctx, walk, s_f14, right - walk_w - 2, walk_w + 2, line1_cy, GTextAlignmentRight);
       right -= walk_w + 6;
     }
-    bus_format_detail(it, now, clock_is_24h_style(), buf, sizeof buf);
-    graphics_context_set_text_color(ctx, detail_color);
-    draw_line(ctx, buf, detail_font, ix, right - ix, line1_cy, GTextAlignmentLeft);
+    if (!draw_times(ctx, it, now, detail_font, ix, right - ix, line1_cy, detail_color)) {
+      bus_format_detail(it, now, clock_is_24h_style(), buf, sizeof buf);
+      graphics_context_set_text_color(ctx, detail_color);
+      draw_line(ctx, buf, detail_font, ix, right - ix, line1_cy, GTextAlignmentLeft);
+    }
   }
 }
 
@@ -795,6 +851,7 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
                       tuple_int(dict_find(iter, MESSAGE_KEY_ITEM_U2)));
     bus_model_set_route(&s_model, lid, i, tuple_str(dict_find(iter, MESSAGE_KEY_ITEM_ROUTE)));
     bus_model_set_walk(&s_model, lid, i, tuple_int_or(dict_find(iter, MESSAGE_KEY_ITEM_WALK), -1));
+    bus_model_set_lead(&s_model, lid, i, tuple_int_or(dict_find(iter, MESSAGE_KEY_ITEM_LEAD), -1));
   }
   if (status) {
     bus_model_set_status(&s_model, tuple_str(status));

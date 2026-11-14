@@ -21,7 +21,8 @@ var RANGES = {
   pickupsPerItem: { min: 1, max: 3, integer: true },
   maxItems: { min: 1, max: 12, integer: true },
   refreshInterval: { min: 15, max: 3600, integer: true },
-  vehicleRadius: { min: 10, max: 2000, integer: true }
+  vehicleRadius: { min: 10, max: 2000, integer: true },
+  walkDeadZone: { min: 0, max: 600, integer: true }
 };
 var SCALE_RANGE = { min: -1000, max: 1000, integer: false };
 
@@ -61,6 +62,7 @@ function defaults() {
     maxItems: 10,
     refreshInterval: 60,
     vehicleRadius: 250,
+    walkDeadZone: 60,  // watch: a pickup time sooner than the walk to the stop plus this many seconds is highlighted
     showWalk: true,    // watch: walking time to a stop, right-aligned in the tile's times line
     showArrow: true,   // watch: the arrow pointing at the stop
     showWeather: false, // watch: weather (now, high / low, temperature + chance of rain) above the first row (Open-Meteo)
