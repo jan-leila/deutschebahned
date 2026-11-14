@@ -71,6 +71,7 @@ Config shape and defaults (distances are always **meters**, speeds m/s; the sett
 | `refreshInterval` | 60 | 15..3600 integer — seconds |
 | `showWalk` | `true` | boolean — the watch shows the walking time to a stop (ITEM_WALK) |
 | `showArrow` | `true` | boolean — the watch shows the arrow pointing at the stop (off: ITEM_BEARING −1) |
+| `showWeather` | `false` | boolean — the watch shows the weather panel above the first row (§17; fetched from Open-Meteo at your position) |
 | `vehicleRadius` | 250 | 10..2000 integer — meters: a live bus position reported this close to you (within `recentWindow`) is "the bus you're on" |
 | `routes` | `[]` | `[{providerId, id, name, scale, color}]` — `scale` −1000..1000, default **0**; `color` is `'RRGGBB'` or `''` (= provider color / default) |
 | `stops` | `[]` | `[{providerId, id, name, lat, lon, walkScale, rideScale}]` — the stops you care about; `lat`/`lon` numbers or both `null`; scales −1000..1000, default **0** |
@@ -593,7 +594,8 @@ train(samples, priorFn, opts)            // → { weights: {key: number}, before
 ## 7. `src/common/protocol.js` — phone ⇄ watch messages
 
 Message keys (`package.json` `messageKeys`): `LIST_ID ITEM_COUNT ITEM_INDEX ITEM_KIND ITEM_TITLE ITEM_T0 ITEM_T1 ITEM_T2 ITEM_BADGE ITEM_COLOR STATUS SELECT_INDEX REFRESH
-ITEM_BEARING ITEM_DIST ITEM_DIR ITEM_LANES ITEM_DIR2 ITEM_U0 ITEM_U1 ITEM_U2 WAKEUP_COUNT WAKEUP_INDEX WAKEUP_TIME WAKEUP_COOKIE WAKEUP_FIRED NOTIFY_TITLE NOTIFY_BODY NOTIFY_COLOR ITEM_ROUTE TEST_NOW WATCH_PREFS ITEM_WALK`.
+ITEM_BEARING ITEM_DIST ITEM_DIR ITEM_LANES ITEM_DIR2 ITEM_U0 ITEM_U1 ITEM_U2 WAKEUP_COUNT WAKEUP_INDEX WAKEUP_TIME WAKEUP_COOKIE WAKEUP_FIRED NOTIFY_TITLE NOTIFY_BODY NOTIFY_COLOR ITEM_ROUTE TEST_NOW WATCH_PREFS ITEM_WALK
+WEATHER_COUNT WEATHER_START WEATHER_NOW WEATHER_HI WEATHER_LO WEATHER_TEMPS WEATHER_RAIN`.
 `TEST_NOW` (test only, sent by `src/pkjs/ui-fixture.js`): unix seconds the watch shows its times against instead of its clock.
 
 Phase 4 (carousel): `TITLE_MAX_BYTES = 63` (full stop names; the watch scrolls what doesn't fit), item messages carry `ITEM_ROUTE` =
@@ -620,6 +622,7 @@ encodeList(listId, items, status, opts) // opts = {units} ('imperial' default). 
 encodeStatus(status)               // → { STATUS }
 encodeWakeups(wakeups)             // [{time, cookie}] → [{WAKEUP_COUNT: n}, {WAKEUP_INDEX: i, WAKEUP_TIME, WAKEUP_COOKIE} × n], n = min(len, MAX_WAKEUPS 8)
                                    //   ([] → just {WAKEUP_COUNT: 0} = cancel all)
+encodeWeather(w, units)            // weather.slice result → ONE message (§17); null / no hours → {WEATHER_COUNT: 0} (hide)
 encodeNotify(n)                    // {title, body, color} → ONE message {NOTIFY_TITLE (≤ TITLE_MAX_BYTES 31), NOTIFY_BODY (≤ NOTIFY_BODY_MAX_BYTES 159),
                                    //   NOTIFY_COLOR (int / -1)}; send it as sendAll([encodeNotify(n)])
 decodeWatchMessage(payload)        // { WAKEUP_FIRED: cookie }          → {type:'wakeup', cookie: Number(cookie)} (checked first)
@@ -1039,3 +1042,41 @@ STORAGE_KEYS = { plans: 'busWatch.plans', handled: 'busWatch.handled' }
   each tick runs `checkDue` then `refreshActive` (they share the scheduler's busy guard).
 - Watch: `BUS_KIND_TRIP = 2` tiles carry a visible "planned trip" marker at every wheel level; detail before departure `"board 8:16 · 4m"`,
   riding `"off 8:31 · 12m"`. Tests: `test/trip-items.test.js`, `test/schedule-integration.test.js`.
+
+## 17. Weather panel — `src/common/weather.js`, `protocol.encodeWeather`, `src/c/bus_weather.{h,c}`
+
+With `showWeather` on, the space above the first row (while it is selected) shows the temperature now, the high and low,
+and the next 24 hours as a temperature line over chance-of-rain bars. It scrolls away with the first row, and it is
+also drawn above the status on the empty screen.
+
+```js
+// weather.js (http injected; °C throughout)
+url(pos, opts?)          // GET {opts.baseUrl || 'https://api.open-meteo.com'}/v1/forecast?latitude&longitude (4 decimals)
+                         //   &current=temperature_2m&hourly=temperature_2m,precipitation_probability
+                         //   &temperature_unit=celsius&timeformat=unixtime&forecast_days=2
+parse(body)              // → {current (°C | null), times, temps, rain (0..100; missing → 0)}; hours without a temperature
+                         //   dropped; throws on an error body / no hours
+slice(data, now, hours?) // → {start, now, hi, lo, temps, rain}: ≤ HOURS (24) hours from the one containing `now`; `now` =
+                         //   current temperature (else the first hour's); hi / lo over the shown hours and `now`; null when none
+createFetcher(http, clock, opts?) // → fetch(pos, cb(err, parsed)): one cached forecast, reused for MAX_AGE (1800 s) within
+                         //   MAX_MOVE (2000 m); concurrent calls share the request in flight; errors aren't cached
+```
+
+`protocol.encodeWeather(w, units)` → `{WEATHER_COUNT: n ≤ 24, WEATHER_START, WEATHER_NOW, WEATHER_HI, WEATHER_LO, WEATHER_TEMPS,
+WEATHER_RAIN}`: the three temperatures as whole degrees, °C when `units` is `'metric'`, else °F; `WEATHER_TEMPS` = n bytes, each hour's
+temperature scaled `lo → 0 … hi → 255` (all 128 when hi = lo); `WEATHER_RAIN` = n bytes, 0..100.
+
+**Session** (`deps.weather(pos, cb)` = a fetcher; `index.js` passes `weather.createFetcher(http, clock)`): when `showWeather` is
+on, each refresh fetches at the refresh's position and sends `encodeWeather(slice(forecast, clock()), prefs.units)` as its own
+message; a failed fetch is only logged (the watch keeps the last one). A units change resends it. When `showWeather` is off, the
+next refresh sends `{WEATHER_COUNT: 0}` once if a panel was shown.
+
+**Watch** (`bus_weather.h`, pure): `bus_weather_set` (count clamped to 24; missing temps → 128, missing rain → 0, rain > 100 → 100),
+`bus_weather_visible(w, now)` (until the last hour ends), `bus_weather_format` (`"12°"`, `"H 15° L 4°"`), `bus_weather_graph` (hour i
+in the columns `[x + i·w/n, x + (i+1)·w/n)`, its bar 1 px narrower when ≥ 3 px wide and rain% of the height from the bottom; its
+point at the column's middle, 255 at the top row, 0 at the bottom row). `bus_wheel_space_above(g)` = the panel's height
+(`height/2 − row_h[0]/2`); `bus_wheel_round_inset(g, y, h)` = the circle inset for a band (0 on rectangular screens).
+`main.c` draws it when that height is ≥ 28 px, its bottom at the first row's top: the temperature now in `GOTHIC_24_BOLD` over high /
+low (`GOTHIC_14`, `GOTHIC_18` when the panel is ≥ 56 px), and beside them the rain bars (`GColorPictonBlue`; B&W: every other pixel
+column), a baseline, and the temperature line 2 px wide (`GColorRed`; B&W black), carried flat to both edges of the graph.
+Tests: `test/weather.test.js`, `test/session.test.js`, `test/c/test_bus_weather.c`, `test/c/test_bus_wheel.c`.

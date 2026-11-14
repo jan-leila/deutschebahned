@@ -32,6 +32,7 @@ function harness(opts) {
     createProvider: config => { calls.createProvider++; return { fake: true, config }; },
     send: messages => sent.push(...messages),
     log: () => {},
+    weather: opts.weather,
     planner: {
       gather: (provider, config, pos, now, cache, cb) => {
         calls.gather++;
@@ -328,4 +329,56 @@ test('lists follow the showWalk / showArrow settings', async () => {
   const m2 = off.sent.find(x => 'ITEM_INDEX' in x);
   assert.equal('ITEM_WALK' in m2, false);
   assert.equal(m2.ITEM_BEARING, -1);
+});
+
+// ---- weather panel (§17) ----
+const FORECAST = { current: 20, times: [NOW - 1800, NOW + 1800, NOW + 5400], temps: [18, 22, 16], rain: [0, 50, 100] };
+const weatherOn = extra => JSON.stringify({ version: 2, providers: [{ id: 'p', type: 'mock' }], showWeather: true, ...extra });
+const tick = () => new Promise(r => setTimeout(r, 5));
+
+test('weather: fetched at the refresh position and sent in the watch units; off by default', async () => {
+  const asked = [];
+  const weather = (pos, cb) => { asked.push(pos); setTimeout(() => cb(null, FORECAST), 0); };
+  const off = harness({ weather });
+  off.session.load();
+  await refresh(off.session);
+  await tick();
+  assert.equal(asked.length, 0);
+  assert.equal(off.sent.some(m => 'WEATHER_COUNT' in m), false);
+
+  const on = harness({ weather, storage: { 'busWatch.config': weatherOn() } });
+  on.session.load();
+  on.session.setPrefs({ clock24: true, units: 'metric' });
+  await refresh(on.session);
+  await tick();
+  assert.deepEqual(asked, [{ lat: 10, lon: 20 }]);
+  const w = on.sent.find(m => 'WEATHER_COUNT' in m);
+  assert.deepEqual(w, { WEATHER_COUNT: 3, WEATHER_START: NOW - 1800, WEATHER_NOW: 20, WEATHER_HI: 22, WEATHER_LO: 16,
+    WEATHER_TEMPS: [85, 255, 0], WEATHER_RAIN: [0, 50, 100] });
+  // units change → the same forecast again in °F
+  on.session.setPrefs({ clock24: true, units: 'imperial' });
+  const w2 = on.sent.filter(m => 'WEATHER_COUNT' in m).pop();
+  assert.equal(w2.WEATHER_NOW, 68);
+  assert.equal(w2.WEATHER_HI, 72);
+});
+
+test('weather: a failed fetch sends nothing; turning it off hides the panel once', async () => {
+  let fail = true;
+  const weather = (pos, cb) => setTimeout(() => (fail ? cb(new Error('down')) : cb(null, FORECAST)), 0);
+  const h = harness({ weather, storage: { 'busWatch.config': weatherOn() } });
+  h.session.load();
+  await refresh(h.session);
+  await tick();
+  assert.equal(h.sent.some(m => 'WEATHER_COUNT' in m), false);
+  fail = false;
+  await refresh(h.session);
+  await tick();
+  assert.equal(h.sent.filter(m => 'WEATHER_COUNT' in m).length, 1);
+  h.session.applySettings({ config: JSON.parse(weatherOn({ showWeather: false })) });
+  await tick();
+  await refresh(h.session);
+  await tick();
+  const ws = h.sent.filter(m => 'WEATHER_COUNT' in m);
+  assert.equal(ws.length, 2);
+  assert.deepEqual(ws[1], { WEATHER_COUNT: 0 });
 });

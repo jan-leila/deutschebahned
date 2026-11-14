@@ -6,6 +6,7 @@
 #include "bus_arrow.h"
 #include "bus_wakeup.h"
 #include "bus_marquee.h"
+#include "bus_weather.h"
 
 #define STATUS_H 16
 #define ROUND_STATUS_Y 4
@@ -21,11 +22,13 @@
 #define ROUTE_BAND_H 15  // level-0 top band carrying the route full name (BAR_H when there is none)
 #define BADGE_GAP 2      // min. white rows between the level-0 band and the route badge
 #define TEST_MARQUEE_END 1000000000  // test hook value: marquee frozen at the end of its scroll
+#define WEATHER_MIN_H 28 // the weather panel needs at least this much room above the first row
 
 static Window *s_window;
 static TextLayer *s_status_layer;
 static Layer *s_wheel_layer;
 static BusModel s_model;
+static BusWeather s_weather;
 static WheelGeometry s_geom;
 
 static int s_sel;            // selected row
@@ -419,6 +422,60 @@ static void draw_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
   }
 }
 
+// ---- Weather panel ----------------------------------------------------------
+// In the room above the first row (bus_wheel_space_above), bottom edge at `bottom` (the first row's top), so it
+// scrolls away with that row: the temperature now over "H 15° L 4°", and beside them the next hours' temperature
+// as a line over their chance of rain as bars (0..100 % of the graph's height).
+
+static void draw_weather(GContext *ctx, int16_t bottom, int16_t width) {
+  int32_t now = s_test_now ? s_test_now : (int32_t)time(NULL);
+  int16_t h = bus_wheel_space_above(&s_geom);
+  if (h < WEATHER_MIN_H || bottom <= 0 || !bus_weather_visible(&s_weather, now)) return;
+  int16_t top = bottom - h;
+  int16_t x = bus_wheel_round_inset(&s_geom, 0, h) + 4, w = width - 2 * x;  // inset as when row 0 is selected
+  if (w < 60) return;
+
+  char now_t[12], hilo[28];
+  bus_weather_format(&s_weather, now_t, sizeof now_t, hilo, sizeof hilo);
+  GFont small = h >= 56 ? s_f18 : s_f14;
+  FontMetrics big = font_info(s_f24b), sm = font_info(small);
+  int16_t nw = text_width(now_t, s_f24b), hw = text_width(hilo, small), colw = nw > hw ? nw : hw;
+  int16_t gap = (h - big.cap - sm.cap) / 3;
+  if (gap > 6) gap = 6;
+  int16_t cy0 = top + (h - big.cap - gap - sm.cap) / 2 + big.cap / 2, cy1 = cy0 + big.cap / 2 + gap + sm.cap / 2;
+  graphics_context_set_text_color(ctx, GColorBlack);
+  draw_line(ctx, now_t, s_f24b, x, colw + 2, cy0, GTextAlignmentLeft);
+  draw_line(ctx, hilo, small, x, colw + 2, cy1, GTextAlignmentLeft);
+
+  int16_t gx = x + colw + 6, gw = x + w - gx, gy = top + 4, gh = h - 9;
+  if (gw < 24 || gh < 12) return;
+  BusWeatherHour hr[BUS_WEATHER_MAX];
+  int n = bus_weather_graph(&s_weather, gx, gy, gw, gh, hr, BUS_WEATHER_MAX);
+  int16_t gb = gy + gh;  // bottom of the graph (exclusive)
+  for (int i = 0; i < n; i++) {
+    if (hr[i].top >= gb) continue;
+#if defined(PBL_COLOR)
+    fill_span(ctx, GColorPictonBlue, hr[i].x0, hr[i].x1, hr[i].top, gb);
+#else
+    graphics_context_set_stroke_color(ctx, GColorBlack);   // B&W: every other column, reads as grey
+    for (int16_t xx = hr[i].x0; xx < hr[i].x1; xx++) {
+      if (!(xx & 1)) graphics_draw_line(ctx, GPoint(xx, hr[i].top), GPoint(xx, gb - 1));
+    }
+#endif
+  }
+  fill_span(ctx, PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack), gx, gx + gw, gb, gb + 1);
+  if (n == 0) return;
+  graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorRed, GColorBlack));
+  graphics_context_set_stroke_width(ctx, 2);
+  GPoint prev = GPoint(gx, hr[0].y);
+  for (int i = 0; i <= n; i++) {
+    GPoint p = i < n ? GPoint(hr[i].x, hr[i].y) : GPoint(gx + gw - 1, hr[n - 1].y);
+    graphics_draw_line(ctx, prev, p);
+    prev = p;
+  }
+  graphics_context_set_stroke_width(ctx, 1);
+}
+
 static void marquee_tick(void *data) {
   s_marquee_timer = NULL;
   if (s_wheel_layer) layer_mark_dirty(s_wheel_layer);
@@ -441,6 +498,7 @@ static void wheel_update(Layer *layer, GContext *ctx) {
   graphics_fill_rect(ctx, b, 0, GCornerNone);
 
   if (s_model.count == 0) {
+    draw_weather(ctx, bus_wheel_space_above(&s_geom), b.size.w);
     graphics_context_set_text_color(ctx, GColorBlack);
     int16_t inset = PBL_IF_ROUND_ELSE(14, 4);
     GRect r = GRect(inset, b.size.h / 2 - 34, b.size.w - 2 * inset, 50);
@@ -454,6 +512,7 @@ static void wheel_update(Layer *layer, GContext *ctx) {
 
   WheelSlot slots[WHEEL_MAX_SLOTS];
   int n = bus_wheel_layout(&s_geom, s_model.count, s_pos, slots, WHEEL_MAX_SLOTS);
+  if (n > 0 && slots[0].index == 0) draw_weather(ctx, slots[0].y, b.size.w);
   // Draw the selected row last so its bars sit on top of its neighbours.
   int sel = -1;
   for (int i = 0; i < n; i++) {
@@ -589,6 +648,14 @@ static int32_t tuple_int_or(const Tuple *t, int32_t fallback) {
 
 static const char *tuple_str(const Tuple *t) {
   return (t && t->type == TUPLE_CSTRING) ? t->value->cstring : "";
+}
+
+static const uint8_t *tuple_bytes(const Tuple *t) {
+  return (t && t->type == TUPLE_BYTE_ARRAY) ? t->value->data : NULL;
+}
+
+static int tuple_bytes_len(const Tuple *t) {
+  return (t && t->type == TUPLE_BYTE_ARRAY) ? (int)t->length : 0;
 }
 
 static void try_send_wakeup_fired(void);
@@ -731,6 +798,15 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
   }
   if (status) {
     bus_model_set_status(&s_model, tuple_str(status));
+  }
+  Tuple *wx = dict_find(iter, MESSAGE_KEY_WEATHER_COUNT);
+  if (wx) {
+    Tuple *temps = dict_find(iter, MESSAGE_KEY_WEATHER_TEMPS), *rain = dict_find(iter, MESSAGE_KEY_WEATHER_RAIN);
+    bus_weather_set(&s_weather, (int)tuple_int(wx), tuple_int(dict_find(iter, MESSAGE_KEY_WEATHER_START)),
+                    (int)tuple_int(dict_find(iter, MESSAGE_KEY_WEATHER_NOW)),
+                    (int)tuple_int(dict_find(iter, MESSAGE_KEY_WEATHER_HI)),
+                    (int)tuple_int(dict_find(iter, MESSAGE_KEY_WEATHER_LO)),
+                    tuple_bytes(temps), tuple_bytes_len(temps), tuple_bytes(rain), tuple_bytes_len(rain));
   }
   Tuple *hook = dict_find(iter, MESSAGE_KEY_REFRESH);  // phone -> watch REFRESH = test hook (see s_test_marquee)
   if (hook) apply_test_hook(tuple_int(hook));
@@ -895,6 +971,7 @@ static void init(void) {
   s_arrow_path = gpath_create(&s_arrow_info);
   bus_model_init(&s_model);
   bus_wakeup_init(&s_wakeups);
+  bus_weather_init(&s_weather);
 
   s_window = window_create();
   window_set_click_config_provider(s_window, click_config);

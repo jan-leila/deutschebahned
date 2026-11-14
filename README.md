@@ -30,6 +30,8 @@ A new system covers its home city until you save stops for it. The settings page
 
 Settings saved by older versions (one provider, pinned stops, stop scales) are migrated on the phone, including learned weights and recorded picks.
 
+**Weather** (optional, under *Nearby & timing*, off by default): the space above the first row shows the temperature now, the high and low, and the next 24 hours as a temperature line over chance-of-rain bars. It comes from [Open-Meteo](https://open-meteo.com) (no key) at your position, is fetched at most every 30 minutes, and follows the watch's units (°F or °C).
+
 On the watch the list is a **rotating drum**. The selected row is full size, with bars in its route color above and below it and a colored route badge. Rows further away shrink, dim and narrow (following the circle on round watches), and scrolling animates between rows.
 
 ## Build
@@ -56,6 +58,7 @@ Each part is tested on its own (see `CONTRACTS.md` for the interfaces):
 | phone⇄watch protocol, session | `test/protocol.test.js`, `test/session.test.js` | `node tools/run-tests.js protocol session` |
 | settings page (headless Chromium) | `test/config-page.test.js` | `node tools/run-tests.js config-page` |
 | settings page screenshots (visual regression) | `test/settings-screenshots/baseline/` | `node tools/settings-screenshots.js [--update] [--only REGEX] [light\|dark]` |
+| weather panel (forecast, message, watch model) | `test/weather.test.js`, `test/c/test_bus_weather.c` | `node tools/run-tests.js weather c-model` |
 | watch UI model + wheel layout (host gcc) | `test/c/test_bus_model.c`, `test/c/test_bus_wheel.c` | `node tools/run-tests.js c-model` |
 | watch UI in the emulator (fixture data) | `tools/test-ui-emulator.sh [platform]` | |
 | integration (all JS parts together) | `test/integration.test.js`, `test/pkjs-glue.test.js` | `node tools/run-tests.js integration pkjs-glue` |

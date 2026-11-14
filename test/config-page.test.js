@@ -634,7 +634,7 @@ test('config page: walking speed lives on the Nearby & timing page (also used fo
   } finally { await page.close(); }
 });
 
-test('config page: watch display switches for the walking time and the direction arrow', { skip }, async () => {
+test('config page: watch display switches for the walking time, the direction arrow and the weather', { skip }, async () => {
   const page = await load(destParams());
   try {
     for (const f of ['showWalk', 'showArrow']) {
@@ -642,10 +642,16 @@ test('config page: watch display switches for the walking time and the direction
       assert.equal(await page.eval(`document.querySelector('[data-field="${f}"]').checked`), true, f + ' on by default');
       assert.equal(await page.eval(`document.querySelector('[data-field="${f}"]').closest('.page').getAttribute('data-page')`), 'nearby');
     }
+    const w = `document.querySelector('[data-field="showWeather"]')`;
+    assert.equal(await page.eval(`${w}.type`), 'checkbox');
+    assert.equal(await page.eval(`${w}.checked`), false, 'showWeather off by default');
+    assert.equal(await page.eval(`${w}.closest('.page').getAttribute('data-page')`), 'nearby');
     await page.eval(`document.querySelector('[data-field="showArrow"]').click()`);
+    await page.eval(`${w}.click()`);
     const out = await saved(page);
     assert.equal(out.config.showWalk, true);
     assert.equal(out.config.showArrow, false);
+    assert.equal(out.config.showWeather, true);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });

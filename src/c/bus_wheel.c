@@ -119,3 +119,12 @@ int bus_wheel_layout(const WheelGeometry *g, int count, int32_t pos_milli, Wheel
   }
   return n;
 }
+
+int16_t bus_wheel_space_above(const WheelGeometry *g) {
+  int32_t top = g->height / 2 - div_round(g->row_h[0], 2);
+  return (int16_t)(top > 0 ? top : 0);
+}
+
+int16_t bus_wheel_round_inset(const WheelGeometry *g, int32_t y, int32_t h) {
+  return g->round ? chord_inset(g, y, h) : 0;
+}

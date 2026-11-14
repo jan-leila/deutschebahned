@@ -60,7 +60,14 @@
       "ITEM_ROUTE",
       "TEST_NOW",
       "WATCH_PREFS",
-      "ITEM_WALK"
+      "ITEM_WALK",
+      "WEATHER_COUNT",
+      "WEATHER_START",
+      "WEATHER_NOW",
+      "WEATHER_HI",
+      "WEATHER_LO",
+      "WEATHER_TEMPS",
+      "WEATHER_RAIN"
     ],
     "capabilities": [
       "configurable",

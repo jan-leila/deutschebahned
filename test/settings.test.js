@@ -22,6 +22,7 @@ test('defaults match the contract', () => {
   assert.equal(d.vehicleRadius, 250);
   assert.equal(d.showWalk, true);
   assert.equal(d.showArrow, true);
+  assert.equal(d.showWeather, false);
   assert.deepEqual(d.routes, []);
   assert.deepEqual(d.stops, []);
   for (const gone of ['provider', 'connections', 'stopScales', 'defaultStopScale', 'defaultRouteScale', 'defaultConnectionScale',
@@ -226,4 +227,10 @@ test('showWalk / showArrow: booleans, default on', () => {
   assert.equal(c.showWalk, false);
   assert.equal(c.showArrow, false);
   assert.equal(settings.normalize({ showWalk: 'maybe' }).showWalk, true);
+});
+
+test('showWeather: boolean, default off', () => {
+  assert.equal(settings.normalize({ version: 2, providers: P, showWeather: 'true' }).showWeather, true);
+  assert.equal(settings.normalize({ version: 2, providers: P, showWeather: 1 }).showWeather, true);
+  assert.equal(settings.normalize({ showWeather: 'maybe' }).showWeather, false);
 });

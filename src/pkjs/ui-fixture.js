@@ -150,9 +150,21 @@ var STEPS = [
   function () { sendList([], 'No stops nearby'); } // 10 empty list / status screen
 ];
 
+// Weather panel (§17): 24 hours from FIXED_NOW, 4° now warming to 9° in the afternoon, a rainy spell in between.
+function sendWeather() {
+  var temps = [], rain = [];
+  for (var i = 0; i < 24; i++) {
+    temps.push(Math.round(255 * (0.5 - 0.5 * Math.cos((i - 1) / 24 * 2 * Math.PI))));
+    rain.push(i >= 3 && i <= 8 ? [20, 45, 80, 90, 60, 30][i - 3] : i >= 18 ? 10 : 0);
+  }
+  sender.sendAll([{ WEATHER_COUNT: 24, WEATHER_START: FIXED_NOW, WEATHER_NOW: 4, WEATHER_HI: 9, WEATHER_LO: 3,
+                    WEATHER_TEMPS: temps, WEATHER_RAIN: rain }]);
+}
+
 Pebble.addEventListener('ready', function () {
   console.log('UI-FIXTURE ready');
   sendList(mainItems());
+  sendWeather();
   sendWakeups();
 });
 

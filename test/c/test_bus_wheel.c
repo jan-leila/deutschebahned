@@ -129,7 +129,22 @@ static void test_round(void) {
   CHECK(sel->inset <= 8);  // only the chord of a 70 px row at the centre
 }
 
+static void test_space_above(void) {
+  WheelGeometry g;
+  bus_wheel_geometry(&g, 144, 152, false);
+  CHECK_EQ(bus_wheel_space_above(&g), 76 - 35);   // row 0 (70 px) centred
+  WheelSlot s[WHEEL_MAX_SLOTS];
+  bus_wheel_layout(&g, 5, 0, s, WHEEL_MAX_SLOTS);
+  CHECK_EQ(s[0].y, bus_wheel_space_above(&g));
+  CHECK_EQ(bus_wheel_round_inset(&g, 0, 41), 0);
+  bus_wheel_geometry(&g, 180, 140, true);
+  CHECK_EQ(bus_wheel_space_above(&g), 35);
+  CHECK_EQ(bus_wheel_round_inset(&g, 0, 35), 90 - 56);  // r 90, 70 px above the centre: half chord isqrt(8100-4900)
+  CHECK_EQ(bus_wheel_round_inset(&g, 60, 20), 1);   // 10 px off centre: 90 - isqrt(8000)
+}
+
 int main(void) {
+  test_space_above();
   test_geometry();
   test_static_layout();
   test_edges();

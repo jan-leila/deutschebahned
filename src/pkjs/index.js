@@ -8,6 +8,7 @@ var triggers = require('../common/triggers');
 var tripItems = require('../common/trip-items');
 var federation = require('../common/federation');
 var catalog = require('../common/catalog');
+var weather = require('../common/weather');
 // Data sources are plug-ins: this composition root is the only place that picks them.
 var sources = require('../sources/registry').createRegistry(require('../sources/all'));
 
@@ -186,6 +187,7 @@ var session = sessionModule.createSession({
   locale: locale(),
   locate: locate,
   createProvider: providerFor,
+  weather: weather.createFetcher(http, clock),
   send: function (messages) {
     sender.sendAll(messages);
   },

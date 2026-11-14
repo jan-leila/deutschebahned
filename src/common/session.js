@@ -4,6 +4,7 @@
 var settings = require('./settings');
 var protocol = require('./protocol');
 var view = require('./view');
+var weather = require('./weather');
 
 var STORAGE_KEYS = { config: 'busWatch.config', samples: 'busWatch.samples', learned: 'busWatch.learned', prefs: 'busWatch.prefs' };
 
@@ -48,6 +49,8 @@ function createSession(deps) {
   var last = null;        // { listId, items, pinned, ranked, pos, now, cfg }
   var running = false;
   var rerun = false;      // a refresh was requested by applySettings while one was running
+  var forecast = null;    // the last forecast fetched (weather.parse), resent when the units change
+  var weatherShown = false;
 
   function send(messages) {
     try {
@@ -151,7 +154,35 @@ function createSession(deps) {
       var id = sendList(last.items, 'Updated ' + clockText(clock()));
       last.listId = id;
     }
+    if (unitsChanged && config.showWeather) sendWeather();
     return true;
+  }
+
+  // The weather panel (config.showWeather, deps.weather(pos, cb) → weather.parse result): fetched alongside each
+  // refresh and sent on its own; a failed fetch keeps the last one. Turned off → the watch is told to hide it.
+  function sendWeather() {
+    if (!forecast) return;
+    var w = weather.slice(forecast, clock());
+    weatherShown = !!w;
+    send([protocol.encodeWeather(w, prefs.units)]);
+  }
+
+  function updateWeather(pos) {
+    if (!config.showWeather || typeof deps.weather !== 'function') {
+      forecast = null;
+      if (weatherShown) {
+        weatherShown = false;
+        send([protocol.encodeWeather(null)]);
+      }
+      return;
+    }
+    if (!pos) return;
+    deps.weather(pos, function (err, data) {
+      if (err) return log('weather failed: ' + errorText(err));
+      if (!config.showWeather) return;
+      forecast = data;
+      sendWeather();
+    });
   }
 
   function locate(cb) {
@@ -189,10 +220,12 @@ function createSession(deps) {
       }
     }
 
+    if (!config.showWeather) updateWeather(null);
     sendStatus('Locating...');
     locate(function (err, pos) {
       if (err) return finish(err);
       if (!pos) return finish(new Error('no position'));
+      if (config.showWeather) updateWeather(pos);
       sendStatus('Loading...');
       var prov, cache, cfg;
       try {

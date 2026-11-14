@@ -26,3 +26,7 @@ void bus_wheel_geometry(WheelGeometry *g, int16_t width, int16_t height, bool ro
 // Lays out the rows visible at position pos_milli (selected index * 1000, fractional while animating).
 // Writes at most max_out slots ordered by index; returns how many.
 int bus_wheel_layout(const WheelGeometry *g, int count, int32_t pos_milli, WheelSlot *out, int max_out);
+// Room above the first row while it is selected (pos 0): the weather panel's height.
+int16_t bus_wheel_space_above(const WheelGeometry *g);
+// Horizontal inset (each side) that keeps a band [y, y+h) of the wheel area inside the circle; 0 on rectangular screens.
+int16_t bus_wheel_round_inset(const WheelGeometry *g, int32_t y, int32_t h);

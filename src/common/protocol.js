@@ -137,6 +137,26 @@ function encodeNotify(n) {
   };
 }
 
+// Weather panel (weather.slice: °C) → one message: WEATHER_COUNT n (0 = hide the panel; null → just that),
+// WEATHER_START (epoch s of the first hour), WEATHER_NOW / WEATHER_HI / WEATHER_LO (whole degrees in the watch's units:
+// °F unless 'metric'), WEATHER_TEMPS (n bytes, each hour's temperature scaled lo → 0 … hi → 255; all 128 when hi = lo)
+// and WEATHER_RAIN (n bytes, chance of rain 0..100).
+var WEATHER_MAX_HOURS = 24;
+function encodeWeather(w, units) {
+  var temps = w && w.temps instanceof Array ? w.temps : [];
+  var n = Math.min(temps.length, WEATHER_MAX_HOURS);
+  if (!n) return { WEATHER_COUNT: 0 };
+  function deg(c) { return Math.round(units === 'metric' ? c : c * 9 / 5 + 32); }
+  var lo = w.lo, span = w.hi - w.lo, rain = w.rain instanceof Array ? w.rain : [];
+  var tb = [], rb = [];
+  for (var i = 0; i < n; i++) {
+    tb.push(span > 0 ? Math.max(0, Math.min(255, Math.round((temps[i] - lo) / span * 255))) : 128);
+    rb.push(Math.max(0, Math.min(100, toInt(rain[i]))));
+  }
+  return { WEATHER_COUNT: n, WEATHER_START: toInt(w.start), WEATHER_NOW: deg(w.now), WEATHER_HI: deg(w.hi),
+           WEATHER_LO: deg(w.lo), WEATHER_TEMPS: tb, WEATHER_RAIN: rb };
+}
+
 function has(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj, key) && obj[key] !== undefined && obj[key] !== null;
 }
@@ -254,6 +274,8 @@ module.exports = {
   encodeStatus: encodeStatus,
   encodeWakeups: encodeWakeups,
   encodeNotify: encodeNotify,
+  encodeWeather: encodeWeather,
+  WEATHER_MAX_HOURS: WEATHER_MAX_HOURS,
   decodeWatchMessage: decodeWatchMessage,
   PREFS: PREFS,
   createSender: createSender

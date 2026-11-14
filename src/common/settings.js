@@ -63,6 +63,7 @@ function defaults() {
     vehicleRadius: 250,
     showWalk: true,    // watch: walking time to a stop, right-aligned in the tile's times line
     showArrow: true,   // watch: the arrow pointing at the stop
+    showWeather: false, // watch: weather (now, high / low, temperature + chance of rain) above the first row (Open-Meteo)
     routes: [],
     stops: [],
     destinations: [],
@@ -310,6 +311,7 @@ function normalize(raw) {
 
   out.showWalk = bool(r.showWalk, d.showWalk);
   out.showArrow = bool(r.showArrow, d.showArrow);
+  out.showWeather = bool(r.showWeather, d.showWeather);
   out.routes = normalizeRoutes(lists.routes, out.providers);
   out.stops = normalizeStops(lists.stops, out.providers);
 
