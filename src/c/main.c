@@ -7,6 +7,7 @@
 #include "bus_wakeup.h"
 #include "bus_marquee.h"
 #include "bus_weather.h"
+#include "bus_nav.h"
 
 #define STATUS_H 16
 #define ROUND_STATUS_Y 4
@@ -29,6 +30,7 @@ static TextLayer *s_status_layer;
 static Layer *s_wheel_layer;
 static BusModel s_model;
 static BusWeather s_weather;
+static BusNav s_nav;
 static WheelGeometry s_geom;
 
 static int s_sel;            // selected row
@@ -268,18 +270,22 @@ static bool draw_times(GContext *ctx, const BusItem *it, int32_t now, GFont font
 }
 
 // Arrow pointing at a stop, filled with the route color (black on B&W), outlined when the color is light.
-static void draw_arrow(GContext *ctx, const BusItem *it, int16_t cx, int16_t cy, int16_t r) {
+static void draw_arrow_at(GContext *ctx, int bearing, int32_t color, int16_t cx, int16_t cy, int16_t r) {
   BusPoint p[4];
-  bus_arrow_points(bus_arrow_angle(it->bearing, s_heading), cx, cy, r, p);
+  bus_arrow_points(bus_arrow_angle(bearing, s_heading), cx, cy, r, p);
   for (int i = 0; i < 4; i++) s_arrow_points[i] = GPoint(p[i].x, p[i].y);
-  graphics_context_set_fill_color(ctx, route_color(it->color));
+  graphics_context_set_fill_color(ctx, route_color(color));
   gpath_draw_filled(ctx, s_arrow_path);
 #if defined(PBL_COLOR)
-  if (bus_color_prefers_dark_text(it->color)) {
+  if (bus_color_prefers_dark_text(color)) {
     graphics_context_set_stroke_color(ctx, GColorBlack);
     gpath_draw_outline(ctx, s_arrow_path);
   }
 #endif
+}
+
+static void draw_arrow(GContext *ctx, const BusItem *it, int16_t cx, int16_t cy, int16_t r) {
+  draw_arrow_at(ctx, it->bearing, it->color, cx, cy, r);
 }
 
 // Small direction label ("North") right of the badge; returns the width used (incl. spacing), 0 when none.
@@ -559,9 +565,6 @@ static void wheel_update(Layer *layer, GContext *ctx) {
     int16_t inset = PBL_IF_ROUND_ELSE(14, 4);
     GRect r = GRect(inset, b.size.h / 2 - 34, b.size.w - 2 * inset, 50);
     graphics_draw_text(ctx, s_model.status, s_f18b, r, GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
-    r = GRect(inset, b.size.h / 2 + 16, b.size.w - 2 * inset, 20);
-    graphics_draw_text(ctx, "Hold SELECT to refresh", s_f14, r, GTextOverflowModeTrailingEllipsis,
-                       GTextAlignmentCenter, NULL);
     schedule_marquee();
     return;
   }
@@ -684,6 +687,103 @@ static void notify_show(const char *title, const char *body, int32_t color) {
   window_stack_push(s_notify_window, !shown);
   vibes_double_pulse();
   light_enable_interaction();
+}
+
+// ---- Navigation window --------------------------------------------------------
+// Opened by the phone (NAV_STATE 1 / 2) after a long SELECT on a tile: the instruction on a route-colour header, an
+// arrow to the target with its distance, and a detail line. The phone follows the GPS and moves through the steps;
+// BACK closes the window and tells it to stop.
+
+static Window *s_nav_window;
+static Layer *s_nav_layer;
+
+static void nav_update(Layer *layer, GContext *ctx) {
+  GRect b = layer_get_bounds(layer);
+  int16_t inset = PBL_IF_ROUND_ELSE(22, 6);
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_fill_rect(ctx, b, 0, GCornerNone);
+
+  // header: the instruction, two lines at most, shrinking to the small bold font when it does not fit
+  GFont hf = s_f24b;
+  GRect tr = GRect(inset, PBL_IF_ROUND_ELSE(14, 4), b.size.w - 2 * inset, 60);
+  GSize sz = graphics_text_layout_get_content_size(s_nav.text, hf, tr, GTextOverflowModeWordWrap, GTextAlignmentCenter);
+  if (sz.h > 2 * 26) {
+    hf = s_f18b;
+    sz = graphics_text_layout_get_content_size(s_nav.text, hf, tr, GTextOverflowModeWordWrap, GTextAlignmentCenter);
+  }
+  int16_t hh = tr.origin.y + sz.h + 8;
+  if (hh > tr.origin.y + 60) hh = tr.origin.y + 60;
+  graphics_context_set_fill_color(ctx, route_color(s_nav.color));
+  graphics_fill_rect(ctx, GRect(0, 0, b.size.w, hh), 0, GCornerNone);
+  graphics_context_set_text_color(ctx, badge_text_color(s_nav.color));
+  tr.size.h = hh - tr.origin.y;
+  graphics_draw_text(ctx, s_nav.text, hf, tr, GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+
+  // footer: the detail line (two lines at most), the distance above it
+  graphics_context_set_text_color(ctx, GColorBlack);
+  int16_t sub_h = s_nav.sub[0] ? 40 : 0, bottom_pad = PBL_IF_ROUND_ELSE(16, 2);
+  if (sub_h) {
+    GRect sr = GRect(inset, b.size.h - sub_h - bottom_pad, b.size.w - 2 * inset, sub_h);
+    graphics_draw_text(ctx, s_nav.sub, s_f18, sr, GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  }
+  int16_t dist_h = s_nav.dist[0] ? 28 : 0, foot = b.size.h - sub_h - bottom_pad;
+  if (dist_h) {
+    GRect dr = GRect(inset, foot - dist_h, b.size.w - 2 * inset, dist_h);
+    graphics_draw_text(ctx, s_nav.dist, s_f24b, dr, GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  }
+  // the arrow fills the room between them
+  int16_t atop = hh + 6, abot = foot - dist_h - 4;
+  if (s_nav.bearing >= 0 && abot - atop >= 20) {
+    int16_t r = (abot - atop) / 2;
+    if (r > b.size.w / 3) r = b.size.w / 3;
+    draw_arrow_at(ctx, s_nav.bearing, s_nav.color, b.size.w / 2, (atop + abot) / 2, r);
+  }
+}
+
+static void nav_window_load(Window *window) {
+  Layer *root = window_get_root_layer(window);
+  window_set_background_color(window, GColorWhite);
+  s_nav_layer = layer_create(layer_get_bounds(root));
+  layer_set_update_proc(s_nav_layer, nav_update);
+  layer_add_child(root, s_nav_layer);
+}
+
+static void send_nav_stop(void) {
+  DictionaryIterator *out;
+  if (app_message_outbox_begin(&out) != APP_MSG_OK) return;
+  dict_write_int32(out, MESSAGE_KEY_NAV_STOP, 1);
+  app_message_outbox_send();
+}
+
+static void nav_window_unload(Window *window) {
+  layer_destroy(s_nav_layer);
+  s_nav_layer = NULL;
+  bus_nav_init(&s_nav);
+  send_nav_stop();   // BACK (or the phone's own close: it ignores a stop it did not expect)
+}
+
+// A NAV_* message from the phone: open / update / close the window; a new step buzzes the wrist.
+static void nav_apply(int state, const char *text, const char *sub, const char *dist, int bearing, int32_t color) {
+  bool shown = s_nav_window && window_stack_contains_window(s_nav_window);
+  if (state != BUS_NAV_GUIDING && state != BUS_NAV_ARRIVED) {
+    bus_nav_init(&s_nav);
+    if (shown) window_stack_remove(s_nav_window, true);
+    return;
+  }
+  bool new_step = bus_nav_set(&s_nav, state, text, sub, dist, bearing, color);
+  if (!shown) {
+    if (!s_nav_window) {
+      s_nav_window = window_create();
+      window_set_window_handlers(s_nav_window, (WindowHandlers){ .load = nav_window_load, .unload = nav_window_unload });
+    }
+    window_stack_push(s_nav_window, true);
+  } else if (s_nav_layer) {
+    layer_mark_dirty(s_nav_layer);
+  }
+  if (new_step) {
+    vibes_short_pulse();
+    light_enable_interaction();
+  }
 }
 
 // ---- AppMessage -------------------------------------------------------------
@@ -865,6 +965,13 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
                     (int)tuple_int(dict_find(iter, MESSAGE_KEY_WEATHER_LO)),
                     tuple_bytes(temps), tuple_bytes_len(temps), tuple_bytes(rain), tuple_bytes_len(rain));
   }
+  Tuple *nav_state = dict_find(iter, MESSAGE_KEY_NAV_STATE);
+  if (nav_state) {
+    nav_apply((int)tuple_int(nav_state), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_TEXT)),
+              tuple_str(dict_find(iter, MESSAGE_KEY_NAV_SUB)), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_DIST)),
+              (int)tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_BEARING), -1),
+              tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_COLOR), -1));
+  }
   Tuple *hook = dict_find(iter, MESSAGE_KEY_REFRESH);  // phone -> watch REFRESH = test hook (see s_test_marquee)
   if (hook) apply_test_hook(tuple_int(hook));
   Tuple *test_now = dict_find(iter, MESSAGE_KEY_TEST_NOW);
@@ -910,10 +1017,12 @@ static void send_select(int index) {
   app_message_outbox_send();
 }
 
-static void send_refresh(void) {
+// Long SELECT: ask the phone to navigate to the selected tile (index -1: nothing is selected).
+static void send_nav_start(int index) {
   DictionaryIterator *out;
   if (app_message_outbox_begin(&out) != APP_MSG_OK) return;
-  dict_write_int32(out, MESSAGE_KEY_REFRESH, 1);
+  dict_write_int32(out, MESSAGE_KEY_NAV_START, index);
+  dict_write_int32(out, MESSAGE_KEY_LIST_ID, s_model.list_id);
   app_message_outbox_send();
 }
 
@@ -928,6 +1037,7 @@ static void compass_handler(CompassHeadingData data) {
   if (heading != s_heading) {
     s_heading = heading;
     if (s_wheel_layer) layer_mark_dirty(s_wheel_layer);
+    if (s_nav_layer) layer_mark_dirty(s_nav_layer);
   }
 }
 
@@ -955,7 +1065,7 @@ static void select_click(ClickRecognizerRef rec, void *ctx) {
 }
 
 static void select_long_click(ClickRecognizerRef rec, void *ctx) {
-  send_refresh();
+  send_nav_start(bus_model_item(&s_model, s_sel) ? s_sel : -1);
 }
 
 static void click_config(void *ctx) {
@@ -1029,6 +1139,7 @@ static void init(void) {
   bus_model_init(&s_model);
   bus_wakeup_init(&s_wakeups);
   bus_weather_init(&s_weather);
+  bus_nav_init(&s_nav);
 
   s_window = window_create();
   window_set_click_config_provider(s_window, click_config);
@@ -1064,6 +1175,7 @@ static void deinit(void) {
   tick_timer_service_unsubscribe();
   app_message_deregister_callbacks();
   if (s_notify_window) window_destroy(s_notify_window);
+  if (s_nav_window) window_destroy(s_nav_window);
   window_destroy(s_window);
   gpath_destroy(s_arrow_path);
 }

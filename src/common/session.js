@@ -247,7 +247,7 @@ function createSession(deps) {
           var list = withPinned(pinned, ranked);
           var status = list.length === 0 ? 'No buses nearby' : 'Updated ' + clockText(clock());
           var id = sendList(list, status);
-          last = { listId: id, items: list, pinned: pinned, ranked: ranked, pos: pos, now: now, cfg: cfg };
+          last = { listId: id, items: list, pinned: pinned, ranked: ranked, pos: pos, now: now, cfg: cfg, data: data };
           ranked = list;
         } catch (e) {
           return finish(e);
@@ -306,7 +306,7 @@ function createSession(deps) {
     var ranked = rank.rank(candidates, cfg, learned);
     var list = withPinned(pinned, ranked);
     var newId = sendList(list, 'Learned (' + samples.length + ' picks)');
-    last = { listId: newId, items: list, pinned: pinned, ranked: ranked, pos: last.pos, now: last.now, cfg: cfg };
+    last = { listId: newId, items: list, pinned: pinned, ranked: ranked, pos: last.pos, now: last.now, cfg: cfg, data: last.data };
     return true;
   }
 
@@ -317,7 +317,6 @@ function createSession(deps) {
       return null;
     }
     if (msg.type === 'select') select(msg.listId, msg.index);
-    else if (msg.type === 'refresh') refresh();
     else if (msg.type === 'prefs') setPrefs(msg);
     return msg;   // e.g. {type: 'wakeup'} is routed to the scheduler by the composition root
   }

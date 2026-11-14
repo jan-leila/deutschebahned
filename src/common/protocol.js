@@ -6,6 +6,7 @@ var TITLE_MAX_BYTES = 63;        // full stop names: the watch scrolls (marquee)
 var ROUTE_MAX_BYTES = 63;        // the route's full name (ITEM_ROUTE)
 var NOTIFY_TITLE_MAX_BYTES = 31;
 var BADGE_MAX_BYTES = 7;
+var NAV_TEXT_MAX_BYTES = 47;
 var STATUS_MAX_BYTES = 47;
 var MAX_ITEMS = 12;
 var DIST_MAX_BYTES = 7;
@@ -118,6 +119,20 @@ function encodeList(listId, items, status, opts) {
   return out;
 }
 
+// Navigation guidance for the watch's nav window (CONTRACTS.md §18). null → {NAV_STATE: 0} (close the window).
+// n = {state: 1 guiding | 2 arrived, text, sub, distance (m), bearing (deg, null = no arrow), color, units}
+function encodeNav(n) {
+  if (!n) return { NAV_STATE: 0 };
+  return {
+    NAV_STATE: n.state === 2 ? 2 : 1,
+    NAV_TEXT: truncateUtf8(n.text, NAV_TEXT_MAX_BYTES),
+    NAV_SUB: truncateUtf8(n.sub, NAV_TEXT_MAX_BYTES),
+    NAV_DIST: encodeDistance(n.distance, n.units),
+    NAV_BEARING: encodeBearing(n.bearing),
+    NAV_COLOR: encodeColor(n.color)
+  };
+}
+
 function encodeStatus(status) {
   return { STATUS: truncateUtf8(status, STATUS_MAX_BYTES) };
 }
@@ -173,7 +188,10 @@ function decodeWatchMessage(payload) {
   if (has(payload, 'SELECT_INDEX') && has(payload, 'LIST_ID')) {
     return { type: 'select', listId: Number(payload.LIST_ID), index: Number(payload.SELECT_INDEX) };
   }
-  if (has(payload, 'REFRESH')) return { type: 'refresh' };
+  if (has(payload, 'NAV_START') && has(payload, 'LIST_ID')) {
+    return { type: 'navStart', listId: Number(payload.LIST_ID), index: Number(payload.NAV_START) };
+  }
+  if (has(payload, 'NAV_STOP')) return { type: 'navStop' };
   if (has(payload, 'WATCH_PREFS')) return decodePrefs(payload.WATCH_PREFS);
   return null;
 }
@@ -278,6 +296,7 @@ module.exports = {
   truncateUtf8: truncateUtf8,
   encodeList: encodeList,
   encodeStatus: encodeStatus,
+  encodeNav: encodeNav,
   encodeWakeups: encodeWakeups,
   encodeNotify: encodeNotify,
   encodeWeather: encodeWeather,

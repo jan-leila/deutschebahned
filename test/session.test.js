@@ -222,8 +222,9 @@ test('select: autoTrain off records only; samples capped at maxSamples (newest k
 test('handleWatchMessage dispatches and returns the decoded message', async () => {
   const h = harness();
   h.session.load();
-  assert.deepEqual(h.session.handleWatchMessage({ REFRESH: 1 }), { type: 'refresh' });
-  await new Promise(r => setTimeout(r, 20));
+  assert.equal(h.session.handleWatchMessage({ REFRESH: 1 }), null, 'a watch REFRESH is ignored');
+  assert.deepEqual(h.session.handleWatchMessage({ NAV_START: 0, LIST_ID: 1 }), { type: 'navStart', listId: 1, index: 0 });
+  await refresh(h.session);
   assert.equal(h.calls.gather, 1);
   assert.deepEqual(h.session.handleWatchMessage({ SELECT_INDEX: 0, LIST_ID: 1 }), { type: 'select', listId: 1, index: 0 });
   assert.equal(h.session.getSamples().length, 1);

@@ -63,6 +63,7 @@ function defaults() {
     refreshInterval: 60,
     vehicleRadius: 250,
     walkDeadZone: 60,  // watch: a pickup time sooner than the walk to the stop plus this many seconds is highlighted
+    routingUrl: '',    // optional walking-route service for navigation (routing.js): URL template with {fromLat} {fromLon} {toLat} {toLon}
     showWalk: true,    // watch: walking time to a stop, right-aligned in the tile's times line
     showArrow: true,   // watch: the arrow pointing at the stop
     showWeather: false, // watch: weather (now, high / low, temperature + chance of rain) above the first row (Open-Meteo)
@@ -311,6 +312,8 @@ function normalize(raw) {
     if (RANGES.hasOwnProperty(f)) out[f] = num(r[f], d[f], RANGES[f]);
   }
 
+  var ru = str(r.routingUrl, '');
+  out.routingUrl = /^https?:\/\/\S+$/i.test(ru) && ru.length <= 300 ? ru : '';
   out.showWalk = bool(r.showWalk, d.showWalk);
   out.showArrow = bool(r.showArrow, d.showArrow);
   out.showWeather = bool(r.showWeather, d.showWeather);

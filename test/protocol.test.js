@@ -61,7 +61,10 @@ test('encodeStatus', () => {
 test('decodeWatchMessage', () => {
   assert.deepEqual(protocol.decodeWatchMessage({ SELECT_INDEX: 2, LIST_ID: 9 }), { type: 'select', listId: 9, index: 2 });
   assert.deepEqual(protocol.decodeWatchMessage({ SELECT_INDEX: 0, LIST_ID: 1 }), { type: 'select', listId: 1, index: 0 });
-  assert.deepEqual(protocol.decodeWatchMessage({ REFRESH: 1 }), { type: 'refresh' });
+  assert.equal(protocol.decodeWatchMessage({ REFRESH: 1 }), null, 'long SELECT no longer refreshes');
+  assert.deepEqual(protocol.decodeWatchMessage({ NAV_START: 2, LIST_ID: 7 }), { type: 'navStart', listId: 7, index: 2 });
+  assert.deepEqual(protocol.decodeWatchMessage({ NAV_START: -1, LIST_ID: 7 }), { type: 'navStart', listId: 7, index: -1 });
+  assert.deepEqual(protocol.decodeWatchMessage({ NAV_STOP: 1 }), { type: 'navStop' });
   assert.equal(protocol.decodeWatchMessage({ SELECT_INDEX: 2 }), null);
   assert.equal(protocol.decodeWatchMessage({}), null);
   assert.equal(protocol.decodeWatchMessage(null), null);

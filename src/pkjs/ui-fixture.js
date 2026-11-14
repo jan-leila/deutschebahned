@@ -10,7 +10,7 @@
 // {TEST_NOW: FIXED_NOW}, which the watch then shows its times against (times carry +20 s of slack).
 //
 // On 'ready': the main list + a wakeup list (cookie 1 fires at FIXED_NOW + 70 s; reported back as 'UI-FIXTURE wakeup 1').
-// Every REFRESH (long SELECT) from the watch logs 'UI-FIXTURE refresh' and runs the next entry of STEPS; a step can set
+// Every NAV_START (long SELECT) from the watch logs 'UI-FIXTURE refresh' and runs the next entry of STEPS; a step can set
 // the watch's test hook ({REFRESH: v}, CONTRACTS.md §11: v >= 0 freezes the marquee clock at v ms, MARQUEE_END at the
 // end of its scroll, v <= -1000 freezes the wheel between rows), send another list, a notification, or an empty list.
 // tools/screenshots.sh walks these steps in order: keep the two in sync.
@@ -147,7 +147,11 @@ var STEPS = [
   function () { hook(MARQUEE_END); },             // 7 long title scrolled to its end
   function () { sendList(tripItems()); hook(0); },// 8 planned-trip tiles pinned first
   function () { sendNotify(); },                  // 9 notification window
-  function () { sendList([], 'No stops nearby'); } // 10 empty list / status screen
+  function () { sendList([], 'No stops nearby'); }, // 10 empty list / status screen
+  function () { sender.sendAll([{ NAV_STATE: 1, NAV_TEXT: 'Walk to Franklin Av & Lyndale Av S', NAV_SUB: '4 min walk \u00B7 2 at 8:09 AM',
+                                  NAV_DIST: '320ft', NAV_BEARING: 90, NAV_COLOR: 0x771473 }]); },  // 11 navigation: walking to a stop
+  function () { sender.sendAll([{ NAV_STATE: 2, NAV_TEXT: 'Wait for the 2', NAV_SUB: 'Next 5 min',
+                                  NAV_DIST: '', NAV_BEARING: -1, NAV_COLOR: 0x771473 }]); }          // 12 navigation: arrived
 ];
 
 // Weather panel (§17): 24 hours from FIXED_NOW, 4° now warming to 9° in the afternoon, a rainy spell in between.
@@ -178,7 +182,7 @@ Pebble.addEventListener('appmessage', function (e) {
   if (!msg) return;
   if (msg.type === 'select') {
     console.log('UI-FIXTURE select ' + msg.listId + ' ' + msg.index);
-  } else if (msg.type === 'refresh') {
+  } else if (msg.type === 'navStart') {
     console.log('UI-FIXTURE refresh');
     if (step < STEPS.length) STEPS[step++]();
     console.log('UI-FIXTURE step ' + step);

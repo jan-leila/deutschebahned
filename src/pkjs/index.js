@@ -9,6 +9,8 @@ var tripItems = require('../common/trip-items');
 var federation = require('../common/federation');
 var catalog = require('../common/catalog');
 var weather = require('../common/weather');
+var routing = require('../common/routing');
+var navModule = require('../common/nav');
 // Data sources are plug-ins: this composition root is the only place that picks them.
 var sources = require('../sources/registry').createRegistry(require('../sources/all'));
 
@@ -216,6 +218,22 @@ var scheduler = schedulerModule.createScheduler({
   log: log
 });
 
+// navigation (hold SELECT on the watch): guidance to a stop or through a scheduled trip, from the last list sent
+var nav = navModule.createNav({
+  send: function (messages) { sender.sendAll(messages); },
+  locate: locate,
+  clock: clock,
+  getList: function () { return session.lastList(); },
+  getConfig: function () { return session.getConfig(); },
+  getUnits: function () { return session.getPrefs().units; },
+  getPlan: function (destId) {
+    var entry = scheduler.plans()[destId];
+    return entry && entry.plan ? entry.plan : null;
+  },
+  route: routing.createFetcher(http),
+  log: log
+});
+
 function checkDue(then) {
   scheduler.checkDue(function (err, sent) {
     if (err) log('schedule check error: ' + (err.message || err));
@@ -275,6 +293,8 @@ Pebble.addEventListener('appmessage', function (e) {
   log('watch message: ' + JSON.stringify(e.payload));
   var msg = session.handleWatchMessage(e.payload);
   if (msg && msg.type === 'wakeup') scheduler.handleWakeup(msg.cookie);
+  else if (msg && msg.type === 'navStart') nav.start(msg.listId, msg.index);
+  else if (msg && msg.type === 'navStop') nav.stop(true);
 });
 
 Pebble.addEventListener('showConfiguration', function () {
@@ -301,6 +321,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
     return;
   }
   session.applySettings(result);
+  nav.stop();
   armTimer();
   replan();
   later(refreshCatalogs, CATALOG_DELAY_MS);

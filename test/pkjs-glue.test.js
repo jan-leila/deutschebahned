@@ -114,7 +114,7 @@ test('pkjs glue: ready -> list, select -> sample, settings page open/close', asy
     await tick(100);
 
     fakes.fire('webviewclosed', { response: '' }); // cancelled settings page: no crash
-    fakes.fire('appmessage', { payload: { REFRESH: 1 } });
+    fakes.fire('appmessage', { payload: { NAV_STOP: 1 } });
     await tick(100);
   } finally { fakes.restore(); }
 });

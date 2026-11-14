@@ -71,6 +71,7 @@ Config shape and defaults (distances are always **meters**, speeds m/s; the sett
 | `refreshInterval` | 60 | 15..3600 integer — seconds |
 | `showWalk` | `true` | boolean — the watch shows the walking time to a stop (ITEM_WALK) |
 | `walkDeadZone` | 60 | 0..600 integer — seconds; a pickup time sooner than the walk to the stop plus this is highlighted on the watch (ITEM_LEAD) |
+| `routingUrl` | `''` | http(s) URL template of your own walking-route service for navigation (§18); `''` = none (plain arrow) |
 | `showArrow` | `true` | boolean — the watch shows the arrow pointing at the stop (off: ITEM_BEARING −1) |
 | `showWeather` | `false` | boolean — the watch shows the weather panel above the first row (§17; fetched from Open-Meteo at your position) |
 | `vehicleRadius` | 250 | 10..2000 integer — meters: a live bus position reported this close to you (within `recentWindow`) is "the bus you're on" |
@@ -595,7 +596,7 @@ train(samples, priorFn, opts)            // → { weights: {key: number}, before
 ## 7. `src/common/protocol.js` — phone ⇄ watch messages
 
 Message keys (`package.json` `messageKeys`): `LIST_ID ITEM_COUNT ITEM_INDEX ITEM_KIND ITEM_TITLE ITEM_T0 ITEM_T1 ITEM_T2 ITEM_BADGE ITEM_COLOR STATUS SELECT_INDEX REFRESH
-ITEM_BEARING ITEM_DIST ITEM_DIR ITEM_LANES ITEM_DIR2 ITEM_U0 ITEM_U1 ITEM_U2 WAKEUP_COUNT WAKEUP_INDEX WAKEUP_TIME WAKEUP_COOKIE WAKEUP_FIRED NOTIFY_TITLE NOTIFY_BODY NOTIFY_COLOR ITEM_ROUTE TEST_NOW WATCH_PREFS ITEM_WALK ITEM_LEAD
+ITEM_BEARING ITEM_DIST ITEM_DIR ITEM_LANES ITEM_DIR2 ITEM_U0 ITEM_U1 ITEM_U2 WAKEUP_COUNT WAKEUP_INDEX WAKEUP_TIME WAKEUP_COOKIE WAKEUP_FIRED NOTIFY_TITLE NOTIFY_BODY NOTIFY_COLOR ITEM_ROUTE TEST_NOW WATCH_PREFS ITEM_WALK ITEM_LEAD NAV_START NAV_STOP NAV_STATE NAV_TEXT NAV_SUB NAV_DIST NAV_BEARING NAV_COLOR
 WEATHER_COUNT WEATHER_START WEATHER_NOW WEATHER_HI WEATHER_LO WEATHER_TEMPS WEATHER_RAIN`.
 `TEST_NOW` (test only, sent by `src/pkjs/ui-fixture.js`): unix seconds the watch shows its times against instead of its clock.
 
@@ -909,7 +910,7 @@ at most 8. main.c then `wakeup_cancel_all()` and `wakeup_schedule(time, cookie, 
   next to the badge; a two-lane pickup tile shows at level 0 one line per lane: `"North 3m, 12m"` / `"South 5m"` (level 1: lane 0 only).
 - **Notifications**: NOTIFY_* → a notification window (color bar in NOTIFY_COLOR, title, scrollable body), double vibe, light; BACK closes.
 - **Wakeups**: WAKEUP_* → bus_wakeup → scheduled as above; `wakeup_service_subscribe` → send `{WAKEUP_FIRED: cookie}`.
-- No items → the status centred plus "Hold SELECT to refresh".
+- No items → the status centred.
 - **Display preferences**: on every inbox message until one is acknowledged (and no wakeup report is pending), send `{WATCH_PREFS: flags}`
   (§7): bit 0 `clock_is_24h_style()`; with `PBL_HEALTH`, `health_service_get_measurement_system_for_display(HealthMetricWalkedDistanceMeters)`
   metric → bits 1 + 2, imperial → bit 2 (unknown / aplite → neither).
@@ -1084,3 +1085,25 @@ point at the column's middle, 255 at the top row, 0 at the bottom row). `bus_whe
 low (`GOTHIC_14`, `GOTHIC_18` when the panel is ≥ 56 px), and beside them the rain bars (`GColorPictonBlue`; B&W: every other pixel
 column), a baseline, and the temperature line 2 px wide (`GColorRed`; B&W black), carried flat to both edges of the graph.
 Tests: `test/weather.test.js`, `test/session.test.js`, `test/c/test_bus_weather.c`, `test/c/test_bus_wheel.c`.
+
+## 18. Navigation — `src/common/nav.js`, `src/common/routing.js`, `protocol.encodeNav`, `src/c/bus_nav.{h,c}`
+
+Long SELECT on a tile starts navigation to it (it no longer refreshes; the phone refreshes on its own timer). The watch shows
+an arrow, a distance and an instruction; the phone follows the GPS every `POLL_MS` (5 s) and sends the guidance when it changes.
+
+- Watch → phone: `{NAV_START: index, LIST_ID}` (index −1 when no tile is selected → ignored) and `{NAV_STOP: 1}` (BACK, or the window
+  closing). Decoded as `{type: 'navStart', listId, index}` / `{type: 'navStop'}`. `REFRESH` from the watch is no longer decoded
+  (phone → watch, `REFRESH` is still the UI test hook).
+- Phone → watch: `encodeNav({state, text, sub, distance, bearing, color, units})` → `{NAV_STATE: 1 guiding | 2 arrived, NAV_TEXT, NAV_SUB`
+  (≤ 47 bytes), `NAV_DIST` (as `ITEM_DIST`), `NAV_BEARING` (−1 = no arrow), `NAV_COLOR}`; `encodeNav(null)` → `{NAV_STATE: 0}` closes the window.
+- Targets, from the session's last list (`lastList()` carries `data` for stop coordinates): *pickup* → walk to the stop, then "Wait for the 44"
+  (arrived; next time); *drop-off* → "Ride to <stop>", then "Get off here"; *trip* → every remaining leg of the stored plan:
+  walk (radius 30 m) → board (until `departAt` + 30 s) → ride (radius 60 m or `arriveAt` + 60 s) → … → "Arrive at <destination>".
+  A stop without coordinates → an info line, no arrow. A route is navigated to as its pickup tile: the most accessible stop of that route.
+- Navigation ends on `navStop`, a new settings save, or after 2 h. Guidance is only re-sent when it changes (bearing in 5° steps).
+- **Routing source** (`routingUrl`, optional): a URL template with `{fromLat} {fromLon} {toLat} {toLon}` (or `{from}` / `{to}` = `lat,lon`),
+  fetched once per walking step. Answers understood: `{steps: [{text, lat, lon}]}`, `{points: [{lat, lon}] | [[lat, lon]]}`, OSRM
+  (`routes[0].legs[].steps[].maneuver` → instructions, else `routes[0].geometry.coordinates`); ≤ 40 waypoints. The arrow then aims at
+  the next waypoint (passed within 20 m) with its instruction; a failed fetch keeps the straight arrow.
+- Watch: `bus_nav_set` keeps the guidance (strings cut at UTF-8 boundaries, bearing outside 0..359 → −1, returns true when the instruction
+  changed → one short vibration). Tests: `test/nav.test.js`, `test/routing.test.js`, `test/c/test_bus_nav.c`.

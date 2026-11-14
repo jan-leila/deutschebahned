@@ -134,6 +134,10 @@ run_scenes() {
   btn click down; btn click down; btn click down;  shot 14-notify-scroll
   btn click back
   next_step;            shot 15-empty
+  next_step;            shot 16-nav-walk           # navigation window: instruction, arrow (heading 0), distance, detail
+  btn click back
+  next_step;            shot 17-nav-arrived
+  btn click back
 }
 
 for P in "${PLATFORMS[@]}"; do
