@@ -119,17 +119,41 @@ function encodeList(listId, items, status, opts) {
   return out;
 }
 
-// Navigation guidance for the watch's nav window (CONTRACTS.md §18). null → {NAV_STATE: 0} (close the window).
-// n = {state: 1 guiding | 2 arrived, text, sub, distance (m), bearing (deg, null = no arrow), color, units}
-function encodeNav(n) {
+// Navigation (CONTRACTS.md §18): the step list, then the live guidance of the current step.
+var NAV_MAX_STEPS = 16;
+var NAV_KIND = { walk: 0, board: 1, ride: 2, wait: 3, arrive: 4, info: 5, turn: 6 };
+
+// steps = [{type, text, sub, meters, dir, color}] → [{NAV_COUNT: n}, {NAV_INDEX: i, NAV_KIND, NAV_TEXT, NAV_SUB,
+// NAV_DIST (the step's length, '' when unknown), NAV_DIR, NAV_COLOR} × n]
+function encodeNavList(steps, units) {
+  steps = steps || [];
+  var n = Math.min(steps.length, NAV_MAX_STEPS);
+  var out = [{ NAV_COUNT: n }];
+  for (var i = 0; i < n; i++) {
+    var st = steps[i] || {};
+    out.push({
+      NAV_INDEX: i,
+      NAV_KIND: NAV_KIND.hasOwnProperty(st.type) ? NAV_KIND[st.type] : NAV_KIND.info,
+      NAV_TEXT: truncateUtf8(st.text, NAV_TEXT_MAX_BYTES),
+      NAV_SUB: truncateUtf8(st.sub, NAV_TEXT_MAX_BYTES),
+      NAV_DIST: encodeDistance(typeof st.meters === 'number' ? st.meters : null, units),
+      NAV_DIR: encodeDir(st.dir),
+      NAV_COLOR: encodeColor(st.color)
+    });
+  }
+  return out;
+}
+
+// Live guidance: n = {state: 1 guiding | 2 arrived, current (step index), sub (time left...), distance (m to the
+// step's target), bearing (deg, null = no arrow), units}; null → {NAV_STATE: 0} (close the nav window).
+function encodeNavLive(n) {
   if (!n) return { NAV_STATE: 0 };
   return {
     NAV_STATE: n.state === 2 ? 2 : 1,
-    NAV_TEXT: truncateUtf8(n.text, NAV_TEXT_MAX_BYTES),
-    NAV_SUB: truncateUtf8(n.sub, NAV_TEXT_MAX_BYTES),
-    NAV_DIST: encodeDistance(n.distance, n.units),
-    NAV_BEARING: encodeBearing(n.bearing),
-    NAV_COLOR: encodeColor(n.color)
+    NAV_CURRENT: Math.max(0, toInt(n.current)),
+    NAV_LSUB: truncateUtf8(n.sub, NAV_TEXT_MAX_BYTES),
+    NAV_LDIST: encodeDistance(typeof n.distance === 'number' ? n.distance : null, n.units),
+    NAV_BEARING: encodeBearing(n.bearing)
   };
 }
 
@@ -296,7 +320,10 @@ module.exports = {
   truncateUtf8: truncateUtf8,
   encodeList: encodeList,
   encodeStatus: encodeStatus,
-  encodeNav: encodeNav,
+  encodeNavList: encodeNavList,
+  encodeNavLive: encodeNavLive,
+  NAV_MAX_STEPS: NAV_MAX_STEPS,
+  NAV_KIND: NAV_KIND,
   encodeWakeups: encodeWakeups,
   encodeNotify: encodeNotify,
   encodeWeather: encodeWeather,

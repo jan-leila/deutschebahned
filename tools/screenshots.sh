@@ -134,9 +134,10 @@ run_scenes() {
   btn click down; btn click down; btn click down;  shot 14-notify-scroll
   btn click back
   next_step;            shot 15-empty
-  next_step;            shot 16-nav-walk           # navigation window: instruction, arrow (heading 0), distance, detail
+  [ "$P" = aplite ] && return                        # no navigation on aplite (not enough RAM)
+  next_step;            shot 16-nav-walk           # navigation: the trip's steps, the first one open (arrow, distance, time left)
   btn click back
-  next_step;            shot 17-nav-arrived
+  next_step;            shot 17-nav-ride           # the third step open, the first two done
   btn click back
 }
 

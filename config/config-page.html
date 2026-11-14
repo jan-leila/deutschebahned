@@ -289,7 +289,7 @@ header .titles { flex: 1; min-width: 0; }
   </section>
   <section>
     <h2>Navigation</h2>
-    <p class="help">Hold <b>SELECT</b> on a stop, route or planned trip for an arrow to it. Walking steps can use your own routing service: a web address with <code>{fromLat}</code> <code>{fromLon}</code> <code>{toLat}</code> <code>{toLon}</code> in it. It must answer with JSON: <code>{"steps":[{"text":"Turn left","lat":1.0,"lon":2.0}]}</code>, or an OSRM-style route. Leave it empty for a plain arrow.</p>
+    <p class="help">Hold <b>SELECT</b> on a stop, route or planned trip for its steps and an arrow to the next one (not on the original Pebble). Walking steps can use your own routing service: a web address with <code>{fromLat}</code> <code>{fromLon}</code> <code>{toLat}</code> <code>{toLon}</code> in it. It must answer with JSON: <code>{"steps":[{"text":"Turn left","lat":1.0,"lon":2.0}]}</code>, or an OSRM-style route. Leave it empty for a plain arrow.</p>
     <label class="field"><span class="name">Routing source</span><span class="hint">optional · address template</span>
       <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" data-field="routingUrl"></label>
   </section>

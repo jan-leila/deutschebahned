@@ -25,5 +25,5 @@ test('C bus_wheel layout (host gcc)', { skip }, () => runC('test_bus_wheel', ['t
 test('C bus_arrow geometry (host gcc)', { skip }, () => runC('test_bus_arrow', ['test/c/test_bus_arrow.c', 'src/c/bus_arrow.c']));
 test('C bus_wakeup list (host gcc)', { skip }, () => runC('test_bus_wakeup', ['test/c/test_bus_wakeup.c', 'src/c/bus_wakeup.c']));
 test('C bus_marquee timing (host gcc)', { skip }, () => runC('test_bus_marquee', ['test/c/test_bus_marquee.c', 'src/c/bus_marquee.c']));
-test('C bus_nav guidance (host gcc)', { skip }, () => runC('test_bus_nav', ['test/c/test_bus_nav.c', 'src/c/bus_nav.c']));
+test('C bus_nav steps (host gcc)', { skip }, () => runC('test_bus_nav', ['test/c/test_bus_nav.c', 'src/c/bus_nav.c']));
 test('C bus_weather panel (host gcc)', { skip }, () => runC('test_bus_weather', ['test/c/test_bus_weather.c', 'src/c/bus_weather.c']));

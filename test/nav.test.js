@@ -37,89 +37,118 @@ function harness(over) {
   return { n, sent, logs, cfg, move: p => { pos = p; }, at: t => { now = t; }, tick: () => iv && iv(), running: () => iv !== null };
 }
 
-test('pickup: an arrow to the stop, then "wait" once you are there', () => {
+// the guidance the watch has now: its step list and live state
+function state(h) {
+  const live = h.sent.filter(m => 'NAV_STATE' in m).pop();
+  const at = h.sent.map(m => 'NAV_COUNT' in m).lastIndexOf(true);
+  const steps = [];
+  for (let i = at + 1; i < h.sent.length && 'NAV_INDEX' in h.sent[i]; i++) steps.push(h.sent[i]);
+  return { live, steps, current: live && steps[live.NAV_CURRENT] };
+}
+const KIND = { walk: 0, board: 1, ride: 2, wait: 3, arrive: 4, info: 5, turn: 6 };
+
+test('pickup: a list of two steps, an arrow to the stop, then "wait" once you are there', () => {
   const h = harness();
   assert.equal(h.n.start(5, 0), true);
-  const m = h.sent[0];
-  assert.equal(m.NAV_STATE, 1);
-  assert.equal(m.NAV_TEXT, 'Walk to First Ave');
-  assert.equal(m.NAV_BEARING, 90);
-  assert.equal(m.NAV_DIST, '400m');
-  assert.equal(m.NAV_COLOR, 0xff0000);
-  assert.match(m.NAV_SUB, /walk/);
+  assert.equal(h.sent[0].NAV_COUNT, 2);
+  let s = state(h);
+  assert.deepEqual(s.steps.map(x => x.NAV_TEXT), ['Walk to First Ave', 'Wait for the 44']);
+  assert.deepEqual(s.steps.map(x => x.NAV_KIND), [KIND.walk, KIND.wait]);
+  assert.equal(s.steps[0].NAV_DIR, 'EB');
+  assert.equal(s.steps[0].NAV_DIST, '400m');
+  assert.equal(s.steps[0].NAV_COLOR, 0xff0000);
+  assert.equal(s.live.NAV_STATE, 1);
+  assert.equal(s.live.NAV_CURRENT, 0);
+  assert.equal(s.live.NAV_BEARING, 90);
+  assert.equal(s.live.NAV_LDIST, '400m');
+  assert.match(s.live.NAV_LSUB, /left/);
   h.move(geo.offset(STOP, 10, 270));
   h.tick();
-  const w = h.sent[h.sent.length - 1];
-  assert.equal(w.NAV_STATE, 2);
-  assert.equal(w.NAV_TEXT, 'Wait for the 44');
-  assert.equal(w.NAV_SUB, 'Next 5 min');
+  s = state(h);
+  assert.equal(s.live.NAV_STATE, 2);
+  assert.equal(s.live.NAV_CURRENT, 1);
+  assert.equal(s.live.NAV_LSUB, 'Next 5 min');
 });
 
-test('identical guidance is not sent twice; a changed bearing / distance is', () => {
+test('only what changed is sent: the list once, the live message when it differs', () => {
   const h = harness();
   h.n.start(5, 0);
+  const n = h.sent.length;
   h.tick(); h.tick();
-  assert.equal(h.sent.length, 1);
+  assert.equal(h.sent.length, n);
   h.move(geo.offset(HOME, 100, 90));
   h.tick();
-  assert.equal(h.sent.length, 2);
-  assert.equal(h.sent[1].NAV_DIST, '300m');
+  assert.equal(h.sent.length, n + 1);
+  assert.equal(h.sent[n].NAV_LDIST, '300m');
+  assert.equal(h.sent.filter(m => 'NAV_COUNT' in m).length, 1);
 });
 
 test('dropoff: ride to the stop, then "get off here"', () => {
   const h = harness();
   h.n.start(5, 1);
-  assert.equal(h.sent[0].NAV_TEXT, 'Ride to Second St');
-  assert.equal(h.sent[0].NAV_DIST, '3.4km');
+  let s = state(h);
+  assert.deepEqual(s.steps.map(x => x.NAV_TEXT), ['Ride to Second St', 'Get off here']);
+  assert.equal(s.live.NAV_LDIST, '3.4km');
   h.move(geo.offset(STOP2, 30, 180));
   h.tick();
-  assert.equal(h.sent[1].NAV_STATE, 2);
-  assert.equal(h.sent[1].NAV_TEXT, 'Get off here');
+  s = state(h);
+  assert.equal(s.live.NAV_CURRENT, 1);
+  assert.equal(s.live.NAV_STATE, 2);
 });
 
-test('trip: walk → board → ride → arrive, each advancing on its own rule', () => {
+test('trip: walk → board → ride → walk → arrive, with each step\'s detail and direction', () => {
   const h = harness();
   h.n.start(5, 2);
-  assert.equal(h.sent[0].NAV_TEXT, 'Walk to First');
-  assert.match(h.sent[0].NAV_SUB, new RegExp('44 at ' + c24(NOW + 600)));
+  let s = state(h);
+  assert.deepEqual(s.steps.map(x => x.NAV_TEXT), ['Walk to First', 'Board 44 EB', 'Ride to Second', 'Walk to Work', 'Arrive at Work']);
+  assert.deepEqual(s.steps.map(x => x.NAV_KIND), [KIND.walk, KIND.board, KIND.ride, KIND.walk, KIND.arrive]);
+  assert.match(s.steps[0].NAV_SUB, new RegExp('44 at ' + c24(NOW + 600)));
+  assert.equal(s.steps[1].NAV_SUB, 'First · ' + c24(NOW + 600));
+  assert.equal(s.steps[1].NAV_DIR, 'EB');
+  assert.equal(s.steps[2].NAV_SUB, 'Arrive ' + c24(NOW + 1200));
+  assert.equal(s.steps[2].NAV_DIST, '3.0km');                  // First → Second
+  assert.equal(s.steps[3].NAV_DIR, 'NB');
+  assert.equal(s.steps[3].NAV_DIST, '200m');
   h.move(STOP); h.tick();
-  const board = h.sent[h.sent.length - 1];
-  assert.equal(board.NAV_TEXT, 'Board 44 EB');
-  assert.equal(board.NAV_SUB, 'First · ' + c24(NOW + 600) + ' · 10 min');
-  h.at(NOW + 700); h.tick();                      // the bus has left
-  const ride = h.sent[h.sent.length - 1];
-  assert.equal(ride.NAV_TEXT, 'Ride to Second');
-  assert.match(ride.NAV_SUB, new RegExp('^Arrive ' + c24(NOW + 1200)));
+  s = state(h);
+  assert.equal(s.live.NAV_CURRENT, 1);
+  assert.equal(s.live.NAV_LSUB, 'Departs 10 min');
+  h.at(NOW + 700); h.tick();
+  s = state(h);
+  assert.equal(s.live.NAV_CURRENT, 2);
+  assert.match(s.live.NAV_LSUB, /^Arrive \d+ min$/);
   h.move(geo.offset(STOP2, 20, 0)); h.at(NOW + 1180); h.tick();
-  const walk = h.sent[h.sent.length - 1];
-  assert.equal(walk.NAV_TEXT, 'Walk to Work');
-  assert.equal(walk.NAV_BEARING, 0);
+  s = state(h);
+  assert.equal(s.live.NAV_CURRENT, 3);
+  assert.equal(s.live.NAV_BEARING, 0);
   h.move(geo.offset(DEST, 10, 180)); h.tick();
-  const last = h.sent[h.sent.length - 1];
-  assert.equal(last.NAV_STATE, 2);
-  assert.equal(last.NAV_TEXT, 'Arrive at Work');
+  s = state(h);
+  assert.equal(s.live.NAV_CURRENT, 4);
+  assert.equal(s.live.NAV_STATE, 2);
 });
 
-test('trip: legs that are over are skipped', () => {
+test('trip: legs that are over are not listed', () => {
   const h = harness();
   h.at(NOW + 1300);
   h.move(STOP2);
   h.n.start(5, 2);
-  assert.equal(h.sent[0].NAV_TEXT, 'Walk to Work');
+  assert.deepEqual(state(h).steps.map(x => x.NAV_TEXT), ['Walk to Work', 'Arrive at Work']);
 });
 
-test('trip without a stored plan: an info line, no arrow', () => {
+test('trip without a stored plan: an info step, no arrow', () => {
   const h = harness({ items: [Object.assign({}, trip, { destinationId: 'other' })] });
   h.n.start(5, 0);
-  assert.equal(h.sent[0].NAV_TEXT, 'No trip plan');
-  assert.equal(h.sent[0].NAV_BEARING, -1);
-  assert.equal(h.sent[0].NAV_STATE, 2);
+  const s = state(h);
+  assert.equal(s.steps[0].NAV_TEXT, 'No trip plan');
+  assert.equal(s.steps[0].NAV_KIND, KIND.info);
+  assert.equal(s.live.NAV_BEARING, -1);
+  assert.equal(s.live.NAV_STATE, 2);
 });
 
-test('a stop without coordinates: an info line', () => {
+test('a stop without coordinates: an info step', () => {
   const h = harness({ items: [Object.assign({}, pickup, { stopId: 'zz' })] });
   h.n.start(5, 0);
-  assert.equal(h.sent[0].NAV_TEXT, 'No location for First Ave');
+  assert.equal(state(h).steps[0].NAV_TEXT, 'No location for First Ave');
 });
 
 test('start: a stale list id / bad index does nothing', () => {
@@ -153,30 +182,48 @@ test('navigation ends by itself after two hours', () => {
   assert.equal(h.n.active(), false);
 });
 
-test('routing source: a walk follows the waypoints and their instructions', () => {
+test('routing source: the walking step becomes its turns', () => {
   const mid = geo.offset(HOME, 200, 90);
   const calls = [];
   const h = harness({ config: { routingUrl: 'https://r/{to}' }, route: (tpl, from, to, cb) => {
     calls.push([tpl, from, to]);
-    cb(null, [{ lat: HOME.lat, lon: HOME.lon, text: 'Head east' }, { lat: mid.lat, lon: mid.lon, text: 'Turn left' }, { lat: STOP.lat, lon: STOP.lon, text: 'Arrive' }]);
+    cb(null, [{ lat: mid.lat, lon: mid.lon, text: 'Turn left' }, { lat: STOP.lat, lon: STOP.lon, text: 'Arrive' }]);
   } });
   h.n.start(5, 0);
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], 'https://r/{to}');
-  h.tick();                                           // the route is in: the first waypoint is where you stand
-  assert.equal(h.sent[h.sent.length - 1].NAV_TEXT, 'Turn left');
-  assert.equal(h.sent[h.sent.length - 1].NAV_DIST, '200m');
-  assert.match(h.sent[h.sent.length - 1].NAV_SUB, /walk/);
+  h.tick();                                           // the route is in: the walk is now two turns, then "wait"
+  let s = state(h);
+  assert.deepEqual(s.steps.map(x => x.NAV_TEXT), ['Turn left', 'Arrive', 'Wait for the 44']);
+  assert.deepEqual(s.steps.map(x => x.NAV_KIND), [KIND.turn, KIND.turn, KIND.wait]);
+  assert.equal(s.steps[0].NAV_DIST, '200m');
+  assert.equal(s.steps[0].NAV_DIR, 'EB');
+  assert.equal(s.live.NAV_CURRENT, 0);
+  assert.equal(s.live.NAV_LDIST, '200m');
   h.move(geo.offset(mid, 5, 270)); h.tick();
-  assert.equal(h.sent[h.sent.length - 1].NAV_TEXT, 'Arrive');
+  s = state(h);
+  assert.equal(s.live.NAV_CURRENT, 1);
+  assert.equal(s.live.NAV_LDIST, '200m');
   assert.equal(calls.length, 1, 'fetched once per step');
+});
+
+test('routing source: more turns than the list has room for are thinned', () => {
+  const pts = [];
+  for (let i = 1; i <= 40; i++) pts.push({ lat: HOME.lat, lon: HOME.lon + i * 0.0001, text: 'Turn ' + i });
+  const h = harness({ config: { routingUrl: 'https://r/{to}' }, route: (tpl, f, t, cb) => cb(null, pts) });
+  h.n.start(5, 0);
+  h.tick();
+  const s = state(h);
+  assert.equal(s.steps.length, 16);
+  assert.equal(s.steps[14].NAV_TEXT, 'Turn 40');
+  assert.equal(s.steps[15].NAV_TEXT, 'Wait for the 44');
 });
 
 test('routing source failing: the straight arrow stays', () => {
   const h = harness({ config: { routingUrl: 'https://r/{to}' }, route: (tpl, from, to, cb) => cb(new Error('Network error')) });
   h.n.start(5, 0);
   h.tick();
-  assert.equal(h.sent[0].NAV_TEXT, 'Walk to First Ave');
+  assert.equal(state(h).steps[0].NAV_TEXT, 'Walk to First Ave');
   assert.ok(h.logs.some(l => /routing failed: Network error/.test(l)));
 });
 

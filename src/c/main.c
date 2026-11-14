@@ -9,6 +9,13 @@
 #include "bus_weather.h"
 #include "bus_nav.h"
 
+// Navigation (the nav window, CONTRACTS.md §18) needs RAM that Pebble Classic / Steel (aplite) does not have.
+#if defined(PBL_PLATFORM_APLITE)
+#define HAS_NAV 0
+#else
+#define HAS_NAV 1
+#endif
+
 #define STATUS_H 16
 #define ROUND_STATUS_Y 4
 #define ROUND_WHEEL_Y 20
@@ -30,7 +37,11 @@ static TextLayer *s_status_layer;
 static Layer *s_wheel_layer;
 static BusModel s_model;
 static BusWeather s_weather;
+#if HAS_NAV
 static BusNav s_nav;
+static Layer *s_nav_layer;
+static AppTimer *s_nav_anim_timer;
+#endif
 static WheelGeometry s_geom;
 
 static int s_sel;            // selected row
@@ -541,6 +552,9 @@ static void draw_weather(GContext *ctx, int16_t bottom, int16_t width) {
 static void marquee_tick(void *data) {
   s_marquee_timer = NULL;
   if (s_wheel_layer) layer_mark_dirty(s_wheel_layer);
+#if HAS_NAV
+  if (s_nav_layer) layer_mark_dirty(s_nav_layer);
+#endif
 }
 
 // After a redraw: wake up when a marquee next moves; no timer while nothing scrolls, while the scroll animation
@@ -550,7 +564,11 @@ static void schedule_marquee(void) {
     app_timer_cancel(s_marquee_timer);
     s_marquee_timer = NULL;
   }
-  if (s_marquee_wait && s_focused && !s_anim_timer) s_marquee_timer = app_timer_register(s_marquee_wait, marquee_tick, NULL);
+  bool nav_animating = false;
+#if HAS_NAV
+  nav_animating = s_nav_anim_timer != NULL;
+#endif
+  if (s_marquee_wait && s_focused && !s_anim_timer && !nav_animating) s_marquee_timer = app_timer_register(s_marquee_wait, marquee_tick, NULL);
 }
 
 static void wheel_update(Layer *layer, GContext *ctx) {
@@ -689,63 +707,247 @@ static void notify_show(const char *title, const char *body, int32_t color) {
   light_enable_interaction();
 }
 
+#if HAS_NAV
 // ---- Navigation window --------------------------------------------------------
-// Opened by the phone (NAV_STATE 1 / 2) after a long SELECT on a tile: the instruction on a route-colour header, an
-// arrow to the target with its distance, and a detail line. The phone follows the GPS and moves through the steps;
-// BACK closes the window and tells it to stop.
+// Opened by the phone (NAV_STATE 1 / 2) after a long SELECT on a tile: the steps as a wheel like the main list, the
+// current step open (kind and direction in the band, the step's length, instruction, time left, an arrow to its target
+// with the distance). UP / DOWN look ahead or back, SELECT returns to the current step, BACK closes the window and
+// tells the phone to stop. The phone follows the GPS and moves through the steps; the wheel follows it.
 
 static Window *s_nav_window;
-static Layer *s_nav_layer;
+static TextLayer *s_nav_status_layer;
+static WheelGeometry s_nav_geom;
+static int s_nav_sel;            // selected step
+static int32_t s_nav_pos;        // drawn position, milli-rows
+static int32_t s_nav_anim_from;
+static uint32_t s_nav_anim_start;
+static char s_nav_status[24];
+
+static void nav_redraw(void) {
+  if (s_nav_status_layer) {
+    snprintf(s_nav_status, sizeof s_nav_status, "Step %d of %d", s_nav_sel + 1, s_nav.count ? (int)s_nav.count : 1);
+    text_layer_set_text(s_nav_status_layer, s_nav_status);
+  }
+  if (s_nav_layer) layer_mark_dirty(s_nav_layer);
+}
+
+static void nav_anim_step(void *data) {
+  s_nav_anim_timer = NULL;
+  int32_t target = (int32_t)s_nav_sel * 1000;
+  uint32_t t = now_ms() - s_nav_anim_start;
+  if (t >= ANIM_MS) {
+    s_nav_pos = target;
+  } else {
+    int32_t p = (int32_t)(t * 1000u / ANIM_MS);
+    int32_t e = 1000 - (1000 - p) * (1000 - p) / 1000;
+    s_nav_pos = s_nav_anim_from + (target - s_nav_anim_from) * e / 1000;
+    s_nav_anim_timer = app_timer_register(FRAME_MS, nav_anim_step, NULL);
+  }
+  if (s_nav_layer) layer_mark_dirty(s_nav_layer);
+}
+
+static void nav_select_step(int sel, bool animate) {
+  int max = bus_nav_row_count(&s_nav) - 1;
+  if (sel > max) sel = max;
+  if (sel < 0) sel = 0;
+  if (s_nav_anim_timer) {
+    app_timer_cancel(s_nav_anim_timer);
+    s_nav_anim_timer = NULL;
+  }
+  s_marquee_start = now_ms() + (animate ? ANIM_MS : 0);
+  if (sel == s_nav_sel && !animate) {
+    s_nav_pos = (int32_t)sel * 1000;
+  } else if (animate && (sel != s_nav_sel || s_nav_pos != (int32_t)sel * 1000)) {
+    s_nav_sel = sel;
+    s_nav_anim_from = s_nav_pos;
+    s_nav_anim_start = now_ms();
+    nav_anim_step(NULL);
+  } else {
+    s_nav_sel = sel;
+    s_nav_pos = (int32_t)sel * 1000;
+  }
+  nav_redraw();
+}
+
+static void draw_nav_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
+  const BusNavStep *st = bus_nav_step(&s_nav, s->index);
+  int16_t x = s->inset, w = width - 2 * s->inset;
+  if (w <= 8) return;
+  bool current = s->index == s_nav.current, past = s->index < s_nav.current;
+  int32_t color = st ? st->color : -1;
+
+  int16_t pad = s->level == 0 ? 4 : 3;
+  int16_t ix = x + pad, iw = w - 2 * pad;
+  // Level 0: a route-color band on top (kind, direction and the step's length) and a bar below.
+  int16_t band_h = s->level == 0 ? ROUTE_BAND_H : 0;
+  if (s->level == 0) {
+    GColor rc = route_color(color);
+    fill_span(ctx, rc, x, x + w, s->y, s->y + band_h);
+    fill_span(ctx, rc, x, x + w, s->y + s->h - BAR_H, s->y + s->h);
+    if (st) {
+      char label[24];
+      snprintf(label, sizeof label, "%s%s%s", bus_nav_kind_name(st->kind), st->dir[0] && st->kind != BUS_NAV_WAIT ? " " : "",
+               st->kind == BUS_NAV_WAIT ? "" : bus_dir_name(st->dir));
+      graphics_context_set_text_color(ctx, badge_text_color(color));
+      int16_t dw = st->dist[0] ? text_width(st->dist, s_f14) : 0;
+      draw_line(ctx, label, s_f14, ix, iw - dw - 2, s->y + band_h / 2, GTextAlignmentLeft);
+      if (dw) draw_line(ctx, st->dist, s_f14, ix + iw - dw - 2, dw + 2, s->y + band_h / 2, GTextAlignmentRight);
+    }
+  } else if (current) {
+    fill_span(ctx, route_color(color), x, x + 3, s->y + 2, s->y + s->h - 2);   // marks the step you are on
+  }
+  int16_t top = s->y + band_h, bottom = s->y + s->h - (s->level == 0 ? BAR_H : 0);
+  int16_t ih = bottom - top;
+
+  GColor fg = GColorBlack, dim = GColorBlack;
+#if defined(PBL_COLOR)
+  dim = GColorDarkGray;
+  if (s->level == 2 || past) fg = GColorDarkGray;
+#endif
+  graphics_context_set_text_color(ctx, fg);
+  if (!st) {
+    draw_line(ctx, "...", s->level == 0 ? s_f18b : s_f14, ix, iw, top + ih / 2, GTextAlignmentLeft);
+    return;
+  }
+
+  GFont title_font = s->level == 0 ? s_f24b : s->level == 1 ? s_f18b : s_f14;
+  GFont detail_font = s->level == 0 ? s_f18 : s_f14;
+  FontMetrics tfi = font_info(title_font), dfi = font_info(detail_font);
+  char mode = 'C';
+  if (s->level == 0 && ih >= tfi.cap + 2 * dfi.cap + 12) mode = 'A';
+  else if (s->level < 2 && ih >= tfi.cap + dfi.cap + 8) mode = 'B';
+
+  int16_t title_cy, line1_cy = 0, line2_cy = 0, lower_top = 0;
+  if (mode == 'A') {
+    int16_t gap = (ih - tfi.cap - 2 * dfi.cap) / 4;
+    title_cy = top + gap + tfi.cap / 2;
+    lower_top = top + gap + tfi.cap;
+    line1_cy = lower_top + gap + dfi.cap / 2;
+    line2_cy = line1_cy + dfi.cap + gap;
+  } else if (mode == 'B') {
+    int16_t gap = (ih - tfi.cap - dfi.cap) / 3;
+    title_cy = top + gap + tfi.cap / 2;
+    line1_cy = bottom - gap - dfi.cap / 2;
+  } else {
+    title_cy = top + ih / 2;
+  }
+
+  // Title: the instruction; at level 1 behind a small kind pill. The selected step's title scrolls when too wide.
+  int16_t tx = ix + (s->level == 0 && current ? 0 : 0), tw = iw;
+  if (s->level == 1 && st->kind != BUS_NAV_INFO) {
+    FontMetrics pf = font_info(s_f14b);
+    int16_t pw = text_width(bus_nav_kind_name(st->kind), s_f14b) + 6, ph = pf.cap + 5;
+    graphics_context_set_fill_color(ctx, route_color(color));
+    graphics_fill_rect(ctx, GRect(ix, title_cy - ph / 2, pw, ph), 3, GCornersAll);
+    graphics_context_set_text_color(ctx, badge_text_color(color));
+    draw_line(ctx, bus_nav_kind_name(st->kind), s_f14b, ix, pw, title_cy, GTextAlignmentCenter);
+    graphics_context_set_text_color(ctx, fg);
+    tx = ix + pw + 4;
+    tw = ix + iw - tx;
+  }
+  if (s->level == 0) {
+    int16_t y0 = title_cy - tfi.cap / 2 - tfi.top, y1 = mode == 'C' ? bottom : line1_cy - dfi.cap / 2 - 1;
+    if (y0 < top) y0 = top;
+    draw_marquee(ctx, st->text, title_font, tx, tw, title_cy, y0, y1, x, x + w, GColorWhite, width);
+    int16_t ly1 = title_cy - tfi.cap / 2 - tfi.top + tfi.line;
+    if (ly1 > bottom) ly1 = bottom;
+    fill_span(ctx, GColorWhite, 0, tx, y1, ly1);
+    fill_span(ctx, GColorWhite, tx + tw, width, y1, ly1);
+  } else {
+    draw_line(ctx, st->text, title_font, tx, tw, title_cy, GTextAlignmentLeft);
+  }
+  if (mode == 'C') return;
+
+  GColor detail_color = s->level == 0 ? (past ? dim : GColorBlack) : dim;
+  graphics_context_set_text_color(ctx, detail_color);
+  if (mode == 'A') {
+    bool live = current && (s_nav.live_sub[0] || s_nav.live_dist[0] || s_nav.bearing >= 0);
+    int16_t colw = current && (s_nav.bearing >= 0 || s_nav.live_dist[0]) ? ARROW_COL_W : 0, lw = iw - colw;
+    const char *first = current ? s_nav.live_sub : st->sub, *second = current ? st->sub : "";
+    if (first[0] && second[0]) {
+      draw_line(ctx, first, detail_font, ix, lw, line1_cy, GTextAlignmentLeft);
+      draw_line(ctx, second, detail_font, ix, lw, line2_cy, GTextAlignmentLeft);
+    } else if (first[0] || second[0]) {
+      draw_line(ctx, first[0] ? first : second, detail_font, ix, lw, (line1_cy + line2_cy) / 2, GTextAlignmentLeft);
+    }
+    if (live && colw) {
+      FontMetrics sfi = font_info(s_f14);
+      int16_t cx = ix + iw - colw / 2, dist_cy = line2_cy + 1;
+      bool has_dist = s_nav.live_dist[0] != 0, has_arrow = s_nav.bearing >= 0;
+      int16_t atop = lower_top + 1, abot = has_dist ? dist_cy - sfi.cap / 2 - 2 : bottom - 2;
+      if (has_arrow) {
+        int16_t r = (abot - atop) / 2;
+        if (r > ARROW_R_MAX) r = ARROW_R_MAX;
+        if (r >= 3) draw_arrow_at(ctx, s_nav.bearing, color, cx, (atop + abot) / 2, r);
+      }
+      if (has_dist) {
+        if (!has_arrow) dist_cy = (line1_cy + line2_cy) / 2;
+        graphics_context_set_text_color(ctx, GColorBlack);
+        draw_line(ctx, s_nav.live_dist, s_f14, ix + iw - colw - 4, colw + 8, dist_cy, GTextAlignmentCenter);
+      }
+    }
+  } else {  // 'B': the step's detail, its length at the right end
+    int16_t right = ix + iw;
+    if (st->dist[0]) {
+      int16_t dw = text_width(st->dist, s_f14);
+      draw_line(ctx, st->dist, s_f14, right - dw, dw + 2, line1_cy, GTextAlignmentLeft);
+      right -= dw + 6;
+    }
+    const char *d = current && s_nav.live_sub[0] ? s_nav.live_sub : st->sub;
+    if (d[0] && right - ix > 20) draw_line(ctx, d, detail_font, ix, right - ix, line1_cy, GTextAlignmentLeft);
+  }
+}
 
 static void nav_update(Layer *layer, GContext *ctx) {
   GRect b = layer_get_bounds(layer);
-  int16_t inset = PBL_IF_ROUND_ELSE(22, 6);
+  s_marquee_wait = 0;
   graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
+  WheelSlot slots[WHEEL_MAX_SLOTS];
+  int n = bus_wheel_layout(&s_nav_geom, bus_nav_row_count(&s_nav), s_nav_pos, slots, WHEEL_MAX_SLOTS);
+  int sel = -1;
+  for (int i = 0; i < n; i++) {
+    if (slots[i].level == 0 && sel < 0) { sel = i; continue; }
+    draw_nav_slot(ctx, &slots[i], b.size.w);
+  }
+  if (sel >= 0) draw_nav_slot(ctx, &slots[sel], b.size.w);
+  schedule_marquee();
+}
 
-  // header: the instruction, two lines at most, shrinking to the small bold font when it does not fit
-  GFont hf = s_f24b;
-  GRect tr = GRect(inset, PBL_IF_ROUND_ELSE(14, 4), b.size.w - 2 * inset, 60);
-  GSize sz = graphics_text_layout_get_content_size(s_nav.text, hf, tr, GTextOverflowModeWordWrap, GTextAlignmentCenter);
-  if (sz.h > 2 * 26) {
-    hf = s_f18b;
-    sz = graphics_text_layout_get_content_size(s_nav.text, hf, tr, GTextOverflowModeWordWrap, GTextAlignmentCenter);
-  }
-  int16_t hh = tr.origin.y + sz.h + 8;
-  if (hh > tr.origin.y + 60) hh = tr.origin.y + 60;
-  graphics_context_set_fill_color(ctx, route_color(s_nav.color));
-  graphics_fill_rect(ctx, GRect(0, 0, b.size.w, hh), 0, GCornerNone);
-  graphics_context_set_text_color(ctx, badge_text_color(s_nav.color));
-  tr.size.h = hh - tr.origin.y;
-  graphics_draw_text(ctx, s_nav.text, hf, tr, GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+static void nav_up(ClickRecognizerRef rec, void *ctx) { nav_select_step(s_nav_sel - 1, true); }
+static void nav_down(ClickRecognizerRef rec, void *ctx) { nav_select_step(s_nav_sel + 1, true); }
+static void nav_current(ClickRecognizerRef rec, void *ctx) { nav_select_step(s_nav.current, true); }
 
-  // footer: the detail line (two lines at most), the distance above it
-  graphics_context_set_text_color(ctx, GColorBlack);
-  int16_t sub_h = s_nav.sub[0] ? 40 : 0, bottom_pad = PBL_IF_ROUND_ELSE(16, 2);
-  if (sub_h) {
-    GRect sr = GRect(inset, b.size.h - sub_h - bottom_pad, b.size.w - 2 * inset, sub_h);
-    graphics_draw_text(ctx, s_nav.sub, s_f18, sr, GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-  }
-  int16_t dist_h = s_nav.dist[0] ? 28 : 0, foot = b.size.h - sub_h - bottom_pad;
-  if (dist_h) {
-    GRect dr = GRect(inset, foot - dist_h, b.size.w - 2 * inset, dist_h);
-    graphics_draw_text(ctx, s_nav.dist, s_f24b, dr, GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-  }
-  // the arrow fills the room between them
-  int16_t atop = hh + 6, abot = foot - dist_h - 4;
-  if (s_nav.bearing >= 0 && abot - atop >= 20) {
-    int16_t r = (abot - atop) / 2;
-    if (r > b.size.w / 3) r = b.size.w / 3;
-    draw_arrow_at(ctx, s_nav.bearing, s_nav.color, b.size.w / 2, (atop + abot) / 2, r);
-  }
+static void nav_click_config(void *ctx) {
+  window_single_repeating_click_subscribe(BUTTON_ID_UP, REPEAT_MS, nav_up);
+  window_single_repeating_click_subscribe(BUTTON_ID_DOWN, REPEAT_MS, nav_down);
+  window_single_click_subscribe(BUTTON_ID_SELECT, nav_current);
 }
 
 static void nav_window_load(Window *window) {
   Layer *root = window_get_root_layer(window);
+  GRect b = layer_get_bounds(root);
   window_set_background_color(window, GColorWhite);
-  s_nav_layer = layer_create(layer_get_bounds(root));
+#if defined(PBL_ROUND)
+  GRect status = GRect(30, ROUND_STATUS_Y - 3, b.size.w - 60, STATUS_H + 2);
+  GRect wheel = GRect(0, ROUND_WHEEL_Y, b.size.w, b.size.h - 2 * ROUND_WHEEL_Y);
+#else
+  GRect status = GRect(2, -2, b.size.w - 4, STATUS_H + 2);
+  GRect wheel = GRect(0, STATUS_H, b.size.w, b.size.h - STATUS_H);
+#endif
+  s_nav_status_layer = text_layer_create(status);
+  text_layer_set_font(s_nav_status_layer, s_f14);
+  text_layer_set_text_alignment(s_nav_status_layer, GTextAlignmentCenter);
+  text_layer_set_background_color(s_nav_status_layer, GColorClear);
+  layer_add_child(root, text_layer_get_layer(s_nav_status_layer));
+  bus_wheel_geometry(&s_nav_geom, wheel.size.w, wheel.size.h, PBL_IF_ROUND_ELSE(true, false));
+  s_nav_layer = layer_create(wheel);
   layer_set_update_proc(s_nav_layer, nav_update);
   layer_add_child(root, s_nav_layer);
+  s_nav_sel = s_nav.current;
+  s_nav_pos = (int32_t)s_nav_sel * 1000;
+  s_marquee_start = now_ms();
+  nav_redraw();
 }
 
 static void send_nav_stop(void) {
@@ -756,35 +958,47 @@ static void send_nav_stop(void) {
 }
 
 static void nav_window_unload(Window *window) {
+  if (s_nav_anim_timer) {
+    app_timer_cancel(s_nav_anim_timer);
+    s_nav_anim_timer = NULL;
+  }
   layer_destroy(s_nav_layer);
   s_nav_layer = NULL;
+  text_layer_destroy(s_nav_status_layer);
+  s_nav_status_layer = NULL;
   bus_nav_init(&s_nav);
   send_nav_stop();   // BACK (or the phone's own close: it ignores a stop it did not expect)
 }
 
-// A NAV_* message from the phone: open / update / close the window; a new step buzzes the wrist.
-static void nav_apply(int state, const char *text, const char *sub, const char *dist, int bearing, int32_t color) {
+// NAV_STATE from the phone: open / update / close the window; a new current step scrolls to it and buzzes the wrist.
+static void nav_live(int state, int current, const char *sub, const char *dist, int bearing) {
   bool shown = s_nav_window && window_stack_contains_window(s_nav_window);
   if (state != BUS_NAV_GUIDING && state != BUS_NAV_ARRIVED) {
     bus_nav_init(&s_nav);
     if (shown) window_stack_remove(s_nav_window, true);
     return;
   }
-  bool new_step = bus_nav_set(&s_nav, state, text, sub, dist, bearing, color);
+  bool new_step = bus_nav_set_live(&s_nav, state, current, sub, dist, bearing);
   if (!shown) {
     if (!s_nav_window) {
       s_nav_window = window_create();
+      window_set_click_config_provider(s_nav_window, nav_click_config);
       window_set_window_handlers(s_nav_window, (WindowHandlers){ .load = nav_window_load, .unload = nav_window_unload });
     }
     window_stack_push(s_nav_window, true);
-  } else if (s_nav_layer) {
-    layer_mark_dirty(s_nav_layer);
-  }
-  if (new_step) {
     vibes_short_pulse();
     light_enable_interaction();
+    return;
+  }
+  if (new_step) {
+    nav_select_step(s_nav.current, true);
+    vibes_short_pulse();
+    light_enable_interaction();
+  } else {
+    nav_redraw();
   }
 }
+#endif  // HAS_NAV
 
 // ---- AppMessage -------------------------------------------------------------
 
@@ -965,13 +1179,24 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
                     (int)tuple_int(dict_find(iter, MESSAGE_KEY_WEATHER_LO)),
                     tuple_bytes(temps), tuple_bytes_len(temps), tuple_bytes(rain), tuple_bytes_len(rain));
   }
+#if HAS_NAV
+  Tuple *nav_count = dict_find(iter, MESSAGE_KEY_NAV_COUNT);
+  if (nav_count) bus_nav_begin(&s_nav, (int)tuple_int(nav_count));
+  Tuple *nav_index = dict_find(iter, MESSAGE_KEY_NAV_INDEX);
+  if (nav_index) {
+    bus_nav_set_step(&s_nav, (int)tuple_int(nav_index), (int)tuple_int(dict_find(iter, MESSAGE_KEY_NAV_KIND)),
+                     tuple_str(dict_find(iter, MESSAGE_KEY_NAV_TEXT)), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_SUB)),
+                     tuple_str(dict_find(iter, MESSAGE_KEY_NAV_DIST)), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_DIR)),
+                     tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_COLOR), -1));
+    nav_redraw();
+  }
   Tuple *nav_state = dict_find(iter, MESSAGE_KEY_NAV_STATE);
   if (nav_state) {
-    nav_apply((int)tuple_int(nav_state), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_TEXT)),
-              tuple_str(dict_find(iter, MESSAGE_KEY_NAV_SUB)), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_DIST)),
-              (int)tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_BEARING), -1),
-              tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_COLOR), -1));
+    nav_live((int)tuple_int(nav_state), (int)tuple_int(dict_find(iter, MESSAGE_KEY_NAV_CURRENT)),
+             tuple_str(dict_find(iter, MESSAGE_KEY_NAV_LSUB)), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_LDIST)),
+             (int)tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_BEARING), -1));
   }
+#endif
   Tuple *hook = dict_find(iter, MESSAGE_KEY_REFRESH);  // phone -> watch REFRESH = test hook (see s_test_marquee)
   if (hook) apply_test_hook(tuple_int(hook));
   Tuple *test_now = dict_find(iter, MESSAGE_KEY_TEST_NOW);
@@ -1017,6 +1242,7 @@ static void send_select(int index) {
   app_message_outbox_send();
 }
 
+#if HAS_NAV
 // Long SELECT: ask the phone to navigate to the selected tile (index -1: nothing is selected).
 static void send_nav_start(int index) {
   DictionaryIterator *out;
@@ -1025,6 +1251,7 @@ static void send_nav_start(int index) {
   dict_write_int32(out, MESSAGE_KEY_LIST_ID, s_model.list_id);
   app_message_outbox_send();
 }
+#endif
 
 // ---- Compass ----------------------------------------------------------------
 
@@ -1037,7 +1264,9 @@ static void compass_handler(CompassHeadingData data) {
   if (heading != s_heading) {
     s_heading = heading;
     if (s_wheel_layer) layer_mark_dirty(s_wheel_layer);
+#if HAS_NAV
     if (s_nav_layer) layer_mark_dirty(s_nav_layer);
+#endif
   }
 }
 
@@ -1064,15 +1293,19 @@ static void select_click(ClickRecognizerRef rec, void *ctx) {
   vibes_short_pulse();
 }
 
+#if HAS_NAV
 static void select_long_click(ClickRecognizerRef rec, void *ctx) {
   send_nav_start(bus_model_item(&s_model, s_sel) ? s_sel : -1);
 }
+#endif
 
 static void click_config(void *ctx) {
   window_single_repeating_click_subscribe(BUTTON_ID_UP, REPEAT_MS, up_click);
   window_single_repeating_click_subscribe(BUTTON_ID_DOWN, REPEAT_MS, down_click);
   window_single_click_subscribe(BUTTON_ID_SELECT, select_click);
+#if HAS_NAV
   window_long_click_subscribe(BUTTON_ID_SELECT, 0, select_long_click, NULL);
+#endif
 }
 
 static void focus_handler(bool in_focus) {
@@ -1139,7 +1372,9 @@ static void init(void) {
   bus_model_init(&s_model);
   bus_wakeup_init(&s_wakeups);
   bus_weather_init(&s_weather);
+#if HAS_NAV
   bus_nav_init(&s_nav);
+#endif
 
   s_window = window_create();
   window_set_click_config_provider(s_window, click_config);
@@ -1175,7 +1410,9 @@ static void deinit(void) {
   tick_timer_service_unsubscribe();
   app_message_deregister_callbacks();
   if (s_notify_window) window_destroy(s_notify_window);
+#if HAS_NAV
   if (s_nav_window) window_destroy(s_nav_window);
+#endif
   window_destroy(s_window);
   gpath_destroy(s_arrow_path);
 }

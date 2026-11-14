@@ -317,3 +317,29 @@ test('encodeList: ITEM_WALK carries the walking time; showWalk / showArrow false
   assert.equal(off.ITEM_BEARING, -1, 'no arrow');
   assert.equal(off.ITEM_DIST, '0.2mi', 'the distance is still shown');
 });
+
+test('encodeNavList: a header and one message per step, capped at NAV_MAX_STEPS', () => {
+  const steps = [{ type: 'walk', text: 'Walk to First', sub: '4 min walk', meters: 350, dir: 'EB', color: 'ff0000' },
+    { type: 'turn', text: 'é'.repeat(40), meters: 2100 }, { type: 'bogus' }];
+  const m = protocol.encodeNavList(steps, 'metric');
+  assert.deepEqual(m[0], { NAV_COUNT: 3 });
+  assert.deepEqual(m[1], { NAV_INDEX: 0, NAV_KIND: 0, NAV_TEXT: 'Walk to First', NAV_SUB: '4 min walk', NAV_DIST: '350m', NAV_DIR: 'EB', NAV_COLOR: 0xff0000 });
+  assert.equal(m[2].NAV_KIND, protocol.NAV_KIND.turn);
+  assert.equal(m[2].NAV_TEXT, 'é'.repeat(23));
+  assert.equal(m[2].NAV_DIST, '2.1km');
+  assert.equal(m[2].NAV_COLOR, -1);
+  assert.equal(m[3].NAV_KIND, protocol.NAV_KIND.info);
+  assert.equal(m[3].NAV_DIST, '');
+  const many = Array.from({ length: 30 }, () => ({ type: 'walk', text: 'x' }));
+  assert.equal(protocol.encodeNavList(many)[0].NAV_COUNT, protocol.NAV_MAX_STEPS);
+  assert.equal(protocol.encodeNavList(many).length, protocol.NAV_MAX_STEPS + 1);
+  assert.deepEqual(protocol.encodeNavList(null), [{ NAV_COUNT: 0 }]);
+});
+
+test('encodeNavLive: state, current step, time left, distance and bearing; null closes', () => {
+  assert.deepEqual(protocol.encodeNavLive({ state: 1, current: 2, sub: '4 min left', distance: 320, bearing: 89.6, units: 'metric' }),
+    { NAV_STATE: 1, NAV_CURRENT: 2, NAV_LSUB: '4 min left', NAV_LDIST: '320m', NAV_BEARING: 90 });
+  assert.deepEqual(protocol.encodeNavLive({ state: 2, current: 1, sub: '', distance: null, bearing: null }),
+    { NAV_STATE: 2, NAV_CURRENT: 1, NAV_LSUB: '', NAV_LDIST: '', NAV_BEARING: -1 });
+  assert.deepEqual(protocol.encodeNavLive(null), { NAV_STATE: 0 });
+});

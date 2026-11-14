@@ -1086,24 +1086,37 @@ low (`GOTHIC_14`, `GOTHIC_18` when the panel is ≥ 56 px), and beside them the 
 column), a baseline, and the temperature line 2 px wide (`GColorRed`; B&W black), carried flat to both edges of the graph.
 Tests: `test/weather.test.js`, `test/session.test.js`, `test/c/test_bus_weather.c`, `test/c/test_bus_wheel.c`.
 
-## 18. Navigation — `src/common/nav.js`, `src/common/routing.js`, `protocol.encodeNav`, `src/c/bus_nav.{h,c}`
+## 18. Navigation — `src/common/nav.js`, `src/common/routing.js`, `protocol.encodeNavList / encodeNavLive`, `src/c/bus_nav.{h,c}`
 
 Long SELECT on a tile starts navigation to it (it no longer refreshes; the phone refreshes on its own timer). The watch shows
-an arrow, a distance and an instruction; the phone follows the GPS every `POLL_MS` (5 s) and sends the guidance when it changes.
+the steps as a wheel like the main list, the current step open; the phone follows the GPS every `POLL_MS` (5 s), advances through
+the steps and sends what changed. **Aplite has no navigation** (not enough RAM: the long press does nothing there).
 
 - Watch → phone: `{NAV_START: index, LIST_ID}` (index −1 when no tile is selected → ignored) and `{NAV_STOP: 1}` (BACK, or the window
   closing). Decoded as `{type: 'navStart', listId, index}` / `{type: 'navStop'}`. `REFRESH` from the watch is no longer decoded
   (phone → watch, `REFRESH` is still the UI test hook).
-- Phone → watch: `encodeNav({state, text, sub, distance, bearing, color, units})` → `{NAV_STATE: 1 guiding | 2 arrived, NAV_TEXT, NAV_SUB`
-  (≤ 47 bytes), `NAV_DIST` (as `ITEM_DIST`), `NAV_BEARING` (−1 = no arrow), `NAV_COLOR}`; `encodeNav(null)` → `{NAV_STATE: 0}` closes the window.
-- Targets, from the session's last list (`lastList()` carries `data` for stop coordinates): *pickup* → walk to the stop, then "Wait for the 44"
-  (arrived; next time); *drop-off* → "Ride to <stop>", then "Get off here"; *trip* → every remaining leg of the stored plan:
+- Phone → watch, the **step list** `encodeNavList(steps, units)` → `[{NAV_COUNT: n ≤ NAV_MAX_STEPS 16}, {NAV_INDEX: i, NAV_KIND, NAV_TEXT,
+  NAV_SUB, NAV_DIST, NAV_DIR, NAV_COLOR} × n]`: `NAV_KIND` walk 0 · board 1 · ride 2 · wait 3 · arrive 4 · info 5 · turn 6; `NAV_TEXT` the
+  instruction, `NAV_SUB` its detail ("4 min walk · 44 at 8:10", "First · 8:10", "Arrive 8:20"), `NAV_DIST` the step's **length**
+  from the previous point (as `ITEM_DIST`, '' = unknown), `NAV_DIR` its travel direction (`NB EB SB WB`; a bus leg's own), `NAV_COLOR`
+  (≤ 47 bytes each). Sent when it changes (a walking step replaced by its turns, the first position known).
+- Phone → watch, the **live guidance** `encodeNavLive({state, current, sub, distance, bearing, units})` → `{NAV_STATE: 1 guiding |
+  2 arrived (the current step is the last kind: wait / arrive / info), NAV_CURRENT: step index, NAV_LSUB: time left ("4 min left",
+  "Departs in 10 min", "Arrive in 12 min", "Next 5 min"), NAV_LDIST: distance to the step's target, NAV_BEARING: −1 = no arrow}`,
+  sent when it changes (bearing in 5° steps); `encodeNavLive(null)` → `{NAV_STATE: 0}` closes the window.
+- Steps, from the session's last list (`lastList()` carries `data` for stop coordinates): *pickup* → walk to the stop, then "Wait for the 44"
+  (next time); *drop-off* → "Ride to <stop>", then "Get off here"; *trip* → every remaining leg of the stored plan:
   walk (radius 30 m) → board (until `departAt` + 30 s) → ride (radius 60 m or `arriveAt` + 60 s) → … → "Arrive at <destination>".
-  A stop without coordinates → an info line, no arrow. A route is navigated to as its pickup tile: the most accessible stop of that route.
-- Navigation ends on `navStop`, a new settings save, or after 2 h. Guidance is only re-sent when it changes (bearing in 5° steps).
+  A stop without coordinates → an info step, no arrow. A route is navigated to as its pickup tile: the most accessible stop of that route.
+- Navigation ends on `navStop`, a new settings save, or after 2 h.
 - **Routing source** (`routingUrl`, optional): a URL template with `{fromLat} {fromLon} {toLat} {toLon}` (or `{from}` / `{to}` = `lat,lon`),
   fetched once per walking step. Answers understood: `{steps: [{text, lat, lon}]}`, `{points: [{lat, lon}] | [[lat, lon]]}`, OSRM
-  (`routes[0].legs[].steps[].maneuver` → instructions, else `routes[0].geometry.coordinates`); ≤ 40 waypoints. The arrow then aims at
-  the next waypoint (passed within 20 m) with its instruction; a failed fetch keeps the straight arrow.
-- Watch: `bus_nav_set` keeps the guidance (strings cut at UTF-8 boundaries, bearing outside 0..359 → −1, returns true when the instruction
-  changed → one short vibration). Tests: `test/nav.test.js`, `test/routing.test.js`, `test/c/test_bus_nav.c`.
+  (`routes[0].legs[].steps[].maneuver` → instructions, else `routes[0].geometry.coordinates`); ≤ 40 waypoints. The walking step is
+  replaced in the list by one `turn` step per waypoint (passed within 20 m; the last within 30 m), thinned to the room left in the
+  16 steps; a failed fetch keeps the straight arrow.
+- Watch: `bus_nav_begin / set_step / set_live` keep the list and the live state (strings cut at UTF-8 boundaries, bearing outside 0..359 →
+  −1; `set_live` returns true when the current step changed → scroll to it, one short vibration). The nav window is a wheel
+  (`bus_wheel`): level 0 = band with kind, direction and the step's length, the instruction (scrolls when long), then the detail and — for
+  the current step — time left beside an arrow over the distance; level 1 = kind pill + instruction + detail; done steps are dimmed; the
+  status line reads "Step 2 of 5". UP / DOWN look ahead or back, SELECT returns to the current step, BACK stops.
+  Tests: `test/nav.test.js`, `test/routing.test.js`, `test/c/test_bus_nav.c`.

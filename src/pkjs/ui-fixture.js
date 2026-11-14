@@ -148,11 +148,21 @@ var STEPS = [
   function () { sendList(tripItems()); hook(0); },// 8 planned-trip tiles pinned first
   function () { sendNotify(); },                  // 9 notification window
   function () { sendList([], 'No stops nearby'); }, // 10 empty list / status screen
-  function () { sender.sendAll([{ NAV_STATE: 1, NAV_TEXT: 'Walk to Franklin Av & Lyndale Av S', NAV_SUB: '4 min walk \u00B7 2 at 8:09 AM',
-                                  NAV_DIST: '320ft', NAV_BEARING: 90, NAV_COLOR: 0x771473 }]); },  // 11 navigation: walking to a stop
-  function () { sender.sendAll([{ NAV_STATE: 2, NAV_TEXT: 'Wait for the 2', NAV_SUB: 'Next 5 min',
-                                  NAV_DIST: '', NAV_BEARING: -1, NAV_COLOR: 0x771473 }]); }          // 12 navigation: arrived
+  function () { sendNav(0, '4 min left', '320ft', 90); },     // 11 navigation: walking to the stop
+  function () { sendNav(2, 'Arrive in 12 min', '2.1mi', 45); }  // 12 navigation: riding, the first steps done
 ];
+
+// Navigation (§18): a planned trip's steps, then the live guidance of step `current`.
+function sendNav(current, sub, dist, bearing) {
+  var C = 0x771473, steps = [
+    { NAV_INDEX: 0, NAV_KIND: 0, NAV_TEXT: 'Walk to Franklin Av & Lyndale Av S', NAV_SUB: '2 at 8:09 AM', NAV_DIST: '320ft', NAV_DIR: 'EB', NAV_COLOR: C },
+    { NAV_INDEX: 1, NAV_KIND: 1, NAV_TEXT: 'Board 2 East', NAV_SUB: 'Franklin Av \u00B7 8:09 AM', NAV_DIST: '', NAV_DIR: 'EB', NAV_COLOR: C },
+    { NAV_INDEX: 2, NAV_KIND: 2, NAV_TEXT: 'Ride to Franklin Station', NAV_SUB: 'Arrive 8:24 AM', NAV_DIST: '5.2mi', NAV_DIR: 'EB', NAV_COLOR: C },
+    { NAV_INDEX: 3, NAV_KIND: 0, NAV_TEXT: 'Walk to Work', NAV_SUB: '3 min walk', NAV_DIST: '700ft', NAV_DIR: 'NB', NAV_COLOR: C },
+    { NAV_INDEX: 4, NAV_KIND: 4, NAV_TEXT: 'Arrive at Work', NAV_SUB: '', NAV_DIST: '', NAV_DIR: '', NAV_COLOR: C }];
+  sender.sendAll([{ NAV_COUNT: steps.length }].concat(steps,
+    [{ NAV_STATE: 1, NAV_CURRENT: current, NAV_LSUB: sub, NAV_LDIST: dist, NAV_BEARING: bearing }]));
+}
 
 // Weather panel (§17): 24 hours from FIXED_NOW, 4° now warming to 9° in the afternoon, a rainy spell in between.
 function sendWeather() {
