@@ -1,7 +1,7 @@
 // Phone <-> watch AppMessage encoding (CONTRACTS.md section 7). ES5.
 var format = require('./format');
 
-var KIND = { pickup: 0, dropoff: 1, trip: 2 };
+var KIND = { pickup: 0, dropoff: 1, trip: 2, place: 3 };
 var TITLE_MAX_BYTES = 63;        // full stop names: the watch scrolls (marquee) what doesn't fit
 var ROUTE_MAX_BYTES = 63;        // the route's full name (ITEM_ROUTE)
 var NOTIFY_TITLE_MAX_BYTES = 31;
@@ -119,6 +119,33 @@ function encodeList(listId, items, status, opts) {
   return out;
 }
 
+// Saved locations (CONTRACTS.md §19): their own list, shown above the first row. [{LIST_ID, PLACE_COUNT: n},
+// {LIST_ID, PLACE_INDEX: i, ITEM_TITLE (name), ITEM_ROUTE (address), ITEM_COLOR, ITEM_BEARING, ITEM_DIST, ITEM_WALK?} × n]
+var MAX_PLACES = 8;
+var PLACE_TEXT_MAX_BYTES = 47;
+function encodePlaces(listId, items, opts) {
+  items = items || [];
+  var units = opts && opts.units === 'metric' ? 'metric' : 'imperial';
+  var showWalk = !(opts && opts.showWalk === false), showArrow = !(opts && opts.showArrow === false);
+  var n = Math.min(items.length, MAX_PLACES);
+  var out = [{ LIST_ID: listId, PLACE_COUNT: n }];
+  for (var i = 0; i < n; i++) {
+    var it = items[i] || {};
+    var msg = {
+      LIST_ID: listId,
+      PLACE_INDEX: i,
+      ITEM_TITLE: truncateUtf8(it.title, PLACE_TEXT_MAX_BYTES),
+      ITEM_ROUTE: truncateUtf8(it.address, PLACE_TEXT_MAX_BYTES),
+      ITEM_COLOR: encodeColor(it.color),
+      ITEM_BEARING: showArrow ? encodeBearing(it.bearing) : -1,
+      ITEM_DIST: encodeDistance(it.distance, units)
+    };
+    if (showWalk && typeof it.walk === 'number' && isFinite(it.walk) && it.walk >= 0) msg.ITEM_WALK = Math.round(it.walk);
+    out.push(msg);
+  }
+  return out;
+}
+
 // Navigation (CONTRACTS.md §18): the step list, then the live guidance of the current step.
 var NAV_MAX_STEPS = 16;
 var NAV_KIND = { walk: 0, board: 1, ride: 2, wait: 3, arrive: 4, info: 5, turn: 6 };
@@ -212,6 +239,12 @@ function decodeWatchMessage(payload) {
   if (has(payload, 'SELECT_INDEX') && has(payload, 'LIST_ID')) {
     return { type: 'select', listId: Number(payload.LIST_ID), index: Number(payload.SELECT_INDEX) };
   }
+  if (has(payload, 'PLACE_SELECT') && has(payload, 'LIST_ID')) {
+    return { type: 'placeSelect', listId: Number(payload.LIST_ID), index: Number(payload.PLACE_SELECT) };
+  }
+  if (has(payload, 'PLACE_NAV') && has(payload, 'LIST_ID')) {
+    return { type: 'navStart', places: true, listId: Number(payload.LIST_ID), index: Number(payload.PLACE_NAV) };
+  }
   if (has(payload, 'NAV_START') && has(payload, 'LIST_ID')) {
     return { type: 'navStart', listId: Number(payload.LIST_ID), index: Number(payload.NAV_START) };
   }
@@ -230,16 +263,32 @@ function decodePrefs(v) {
 }
 
 // Sends messages one at a time through sendFn(dict, onOk, onErr) (= Pebble.sendAppMessage).
-// Each queued entry remembers its batch and whether that batch is a list (has an ITEM_COUNT header).
+// Each queued entry remembers its batch and which list it carries, if any: 'items' (an ITEM_COUNT header) or 'places'
+// (PLACE_COUNT); a newer list of the same kind supersedes it.
+var LIST_HEADERS = { ITEM_COUNT: 'items', PLACE_COUNT: 'places' };
+function listKind(messages) {
+  for (var i = 0; i < messages.length; i++) {
+    for (var h in LIST_HEADERS) {
+      if (LIST_HEADERS.hasOwnProperty(h) && messages[i] && Object.prototype.hasOwnProperty.call(messages[i], h)) return LIST_HEADERS[h];
+    }
+  }
+  return '';
+}
+
+// opts.timeout (ms, optional): a send that is neither acknowledged nor refused by then counts as failed, so a phone app
+// that never calls back (seen with some companion apps when a message can't be converted) can't stall the queue.
 function createSender(sendFn, opts) {
   var retries = opts && typeof opts.retries === 'number' ? opts.retries : 2;
-  var queue = [];       // [{ msg, batch, list }] not yet sent
+  var timeout = opts && typeof opts.timeout === 'number' && opts.timeout > 0 ? opts.timeout : 0;
+  var setT = (opts && opts.setTimeout) || (typeof setTimeout === 'function' ? setTimeout : null);
+  var clearT = (opts && opts.clearTimeout) || (typeof clearTimeout === 'function' ? clearTimeout : null);
+  var queue = [];       // [{ msg, batch, list }] not yet sent (list: '' | 'items' | 'places')
   var inFlight = null;  // { msg, batch, list, failures }
   var batches = 0;      // batch id counter
-  var listBatch = 0;    // id of the newest list batch
+  var listBatch = {};   // list kind → id of its newest batch
 
   function stale(entry) {
-    return entry.list && entry.batch !== listBatch;
+    return !!entry.list && entry.batch !== listBatch[entry.list];
   }
 
   function next() {
@@ -252,15 +301,21 @@ function createSender(sendFn, opts) {
   function transmit() {
     var current = inFlight;
     var done = false;
+    var timer = timeout && setT ? setT(function () { timer = null; onErr(new Error('timeout')); }, timeout) : null;
+    function settle() {
+      done = true;
+      if (timer !== null && clearT) clearT(timer);
+      timer = null;
+    }
     function onOk() {
       if (done) return;
-      done = true;
+      settle();
       inFlight = null;
       next();
     }
     function onErr() {
       if (done) return;
-      done = true;
+      settle();
       current.failures++;
       if (!stale(current) && current.failures <= retries) {
         transmit();          // retry the same message (inFlight unchanged)
@@ -280,23 +335,20 @@ function createSender(sendFn, opts) {
   }
 
   return {
-    // A batch carrying a new list (ITEM_COUNT header) drops the queued messages of earlier list batches; queued
-    // non-list messages (status, wakeups, notify) stay, in order. Non-list batches are appended.
+    // A batch carrying a new list (ITEM_COUNT or PLACE_COUNT header) drops the queued messages of earlier batches of the
+    // same list; everything else queued (the other list, status, wakeups, notify) stays, in order. Others are appended.
     sendAll: function (messages) {
       messages = (messages || []).slice();
-      var isList = false;
+      var kind = listKind(messages);
       var i;
-      for (i = 0; i < messages.length; i++) {
-        if (messages[i] && Object.prototype.hasOwnProperty.call(messages[i], 'ITEM_COUNT')) isList = true;
-      }
       var id = ++batches;
-      if (isList) {
-        listBatch = id;
+      if (kind) {
+        listBatch[kind] = id;
         var kept = [];
-        for (i = 0; i < queue.length; i++) if (!queue[i].list) kept.push(queue[i]);
+        for (i = 0; i < queue.length; i++) if (queue[i].list !== kind) kept.push(queue[i]);
         queue = kept;
       }
-      for (i = 0; i < messages.length; i++) queue.push({ msg: messages[i], batch: id, list: isList });
+      for (i = 0; i < messages.length; i++) queue.push({ msg: messages[i], batch: id, list: kind });
       next();
     },
     pending: function () {
@@ -321,6 +373,9 @@ module.exports = {
   encodeList: encodeList,
   encodeStatus: encodeStatus,
   encodeNavList: encodeNavList,
+  encodePlaces: encodePlaces,
+  MAX_PLACES: MAX_PLACES,
+  PLACE_TEXT_MAX_BYTES: PLACE_TEXT_MAX_BYTES,
   encodeNavLive: encodeNavLive,
   NAV_MAX_STEPS: NAV_MAX_STEPS,
   NAV_KIND: NAV_KIND,

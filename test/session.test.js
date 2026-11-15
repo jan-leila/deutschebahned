@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const settings = require('../src/common/settings');
+const context = require('../src/common/context');
 const { createSession, STORAGE_KEYS } = require('../src/common/session');
 
 function memoryStorage(init) {
@@ -184,8 +185,11 @@ test('select: records a sample, trains with the config prior, re-sends the re-ra
   assert.equal(h.session.select(1, 1), true);
   const samples = h.session.getSamples();
   assert.equal(samples.length, 1);
+  // every candidate also carries the moment's context crossed with its key (no forecast: no weather ones)
+  const withCtx = context.augment(ITEMS, context.at(NOW, null));
   assert.deepEqual(samples[0], { t: NOW, lat: 10, lon: 20, chosen: 1,
-    candidates: [{ key: 'p1', features: ITEMS[0].features }, { key: 'd1', features: ITEMS[1].features }] });
+    candidates: [{ key: 'p1', features: withCtx[0].features }, { key: 'd1', features: withCtx[1].features }] });
+  assert.equal(samples[0].candidates[0].features['p1@dow' + new Date(NOW * 1000).getDay()], context.UNIT);
   assert.equal(JSON.parse(h.storage.getItem('busWatch.samples')).length, 1);
   assert.equal(h.calls.train.length, 1);
   assert.equal(h.calls.train[0].prior, -1, 'prior is weightFor(key, config, null)');
@@ -337,15 +341,21 @@ const FORECAST = { current: 20, times: [NOW - 1800, NOW + 1800, NOW + 5400], tem
 const weatherOn = extra => JSON.stringify({ version: 2, providers: [{ id: 'p', type: 'mock' }], showWeather: true, ...extra });
 const tick = () => new Promise(r => setTimeout(r, 5));
 
-test('weather: fetched at the refresh position and sent in the watch units; off by default', async () => {
+test('weather: fetched at the refresh position and sent in the watch units; no panel by default', async () => {
   const asked = [];
   const weather = (pos, cb) => { asked.push(pos); setTimeout(() => cb(null, FORECAST), 0); };
   const off = harness({ weather });
   off.session.load();
   await refresh(off.session);
   await tick();
-  assert.equal(asked.length, 0);
+  assert.equal(asked.length, 1, 'fetched for learning (training.useWeather) even with the panel off');
   assert.equal(off.sent.some(m => 'WEATHER_COUNT' in m), false);
+  const none = harness({ weather, storage: { 'busWatch.config': JSON.stringify({ training: { useWeather: false } }) } });
+  none.session.load();
+  await refresh(none.session);
+  await tick();
+  assert.equal(asked.length, 1, 'neither the panel nor learning wants it: not fetched');
+  asked.length = 0;
 
   const on = harness({ weather, storage: { 'busWatch.config': weatherOn() } });
   on.session.load();
@@ -382,4 +392,96 @@ test('weather: a failed fetch sends nothing; turning it off hides the panel once
   const ws = h.sent.filter(m => 'WEATHER_COUNT' in m);
   assert.equal(ws.length, 2);
   assert.deepEqual(ws[1], { WEATHER_COUNT: 0 });
+});
+
+// ---- saved locations (§19) and context ------------------------------------------------------------------------
+const PLACES_CONFIG = extra => JSON.stringify({ version: 2, providers: [{ id: 'p', type: 'mock' }], ...extra,
+  places: [{ id: 'home', name: 'Home', lat: 10, lon: 20.01, address: '1 Main St' }, { id: 'work', name: 'Work', lat: 10.01, lon: 20 }] });
+const placeMsgs = sent => sent.filter(m => 'PLACE_COUNT' in m || 'PLACE_INDEX' in m);
+
+test('places: sent as their own list on refresh, ranked; unchanged → not sent again; none saved → nothing', async () => {
+  const none = harness();
+  none.session.load();
+  await refresh(none.session);
+  assert.equal(placeMsgs(none.sent).length, 0);
+  assert.equal(none.session.lastPlaces(), null);
+
+  const h = harness({ storage: { 'busWatch.config': PLACES_CONFIG() } });
+  h.session.load();
+  h.session.setPrefs({ clock24: true, units: 'metric' });
+  await refresh(h.session);
+  const msgs = placeMsgs(h.sent);
+  assert.deepEqual(msgs[0], { LIST_ID: 1, PLACE_COUNT: 2 });
+  assert.deepEqual(msgs.slice(1).map(m => [m.PLACE_INDEX, m.ITEM_TITLE, m.ITEM_ROUTE]), [[0, 'Home', '1 Main St'], [1, 'Work', '']]);
+  assert.equal(msgs[1].ITEM_DIST, '1.1km');
+  assert.equal(msgs[1].ITEM_BEARING, 90);
+  assert.ok(msgs[1].ITEM_WALK > 0);
+  const lp = h.session.lastPlaces();
+  assert.equal(lp.listId, 1);
+  assert.equal(lp.items[0].features['place:home'], Math.round(lp.items[0].distance));
+  assert.ok(Object.keys(lp.items[0].features).some(k => k.startsWith('place:home@dow')), 'context features');
+  h.sent.length = 0;
+  await refresh(h.session);
+  assert.equal(placeMsgs(h.sent).length, 0, 'same as shown: not re-sent');
+  assert.equal(h.session.lastPlaces().listId, 1);
+});
+
+test('places: SELECT records a pick with its context and label, trains, and re-sends them (new id)', async () => {
+  const h = harness({ storage: { 'busWatch.config': PLACES_CONFIG() } });
+  h.session.load();
+  await refresh(h.session);
+  h.sent.length = 0;
+  assert.equal(h.session.selectPlace(9, 0), false, 'stale list id');
+  assert.equal(h.session.selectPlace(1, 2), false, 'bad index');
+  assert.deepEqual(h.session.handleWatchMessage({ PLACE_SELECT: 1, LIST_ID: 1 }), { type: 'placeSelect', listId: 1, index: 1 });
+  const samples = h.session.getSamples();
+  assert.equal(samples.length, 1);
+  assert.equal(samples[0].chosen, 1);
+  assert.deepEqual(samples[0].candidates.map(c => c.key), ['place:home', 'place:work']);
+  assert.equal(h.calls.train.length, 1);
+  const msgs = placeMsgs(h.sent);
+  assert.deepEqual(msgs[0], { LIST_ID: 2, PLACE_COUNT: 2 });
+  assert.deepEqual(msgs.slice(1).map(m => m.ITEM_TITLE), ['Work', 'Home'], 're-ranked with what was learned (fake: flipped)');
+  assert.equal(h.session.lastPlaces().listId, 2);
+});
+
+test('context: the moment and the last forecast go into the features and into each pick (real optimize)', async () => {
+  const weather = (pos, cb) => setTimeout(() => cb(null, FORECAST), 0);
+  const h = harness({ weather });
+  h.session.load();
+  await refresh(h.session);
+  await tick();          // the forecast arrives after the first list
+  await refresh(h.session);
+  const opt = require('../src/common/optimize');
+  const items = h.session.lastList().items;
+  const ctx = h.session.lastList().ctx;
+  assert.equal(ctx.temp, 20);
+  assert.equal(ctx.rain, 0);
+  assert.equal(ctx.dow, new Date(NOW * 1000).getDay());
+  assert.equal(items[0].features['p1@temp'], context.UNIT * 2);
+  const s = opt.makeSample(items, 0, { lat: 1, lon: 2 }, NOW, ctx);
+  assert.deepEqual(s.ctx, ctx);
+  assert.equal(s.label, 'P1');
+  assert.equal(s.kind, 'pickup');
+});
+
+test('applySettings: picks removed on the settings page are dropped and learned again', async () => {
+  const h = harness();
+  h.session.load();
+  await refresh(h.session);
+  h.session.select(1, 0);
+  h.session.select(2, 1);
+  assert.equal(h.session.getSamples().length, 2);
+  const keep = [h.session.getSamples()[1]];
+  h.calls.train.length = 0;
+  h.session.applySettings({ config: h.session.getConfig(), samples: keep });
+  assert.deepEqual(h.session.getSamples(), keep);
+  assert.deepEqual(JSON.parse(h.storage.getItem('busWatch.samples')), keep);
+  assert.equal(h.calls.train.length, 1);
+  assert.equal(h.calls.train[0].n, 1);
+  h.calls.train.length = 0;
+  h.session.applySettings({ config: h.session.getConfig(), samples: [], learned: { a: 1 } });
+  assert.deepEqual(h.session.getSamples(), []);
+  assert.equal(h.calls.train.length, 0, 'learned weights came with them: not retrained');
+  assert.deepEqual(h.session.getLearned(), { a: 1 });
 });

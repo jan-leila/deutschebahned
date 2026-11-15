@@ -120,6 +120,11 @@ run_scenes() {
   next_step
   compass 90;           shot 04-heading90
   compass 0
+  btn click up;         shot 04a-places              # UP on the first row: the saved locations, the best one at the bottom
+  btn click up;         shot 04b-places-up
+  btn click select
+  wait_log "UI-FIXTURE place 1 1" 10 || bad "SELECT on a place not reported as PLACE_SELECT 1 1"
+  btn click down; btn click down                     # back to the list's first row
   btn click down;       shot 05-down1-dropoff      # drop-off tile selected
   btn click down;       shot 06-down2
   next_step;            shot 07-anim-mid           # wheel halfway between rows 2 and 3

@@ -83,7 +83,11 @@
       "WEATHER_HI",
       "WEATHER_LO",
       "WEATHER_TEMPS",
-      "WEATHER_RAIN"
+      "WEATHER_RAIN",
+      "PLACE_COUNT",
+      "PLACE_INDEX",
+      "PLACE_SELECT",
+      "PLACE_NAV"
     ],
     "capabilities": [
       "configurable",

@@ -5,6 +5,7 @@
 var ID_RE = /^[a-z0-9_-]{1,32}$/;
 var DEFAULT_PROVIDER_TYPE = 'metrotransit';   // what a version 1 config's '' provider type meant
 var MAX_DESTINATIONS = 8;
+var MAX_PLACES = 8;
 var MAX_PROVIDERS = 8;
 var LOCATION_MODES = ['gps', 'fixed'];
 var COVERAGE_MODES = ['auto', 'manual'];
@@ -70,9 +71,12 @@ function defaults() {
     routes: [],
     stops: [],
     destinations: [],
+    places: [],        // saved locations: shown above the first row on the watch (UP from the top), with an arrow to each
     schedule: { leadMinutes: 15, walkSpeed: 1.3, maxWalk: 800, transferWalk: 250, maxTransfers: 1, minTransfer: 120,
                 lastTransfer: 600, leaveReminder: true, fallbackMinutes: 60 },
-    training: { autoTrain: true, learningRate: 0.05, iterations: 300, temperature: 60, regularization: 0.01, maxSamples: 200 }
+    // useWeather: the weather at your position (Open-Meteo) is part of what learning sees, even with the panel off
+    training: { autoTrain: true, useWeather: true, learningRate: 0.05, iterations: 300, temperature: 60, regularization: 0.01,
+                maxSamples: 200 }
   };
 }
 
@@ -233,6 +237,35 @@ function normalizeStops(list, providers) {
   return out;
 }
 
+// Saved locations: ≤ MAX_PLACES entries with numeric lat / lon (others dropped). name defaults to 'Place N'; ids are
+// kept unless empty or taken, then the lowest free 'placeN'; scale as a stop's (weight per meter of walking to it).
+function normalizePlaces(list) {
+  var out = [], seen = {}, pending = [];
+  var raw = list instanceof Array ? list : [];
+  for (var i = 0; i < raw.length && out.length < MAX_PLACES; i++) {
+    var pl = raw[i];
+    if (!isObject(pl)) continue;
+    var lat = toNumber(pl.lat), lon = toNumber(pl.lon);
+    if (lat === null || lon === null) continue;
+    var id = str(pl.id, '');
+    if (id !== '' && seen.hasOwnProperty(id)) id = '';
+    if (id !== '') seen[id] = true;
+    var name = str(pl.name, '');
+    var place = { id: id, name: name === '' ? 'Place ' + (out.length + 1) : name,
+                  lat: num(lat, 0, { min: -90, max: 90 }), lon: num(lon, 0, { min: -180, max: 180 }),
+                  address: str(pl.address, ''), scale: num(pl.scale, 0, SCALE_RANGE) };
+    if (id === '') pending.push(place);
+    out.push(place);
+  }
+  var n = 1;
+  for (var p = 0; p < pending.length; p++) {
+    while (seen.hasOwnProperty('place' + n)) n++;
+    pending[p].id = 'place' + n;
+    seen['place' + n] = true;
+  }
+  return out;
+}
+
 // A version 1 config (one `provider`, `connections` + `stopScales`, default scales) as version 2 lists.
 // Its single source becomes provider `<type>`; a pinned stop's route is saved too, so its drop-offs keep working.
 function migrateV1(r) {
@@ -345,6 +378,7 @@ function normalize(raw) {
     seenDests['dest' + nextId] = true;
   }
   out.destinations = dests;
+  out.places = normalizePlaces(r.places);
 
   var sc = isObject(r.schedule) ? r.schedule : {};
   out.schedule = {};
@@ -354,7 +388,7 @@ function normalize(raw) {
   out.schedule.leaveReminder = bool(sc.leaveReminder, d.schedule.leaveReminder);
 
   var t = isObject(r.training) ? r.training : {};
-  out.training = { autoTrain: bool(t.autoTrain, d.training.autoTrain) };
+  out.training = { autoTrain: bool(t.autoTrain, d.training.autoTrain), useWeather: bool(t.useWeather, d.training.useWeather) };
   for (var tf in TRAINING_RANGES) {
     if (TRAINING_RANGES.hasOwnProperty(tf)) out.training[tf] = num(t[tf], d.training[tf], TRAINING_RANGES[tf]);
   }
@@ -377,6 +411,7 @@ module.exports = {
   SCALE_RANGE: SCALE_RANGE,
   COVERAGE_RADIUS: COVERAGE_RADIUS,
   MAX_DESTINATIONS: MAX_DESTINATIONS,
+  MAX_PLACES: MAX_PLACES,
   MAX_PROVIDERS: MAX_PROVIDERS,
   ID_RE: ID_RE,
   freeId: freeId,

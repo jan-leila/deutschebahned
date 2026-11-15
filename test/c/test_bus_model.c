@@ -274,6 +274,47 @@ static void test_lane(void) {
   bus_format_detail(&p, now, true, b, sizeof b); CHECK_STR(b, "3m, 12m");
 }
 
+static void test_places(void) {
+  static BusPlaces p;
+  bus_places_init(&p);
+  CHECK(p.list_id == -1 && p.count == 0);
+  CHECK(bus_places_at_row(&p, 0) == NULL);
+  bus_places_begin(&p, 7, 99);
+  CHECK(p.count == BUS_MAX_PLACES);
+  bus_places_begin(&p, 7, 3);
+  CHECK(p.count == 3);
+  CHECK(!bus_places_set(&p, 8, 0, "Home", "", -1, 0, "", 0));   // wrong list
+  CHECK(!bus_places_set(&p, 7, 3, "Home", "", -1, 0, "", 0));   // index >= count
+  CHECK(bus_places_set(&p, 7, 0, "Home", "1 Main St", 0xFF0000, 90, "350m", 240));
+  CHECK(bus_places_set(&p, 7, 2, "Gym", NULL, -1, 400, NULL, -5));
+  // rows run from the last place to the best one at the bottom; a place not yet arrived → NULL
+  CHECK(bus_places_at_row(&p, 2) == &p.items[0]);
+  CHECK(bus_places_at_row(&p, 1) == NULL);
+  CHECK(bus_places_at_row(&p, 0) == &p.items[2]);
+  CHECK(bus_places_at_row(&p, 3) == NULL && bus_places_at_row(&p, -1) == NULL);
+  CHECK(p.items[2].bearing == -1 && p.items[2].walk == -1);
+  CHECK_STR(p.items[2].address, "");
+  // long names are cut at a UTF-8 boundary
+  char longname[80];
+  memset(longname, 'a', sizeof longname);
+  memcpy(longname + BUS_PLACE_LEN - 2, "\xC3\xA9", 2);  // straddles the last byte that fits
+  longname[sizeof longname - 1] = 0;
+  CHECK(bus_places_set(&p, 7, 1, longname, "", -1, 0, "", 0));
+  CHECK(strlen(p.items[1].name) == BUS_PLACE_LEN - 2);
+
+  BusItem it;
+  bus_place_as_item(&p.items[0], &it);
+  CHECK(it.present && it.kind == BUS_KIND_PLACE && it.lanes == 1 && it.lead == -1 && it.badge[0] == 0);
+  CHECK_STR(it.title, "Home");
+  CHECK_STR(it.route, "1 Main St");
+  CHECK_STR(it.dist, "350m");
+  CHECK(it.bearing == 90 && it.walk == 240 && it.color == 0xFF0000 && it.t[0] == 0);
+  char b[48];
+  bus_format_detail(&it, 0, true, b, sizeof b); CHECK_STR(b, "1 Main St");
+  bus_places_begin(&p, 8, 0);
+  CHECK(p.count == 0 && bus_places_at_row(&p, 0) == NULL);
+}
+
 int main(void) {
   setenv("TZ", "UTC", 1);
   tzset();
@@ -287,6 +328,7 @@ int main(void) {
   test_color();
   test_geo();
   test_lane();
+  test_places();
   printf("%d checks, %d failures\n", checks, failures);
   return failures ? 1 : 0;
 }

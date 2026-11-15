@@ -36,6 +36,9 @@ static Window *s_window;
 static TextLayer *s_status_layer;
 static Layer *s_wheel_layer;
 static BusModel s_model;
+static BusPlaces s_places;   // saved locations: the view above the first row (UP from the top)
+static bool s_in_places;     // the wheel shows the places (s_sel / s_pos are rows of that view)
+static BusItem s_place_tile; // the place being drawn, as a tile (bus_place_as_item)
 static BusWeather s_weather;
 #if HAS_NAV
 static BusNav s_nav;
@@ -309,15 +312,29 @@ static int16_t draw_dir(GContext *ctx, const char *code, GFont font, int16_t x, 
   return w + 4;
 }
 
+// What wheel row `row` shows in the current view: a list tile, or a saved location as one.
+static int view_rows(void) {
+  return s_in_places ? s_places.count : s_model.count;
+}
+
+static const BusItem *row_item(int row) {
+  if (!s_in_places) return bus_model_item(&s_model, row);
+  const BusPlace *pl = bus_places_at_row(&s_places, row);
+  if (!pl) return NULL;
+  bus_place_as_item(pl, &s_place_tile);
+  return &s_place_tile;
+}
+
 static void draw_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
-  const BusItem *it = bus_model_item(&s_model, s->index);
+  const BusItem *it = row_item(s->index);
   int16_t x = s->inset, w = width - 2 * s->inset;
   if (w <= 8) return;
 
   int16_t pad = s->level == 0 ? 4 : 3;
   int16_t ix = x + pad, iw = w - 2 * pad;
   // Level 0: a route-color band on top (holding the route's full name when there is one) and a bar below.
-  int16_t band_h = s->level == 0 ? (it && it->route[0] ? ROUTE_BAND_H : BAR_H) : 0;
+  // (A place's address goes on its detail line instead.)
+  int16_t band_h = s->level == 0 ? (it && it->route[0] && it->kind != BUS_KIND_PLACE ? ROUTE_BAND_H : BAR_H) : 0;
   if (s->level == 0) {
     GColor rc = route_color(it ? it->color : -1);
     fill_span(ctx, rc, x, x + w, s->y, s->y + band_h);
@@ -577,7 +594,7 @@ static void wheel_update(Layer *layer, GContext *ctx) {
   graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
 
-  if (s_model.count == 0) {
+  if (view_rows() == 0) {
     draw_weather(ctx, bus_wheel_space_above(&s_geom), b.size.w);
     graphics_context_set_text_color(ctx, GColorBlack);
     int16_t inset = PBL_IF_ROUND_ELSE(14, 4);
@@ -588,8 +605,8 @@ static void wheel_update(Layer *layer, GContext *ctx) {
   }
 
   WheelSlot slots[WHEEL_MAX_SLOTS];
-  int n = bus_wheel_layout(&s_geom, s_model.count, s_pos, slots, WHEEL_MAX_SLOTS);
-  if (n > 0 && slots[0].index == 0) draw_weather(ctx, slots[0].y, b.size.w);
+  int n = bus_wheel_layout(&s_geom, view_rows(), s_pos, slots, WHEEL_MAX_SLOTS);
+  if (!s_in_places && n > 0 && slots[0].index == 0) draw_weather(ctx, slots[0].y, b.size.w);
   // Draw the selected row last so its bars sit on top of its neighbours.
   int sel = -1;
   for (int i = 0; i < n; i++) {
@@ -602,8 +619,8 @@ static void wheel_update(Layer *layer, GContext *ctx) {
 
 static void redraw(void) {
   if (s_status_layer) {
-    text_layer_set_text(s_status_layer, s_model.status);
-    layer_set_hidden(text_layer_get_layer(s_status_layer), s_model.count == 0);
+    text_layer_set_text(s_status_layer, s_in_places ? "Saved places" : s_model.status);
+    layer_set_hidden(text_layer_get_layer(s_status_layer), view_rows() == 0);
   }
   if (s_wheel_layer) layer_mark_dirty(s_wheel_layer);
 }
@@ -1136,12 +1153,38 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
 
   if (count) {
     bus_model_begin_list(&s_model, tuple_int(list_id), (int)tuple_int(count));
-    s_marquee_start = now_ms();
-    int sel = bus_model_clamp_selection(&s_model, s_sel);
-    if (sel != s_sel) {
-      s_sel = sel;
-      jump_to_selection();
+    if (!s_in_places) {
+      s_marquee_start = now_ms();
+      int sel = bus_model_clamp_selection(&s_model, s_sel);
+      if (sel != s_sel) {
+        s_sel = sel;
+        jump_to_selection();
+      }
     }
+  }
+  Tuple *pcount = dict_find(iter, MESSAGE_KEY_PLACE_COUNT);
+  if (pcount) {
+    bus_places_begin(&s_places, tuple_int(list_id), (int)tuple_int(pcount));
+    if (s_in_places) {
+      s_marquee_start = now_ms();
+      if (s_places.count == 0) {
+        s_in_places = false;   // nothing left to show: back to the list's first row
+        s_sel = 0;
+        jump_to_selection();
+      } else if (s_sel >= s_places.count) {
+        s_sel = s_places.count - 1;
+        jump_to_selection();
+      }
+    }
+  }
+  Tuple *pindex = dict_find(iter, MESSAGE_KEY_PLACE_INDEX);
+  if (pindex) {
+    bus_places_set(&s_places, tuple_int(list_id), (int)tuple_int(pindex),
+                   tuple_str(dict_find(iter, MESSAGE_KEY_ITEM_TITLE)), tuple_str(dict_find(iter, MESSAGE_KEY_ITEM_ROUTE)),
+                   tuple_int_or(dict_find(iter, MESSAGE_KEY_ITEM_COLOR), -1),
+                   tuple_int_or(dict_find(iter, MESSAGE_KEY_ITEM_BEARING), -1),
+                   tuple_str(dict_find(iter, MESSAGE_KEY_ITEM_DIST)),
+                   tuple_int_or(dict_find(iter, MESSAGE_KEY_ITEM_WALK), -1));
   }
   if (index) {
     int32_t lid = tuple_int(list_id);
@@ -1234,12 +1277,19 @@ static void outbox_failed(DictionaryIterator *iter, AppMessageResult reason, voi
   if (dict_find(iter, MESSAGE_KEY_WAKEUP_FIRED)) schedule_wakeup_retry();
 }
 
+// SELECT on a tile (or, in the places view, on a saved location: its index in the phone's list)
 static void send_select(int index) {
   DictionaryIterator *out;
   if (app_message_outbox_begin(&out) != APP_MSG_OK) return;
-  dict_write_int32(out, MESSAGE_KEY_SELECT_INDEX, index);
-  dict_write_int32(out, MESSAGE_KEY_LIST_ID, s_model.list_id);
+  dict_write_int32(out, s_in_places ? MESSAGE_KEY_PLACE_SELECT : MESSAGE_KEY_SELECT_INDEX, index);
+  dict_write_int32(out, MESSAGE_KEY_LIST_ID, s_in_places ? s_places.list_id : s_model.list_id);
   app_message_outbox_send();
+}
+
+// the selected row's index in its list: the main list as it is, the places from the bottom up (bus_places_at_row)
+static int selected_index(void) {
+  if (s_in_places) return bus_places_at_row(&s_places, s_sel) ? s_places.count - 1 - s_sel : -1;
+  return bus_model_item(&s_model, s_sel) ? s_sel : -1;
 }
 
 #if HAS_NAV
@@ -1247,8 +1297,8 @@ static void send_select(int index) {
 static void send_nav_start(int index) {
   DictionaryIterator *out;
   if (app_message_outbox_begin(&out) != APP_MSG_OK) return;
-  dict_write_int32(out, MESSAGE_KEY_NAV_START, index);
-  dict_write_int32(out, MESSAGE_KEY_LIST_ID, s_model.list_id);
+  dict_write_int32(out, s_in_places ? MESSAGE_KEY_PLACE_NAV : MESSAGE_KEY_NAV_START, index);
+  dict_write_int32(out, MESSAGE_KEY_LIST_ID, s_in_places ? s_places.list_id : s_model.list_id);
   app_message_outbox_send();
 }
 #endif
@@ -1272,8 +1322,29 @@ static void compass_handler(CompassHeadingData data) {
 
 // ---- Buttons ----------------------------------------------------------------
 
-static void move(int delta) {
-  int sel = bus_model_clamp_selection(&s_model, s_sel + delta);
+// Switch between the list and the saved locations above it: UP from the first row opens the places with the best one
+// selected (at the bottom, next to the list); DOWN from there, or BACK, returns to the first row. Only a fresh press
+// crosses over: holding UP to get to the top stops at the first row.
+static void show_places(bool on) {
+  s_in_places = on;
+  s_sel = on ? s_places.count - 1 : 0;
+  jump_to_selection();
+  s_marquee_start = now_ms();
+  redraw();
+}
+
+static void move(int delta, bool held) {
+  if (!s_in_places && delta < 0 && s_sel == 0 && s_places.count > 0) {
+    if (!held) show_places(true);
+    return;
+  }
+  if (s_in_places && delta > 0 && s_sel >= s_places.count - 1) {
+    if (!held) show_places(false);
+    return;
+  }
+  int rows = view_rows(), sel = s_sel + delta;
+  if (sel > rows - 1) sel = rows - 1;
+  if (sel < 0) sel = 0;
   if (sel == s_sel) return;
   s_sel = sel;
   if (s_test_marquee >= 0) {
@@ -1284,25 +1355,33 @@ static void move(int delta) {
   }
 }
 
-static void up_click(ClickRecognizerRef rec, void *ctx) { move(-1); }
-static void down_click(ClickRecognizerRef rec, void *ctx) { move(1); }
+// a repeating click counts its repeats: more than one = the button is being held
+static void up_click(ClickRecognizerRef rec, void *ctx) { move(-1, click_number_of_clicks_counted(rec) > 1); }
+static void down_click(ClickRecognizerRef rec, void *ctx) { move(1, click_number_of_clicks_counted(rec) > 1); }
 
 static void select_click(ClickRecognizerRef rec, void *ctx) {
-  if (!bus_model_item(&s_model, s_sel)) return;
-  send_select(s_sel);
+  int index = selected_index();
+  if (index < 0) return;
+  send_select(index);
   vibes_short_pulse();
 }
 
 #if HAS_NAV
 static void select_long_click(ClickRecognizerRef rec, void *ctx) {
-  send_nav_start(bus_model_item(&s_model, s_sel) ? s_sel : -1);
+  send_nav_start(selected_index());
 }
 #endif
+
+static void back_click(ClickRecognizerRef rec, void *ctx) {
+  if (s_in_places) show_places(false);
+  else window_stack_pop(true);
+}
 
 static void click_config(void *ctx) {
   window_single_repeating_click_subscribe(BUTTON_ID_UP, REPEAT_MS, up_click);
   window_single_repeating_click_subscribe(BUTTON_ID_DOWN, REPEAT_MS, down_click);
   window_single_click_subscribe(BUTTON_ID_SELECT, select_click);
+  window_single_click_subscribe(BUTTON_ID_BACK, back_click);
 #if HAS_NAV
   window_long_click_subscribe(BUTTON_ID_SELECT, 0, select_long_click, NULL);
 #endif
@@ -1370,6 +1449,7 @@ static void init(void) {
   s_f24b = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
   s_arrow_path = gpath_create(&s_arrow_info);
   bus_model_init(&s_model);
+  bus_places_init(&s_places);
   bus_wakeup_init(&s_wakeups);
   bus_weather_init(&s_weather);
 #if HAS_NAV

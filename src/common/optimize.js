@@ -10,13 +10,22 @@ function copyFeatures(f) {
   return out;
 }
 
-function makeSample(items, chosenIndex, pos, now) {
+// ctx (optional): the moment (context.at) the list was picked from, kept so the settings page can show it.
+// label / kind: what the chosen item showed ('44 · Lake St'), so a pick can be recognized (and removed) later.
+function makeSample(items, chosenIndex, pos, now, ctx) {
   var list = items instanceof Array ? items : [];
   var candidates = [];
   for (var i = 0; i < list.length; i++) {
     candidates.push({ key: list[i].key, features: copyFeatures(list[i].features) });
   }
-  return { t: now, lat: pos ? pos.lat : 0, lon: pos ? pos.lon : 0, chosen: chosenIndex, candidates: candidates };
+  var s = { t: now, lat: pos ? pos.lat : 0, lon: pos ? pos.lon : 0, chosen: chosenIndex, candidates: candidates };
+  var it = list[chosenIndex];
+  if (it) {
+    s.kind = it.kind || '';
+    s.label = (it.badge ? it.badge + ' · ' : '') + (it.title || '');
+  }
+  if (ctx && typeof ctx === 'object') s.ctx = copyFeatures(ctx);
+  return s;
 }
 
 function usable(s) {

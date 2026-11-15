@@ -27,7 +27,29 @@ test('defaults match the contract', () => {
   assert.deepEqual(d.stops, []);
   for (const gone of ['provider', 'connections', 'stopScales', 'defaultStopScale', 'defaultRouteScale', 'defaultConnectionScale',
     'units', 'clock24']) assert.equal(d[gone], undefined, gone);
-  assert.deepEqual(d.training, { autoTrain: true, learningRate: 0.05, iterations: 300, temperature: 60, regularization: 0.01, maxSamples: 200 });
+  assert.deepEqual(d.training, { autoTrain: true, useWeather: true, learningRate: 0.05, iterations: 300, temperature: 60,
+    regularization: 0.01, maxSamples: 200 });
+  assert.deepEqual(d.places, []);
+});
+
+test('places: need a position; names, ids and scales filled; at most MAX_PLACES', () => {
+  const c = settings.normalize({ places: [
+    { name: ' Home ', lat: '44.9', lon: -93.2, address: ' 1 Main St ', scale: 5000 },
+    { id: 'gym', lat: 95, lon: 200 },
+    { name: 'No position', lat: null, lon: 1 },
+    'junk',
+    { id: 'gym', name: 'Taken id', lat: 1, lon: 2 },
+    { id: 'place1', name: 'Explicit', lat: 3, lon: 4 },
+  ] });
+  assert.deepEqual(c.places, [
+    { id: 'place2', name: 'Home', lat: 44.9, lon: -93.2, address: '1 Main St', scale: 1000 },
+    { id: 'gym', name: 'Place 2', lat: 90, lon: 180, address: '', scale: 0 },
+    { id: 'place3', name: 'Taken id', lat: 1, lon: 2, address: '', scale: 0 },
+    { id: 'place1', name: 'Explicit', lat: 3, lon: 4, address: '', scale: 0 },
+  ]);
+  const many = settings.normalize({ places: Array.from({ length: 12 }, (_, i) => ({ lat: i, lon: i })) });
+  assert.equal(many.places.length, settings.MAX_PLACES);
+  assert.equal(settings.normalize({ training: { useWeather: 'false' } }).training.useWeather, false);
 });
 
 test('defaults() returns independent copies', () => {
@@ -85,7 +107,7 @@ test('RANGES describes every numeric top-level field', () => {
 
 test('training fields validated', () => {
   const c = settings.normalize({ training: { autoTrain: 'false', learningRate: 0, iterations: '20.2', temperature: -1, regularization: 500, maxSamples: 'x' } });
-  assert.deepEqual(c.training, { autoTrain: false, learningRate: 0.0001, iterations: 20, temperature: 0.01, regularization: 100, maxSamples: 200 });
+  assert.deepEqual(c.training, { autoTrain: false, useWeather: true, learningRate: 0.0001, iterations: 20, temperature: 0.01, regularization: 100, maxSamples: 200 });
   assert.equal(settings.normalize({ training: { autoTrain: 0 } }).training.autoTrain, false);
   assert.equal(settings.normalize({ training: { autoTrain: 1 } }).training.autoTrain, true);
   assert.equal(settings.normalize({ training: { autoTrain: 'true' } }).training.autoTrain, true);

@@ -87,7 +87,9 @@ Config shape and defaults (distances are always **meters**, speeds m/s; the sett
 | `schedule.lastTransfer` | 600 | 0..3600 integer s — slack needed instead (when larger) when the connecting bus is the last one for an hour (`router.LAST_TRIP_GAP`); 0 = off |
 | `schedule.leaveReminder` | `true` | boolean — also notify at the leave time itself |
 | `schedule.fallbackMinutes` | 60 | 5..240 integer — no plan yet: re-check this long (+ lead) before `arriveBy` |
+| `places` | `[]` | ≤ 8 (`settings.MAX_PLACES`) saved locations `{id, name, lat, lon, address, scale}` — §19 |
 | `training.autoTrain` | `true` | boolean (accept `1/0`, `'true'/'false'`) |
+| `training.useWeather` | `true` | boolean — the weather at your position is part of the learning context (§19), fetched even with `showWeather` off |
 | `training.learningRate` | 0.05 | 0.0001..10 |
 | `training.iterations` | 300 | 1..5000 integer |
 | `training.temperature` | 60 | 0.01..100000 |
@@ -119,6 +121,10 @@ source). Routes keep their scale (missing → the old `defaultRouteScale`). Each
 `'Destination N'` (N = position among kept entries). `days` = weekday numbers (0 = Sunday) deduplicated and sorted, invalid ones
 dropped; `[]` = every day. `enabled` defaults to `true`. A non-empty `id` is kept (duplicates → first wins); empty ids are filled
 after the pass with the lowest unused `'destN'` (N = 1, 2, …). Tests: `test/settings.test.js`.
+
+`places`: entries need numeric `lat`/`lon` (clamped), others dropped; at most `MAX_PLACES`. `name` defaults to `'Place N'` (N = position
+among kept entries), `address` a trimmed string (default `''`), `scale` in `SCALE_RANGE` (default 0: a weight per meter of walking to it,
+like a stop's `walkScale`). Ids: a non-empty id is kept unless taken (then treated as empty); empty ids get the lowest unused `'placeN'`.
 
 ## 2a. `src/common/view.js` — runtime view of a config (pure)
 
@@ -565,7 +571,8 @@ weightFor(key, config, learned) // learned[key] if finite number; else, config b
                                 //  'stop:REF'  → the saved stop's walkScale   (walking to it: pickup distance)
                                 //  'ride:REF'  → the saved stop's rideScale   (riding to it: drop-off distance left)
                                 //  'route:REF' → the saved route's scale      (seconds until the bus)
-                                //  not saved, missing scale, anything else → 0
+                                //  'place:ID'  → the saved location's scale   (walking to it, §19)
+                                //  not saved, missing scale, anything else (incl. context keys 'KEY@…', §19) → 0
 score(features, weightFn)       // Σ weightFn(key) * value
 rank(items, config, learned)    // → NEW array of shallow copies with `.score`, sorted by score descending,
                                 //   ties keep input order (stable), truncated to config.maxItems. Input untouched.
@@ -577,8 +584,9 @@ default) the planner's order stays until learning gives weights. Learned weights
 ## 6. `src/common/optimize.js` — learn the scales from SELECT presses
 
 ```js
-Sample = { t, lat, lon, chosen /*index*/, candidates: [{ key, features }] }
-makeSample(items, chosenIndex, pos, now) // → Sample (deep copies features; no other item fields)
+Sample = { t, lat, lon, chosen /*index*/, candidates: [{ key, features }], kind?, label?, ctx? }
+makeSample(items, chosenIndex, pos, now, ctx?) // → Sample (deep copies features). With a chosen item: kind = its kind,
+                                         //   label = (badge ? badge + ' · ' : '') + title. ctx (context.at, §19) copied when given.
 evaluate(samples, weightFn, temperature) // → { n, loss, accuracy }
 train(samples, priorFn, opts)            // → { weights: {key: number}, before: Eval, after: Eval }
 ```
@@ -597,14 +605,14 @@ train(samples, priorFn, opts)            // → { weights: {key: number}, before
 
 Message keys (`package.json` `messageKeys`): `LIST_ID ITEM_COUNT ITEM_INDEX ITEM_KIND ITEM_TITLE ITEM_T0 ITEM_T1 ITEM_T2 ITEM_BADGE ITEM_COLOR STATUS SELECT_INDEX REFRESH
 ITEM_BEARING ITEM_DIST ITEM_DIR ITEM_LANES ITEM_DIR2 ITEM_U0 ITEM_U1 ITEM_U2 WAKEUP_COUNT WAKEUP_INDEX WAKEUP_TIME WAKEUP_COOKIE WAKEUP_FIRED NOTIFY_TITLE NOTIFY_BODY NOTIFY_COLOR ITEM_ROUTE TEST_NOW WATCH_PREFS ITEM_WALK ITEM_LEAD NAV_START NAV_STOP NAV_STATE NAV_TEXT NAV_SUB NAV_DIST NAV_BEARING NAV_COLOR
-WEATHER_COUNT WEATHER_START WEATHER_NOW WEATHER_HI WEATHER_LO WEATHER_TEMPS WEATHER_RAIN`.
+WEATHER_COUNT WEATHER_START WEATHER_NOW WEATHER_HI WEATHER_LO WEATHER_TEMPS WEATHER_RAIN PLACE_COUNT PLACE_INDEX PLACE_SELECT PLACE_NAV`.
 `TEST_NOW` (test only, sent by `src/pkjs/ui-fixture.js`): unix seconds the watch shows its times against instead of its clock.
 
 Phase 4 (carousel): `TITLE_MAX_BYTES = 63` (full stop names; the watch scrolls what doesn't fit), item messages carry `ITEM_ROUTE` =
 `truncateUtf8(item.routeLongName, ROUTE_MAX_BYTES 63)` (the route's full name, `''` if none); `NOTIFY_TITLE` uses `NOTIFY_TITLE_MAX_BYTES = 31`.
 
 ```js
-KIND = { pickup: 0, dropoff: 1 };  TITLE_MAX_BYTES = 31;  BADGE_MAX_BYTES = 7;  STATUS_MAX_BYTES = 47;  MAX_ITEMS = 12
+KIND = { pickup: 0, dropoff: 1, trip: 2, place: 3 };  TITLE_MAX_BYTES = 31;  BADGE_MAX_BYTES = 7;  STATUS_MAX_BYTES = 47;  MAX_ITEMS = 12
 truncateUtf8(str, maxBytes)        // longest prefix whose UTF-8 is ≤ maxBytes, never splitting a code point
 encodeList(listId, items, status)  // → [ {LIST_ID, ITEM_COUNT: n, STATUS},
                                    //     {LIST_ID, ITEM_INDEX: i, ITEM_KIND, ITEM_BADGE, ITEM_TITLE, ITEM_COLOR, ITEM_T0, ITEM_T1, ITEM_T2} × n ]
@@ -635,12 +643,15 @@ decodeWatchMessage(payload)        // { WAKEUP_FIRED: cookie }          → {typ
                                    // { WATCH_PREFS: flags }             → {type:'prefs', clock24, units: 'metric'|'imperial'|null}
                                    //   PREFS = {CLOCK24: 1, METRIC: 2, UNITS_KNOWN: 4}; units null unless UNITS_KNOWN
                                    // anything else                      → null
-createSender(sendFn, opts)         // opts.retries (default 2). sendFn(dict, onOk, onErr) = Pebble.sendAppMessage
+createSender(sendFn, opts)         // opts.retries (default 2); opts.timeout (ms, optional; index.js: 15000): a send neither acked
+                                   //   nor refused by then counts as a failure (retried as above), so a companion app that never
+                                   //   calls back can't stall the queue; opts.setTimeout / clearTimeout injectable.
+                                   //   sendFn(dict, onOk, onErr) = Pebble.sendAppMessage
   sender.sendAll(messages)         //   send in order, one at a time (next only after onOk). Replaces whatever
                                    //   is still queued from an earlier sendAll (the in-flight message completes).
-                                   //   Precisely: a batch containing a list header (ITEM_COUNT) drops the queued messages of
-                                   //   earlier *list* batches only; every other queued message (status, wakeups, notify) stays,
-                                   //   in order. Non-list batches are appended.
+                                   //   Precisely: a batch containing a list header (ITEM_COUNT, or PLACE_COUNT for the places
+                                   //   list, §19) drops the queued messages of earlier batches of *that* list only; everything
+                                   //   else queued (the other list, status, wakeups, notify) stays, in order. Others are appended.
                                    //   A message failing more than `retries` times drops the rest of its own batch only (other
                                    //   batches stay queued). A list message superseded by a newer list while in flight is not retried.
   sender.pending()                 //   → number of messages not yet acknowledged (queued + in flight)
@@ -679,11 +690,13 @@ deps.locale  // optional: the phone's locale, for the units guess before the wat
   If `training.autoTrain`: `learned = optimize.train(samples, k => ranking.weightFor(k, cfg, null), config.training).weights`, saved
   (`cfg` = the runtime view the list was ranked with).
   Re-ranks the last list's items, increments `listId`, sends it with status `'Learned (N picks)'`. Returns `true`.
-- `handleWatchMessage(payload)`: decodes with protocol, dispatches to `select` / `refresh` / `setPrefs`; returns the decoded message (`null` when
+- `handleWatchMessage(payload)`: decodes with protocol, dispatches to `select` / `selectPlace` (§19) / `refresh` / `setPrefs`; returns the decoded message (`null` when
   unrecognized). `wakeup` is not handled by the session — the root routes it to the scheduler.
 - `configPageParams()` → `{config, samples, learned, prefs}`.
 - `applySettings(result)`: `result = {config, learned?, clearSamples?}` (as returned by the settings page).
-  Config normalized + saved; `learned` given → replaces learned (`null` → `{}`); `clearSamples` → `[]`. Drops provider and
+  Config normalized + saved; `learned` given → replaces learned (`null` → `{}`); `clearSamples` → `[]`; else `samples` (an array:
+  the picks left after removing some on the settings page) → replaces the samples (plain objects only, newest `maxSamples`) and,
+  without `learned` and with `autoTrain`, retrains on them (prior from `runtimeConfig(null)`). Drops provider and
   route cache, then `refresh()`.
 
 ## 9. `src/pkjs/index.js` — Pebble glue (thin, not unit tested)
@@ -1120,3 +1133,61 @@ the steps and sends what changed. **Aplite has no navigation** (not enough RAM: 
   the current step — time left beside an arrow over the distance; level 1 = kind pill + instruction + detail; done steps are dimmed; the
   status line reads "Step 2 of 5". UP / DOWN look ahead or back, SELECT returns to the current step, BACK stops.
   Tests: `test/nav.test.js`, `test/routing.test.js`, `test/c/test_bus_nav.c`.
+
+## 19. Saved locations and the learning context — `src/common/places.js`, `src/common/context.js`, `protocol.encodePlaces`
+
+**Places**: `config.places` (§2) are shown on the watch *above* the first row: UP on the first row of the list (also on the empty
+screen) switches the wheel to the places, the best-ranked one selected at the bottom (next to the list), UP for the next ones; DOWN
+from the bottom row or BACK returns to the list's first row. Only a fresh press crosses between the two (not the button's auto-repeat, `click_number_of_clicks_counted > 1`):
+holding UP stops at the list's first row. The status line reads "Saved places"; there is no weather panel in that view.
+
+```js
+places.buildItems(cfg, pos) // cfg: runtime view → [{kind: 'place', key: 'place:<id>', placeId, title: name, address, color: '',
+                            //   bearing, distance, walk (format.walkSeconds at schedule.walkSpeed), lat, lon,
+                            //   features: {'place:<id>': round(distance)}}] in config order, ≤ MAX_PLACES (8); pos null → bearing /
+                            //   distance / walk null, feature 0
+protocol.encodePlaces(listId, items, opts) // opts {units, showWalk, showArrow} as encodeList →
+  // [{LIST_ID, PLACE_COUNT: n ≤ MAX_PLACES}, {LIST_ID, PLACE_INDEX: i, ITEM_TITLE, ITEM_ROUTE (address), ITEM_COLOR, ITEM_BEARING,
+  //   ITEM_DIST, ITEM_WALK?} × n]  (texts ≤ PLACE_TEXT_MAX_BYTES 47)
+// watch → phone: {PLACE_SELECT: index, LIST_ID} → {type: 'placeSelect', listId, index};
+//                {PLACE_NAV: index, LIST_ID}    → {type: 'navStart', places: true, listId, index}  (long SELECT)
+```
+
+Session: every refresh (once the position is known, before `gather`) builds the places, adds the context (below), ranks them
+(`ranking.rank(items, {places, maxItems: MAX_PLACES}, learned)`) and sends `encodePlaces` with its own list id (`placeListId`,
+counting from 1) — only when the encoded list differs from the last one sent (none saved and nothing shown yet → nothing sent);
+otherwise the watch's list keeps its id and only `lastPlaces()` = `{listId, items, pos, cfg, ctx}` is updated. A units change resends it.
+`selectPlace(listId, index)` (stale id / bad index → `false`) records a pick exactly like `select` (sample, cap, `autoTrain`) and
+resends the re-ranked places with a new id. Navigation (§18): `nav.start(listId, index, places)` takes the item from
+`deps.getPlaces()`; a place → "Walk to <name>", then "Arrive at <name>"; no position → an info step.
+
+Watch (`bus_model.h`, pure): `BusPlaces` (≤ `BUS_MAX_PLACES` = 8, 4 on aplite, which keeps the first ones), `bus_places_begin / set`
+(strings ≤ 47 bytes cut at a UTF-8 boundary; bearing outside 0..359 → −1; negative walk → −1), `bus_places_at_row(p, row)` = place
+`count − 1 − row` (NULL until it arrives), `bus_place_as_item` → a `BUS_KIND_PLACE` tile (title = name, route = address, no badge /
+times; `bus_format_detail` = the address, drawn on the detail line, not in the level-0 band). Tests: `test/context.test.js`,
+`test/session.test.js`, `test/protocol.test.js`, `test/nav.test.js`, `test/c/test_bus_model.c`.
+
+**Context**: the moment a list is shown is part of every ranked list (main list and places; pinned trip tiles aren't ranked):
+
+```js
+context.at(now, w)        // → {t, dow (0 = Sunday), minute (of the day), month (0..11), day, temp (°C, 1 decimal) | null,
+                          //    rain (chance %, the current hour, 0..100) | null} — local time; w = weather.slice result or null
+context.features(key, ctx)// → {key@dowD: UNIT, key@tod1s / tod1c (time of day, once round the circle), key@tod2s / tod2c (twice),
+                          //    key@yrs / yrc (time of year: month + (day−1)/31 of 12), key@temp: UNIT·°C/10, key@rain: UNIT·%/100}
+                          //    UNIT = 60; sines / cosines × UNIT, rounded to 4 decimals; weather ones only when known; '' key → {}
+context.augment(items, ctx)// → new shallow copies with features(item.key, ctx) merged into their features
+context.split(key)        // 'K@dow1' → {base: 'K', part: 'dow1'}; no context suffix → {base: key, part: ''}
+```
+
+The model stays linear (§5, §6): a context value shared by every candidate would cancel in the softmax, so each one is crossed with the
+item's own key and learning gives each tile its own lift per weekday, time of day, season, temperature and rain. Their prior is 0.
+The session uses `context.at(now, training.useWeather && forecast ? weather.slice(forecast, now) : null)`, the forecast being the last
+one fetched (`deps.weather`, fetched when `showWeather` **or** `training.useWeather`; the panel is sent only with `showWeather`), and
+each pick stores its `ctx`.
+
+Settings page: a **Places** page (name, address lookup as for trips, position, "Use my position", scale; ≤ 8; drag to reorder) and on
+the Learning page **Recent picks**, newest first (20 at a time, "Show more"): the pick's `label` (or, for older picks, a name built
+from the chosen key and the saved routes / stops / places), weekday, date, time, temperature and chance of rain, out of how many; ×
+removes it, and Save then sends `samples` (§8). The learned table names context keys ("44 at Home on Mondays", "… when rain is
+likely"); **Bake** keeps them learned (there is no scale for them). "Learn from the weather" = `training.useWeather`.
+

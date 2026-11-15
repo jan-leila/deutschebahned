@@ -5,7 +5,7 @@ const protocol = require('../src/common/protocol');
 const bytes = s => Buffer.byteLength(s, 'utf8');
 
 test('constants', () => {
-  assert.deepEqual(protocol.KIND, { pickup: 0, dropoff: 1, trip: 2 });
+  assert.deepEqual(protocol.KIND, { pickup: 0, dropoff: 1, trip: 2, place: 3 });
   assert.equal(protocol.TITLE_MAX_BYTES, 63);
   assert.equal(protocol.ROUTE_MAX_BYTES, 63);
   assert.equal(protocol.NOTIFY_TITLE_MAX_BYTES, 31);
@@ -342,4 +342,64 @@ test('encodeNavLive: state, current step, time left, distance and bearing; null 
   assert.deepEqual(protocol.encodeNavLive({ state: 2, current: 1, sub: '', distance: null, bearing: null }),
     { NAV_STATE: 2, NAV_CURRENT: 1, NAV_LSUB: '', NAV_LDIST: '', NAV_BEARING: -1 });
   assert.deepEqual(protocol.encodeNavLive(null), { NAV_STATE: 0 });
+});
+
+// ---- saved locations (§19) ---------------------------------------------------------------------------------
+test('encodePlaces: own header and items; name, address, arrow, distance, walk; at most MAX_PLACES', () => {
+  const items = [
+    { title: 'Home', address: '1 Main St', bearing: 359.6, distance: 350, walk: 269.2, color: 'FF0000' },
+    { title: 'x'.repeat(80), address: '', bearing: null, distance: null, walk: null },
+  ];
+  const m = protocol.encodePlaces(4, items, { units: 'metric' });
+  assert.deepEqual(m[0], { LIST_ID: 4, PLACE_COUNT: 2 });
+  assert.deepEqual(m[1], { LIST_ID: 4, PLACE_INDEX: 0, ITEM_TITLE: 'Home', ITEM_ROUTE: '1 Main St', ITEM_COLOR: 0xFF0000,
+    ITEM_BEARING: 0, ITEM_DIST: '350m', ITEM_WALK: 269 });
+  assert.equal(m[2].ITEM_TITLE.length, protocol.PLACE_TEXT_MAX_BYTES);
+  assert.equal(m[2].ITEM_BEARING, -1);
+  assert.equal(m[2].ITEM_DIST, '');
+  assert.equal('ITEM_WALK' in m[2], false);
+  const off = protocol.encodePlaces(1, items, { showArrow: false, showWalk: false });
+  assert.equal(off[1].ITEM_BEARING, -1);
+  assert.equal('ITEM_WALK' in off[1], false);
+  assert.equal(off[1].ITEM_DIST, require('../src/common/format').distance(350, 'imperial'), 'imperial by default');
+  assert.equal(protocol.encodePlaces(1, Array(20).fill(items[0]))[0].PLACE_COUNT, protocol.MAX_PLACES);
+  assert.equal(protocol.KIND.place, 3);
+});
+
+test('decodeWatchMessage: PLACE_SELECT and PLACE_NAV', () => {
+  assert.deepEqual(protocol.decodeWatchMessage({ PLACE_SELECT: 2, LIST_ID: 7 }), { type: 'placeSelect', listId: 7, index: 2 });
+  assert.deepEqual(protocol.decodeWatchMessage({ PLACE_NAV: 1, LIST_ID: 7 }), { type: 'navStart', places: true, listId: 7, index: 1 });
+  assert.equal(protocol.decodeWatchMessage({ PLACE_SELECT: 2 }), null);
+});
+
+test('sender: a places list supersedes queued places only; the item list and other messages stay', () => {
+  const f = fakeSend();
+  const s = protocol.createSender(f.fn);
+  s.sendAll([{ STATUS: 'x' }]);                                   // in flight
+  s.sendAll([{ ITEM_COUNT: 1 }, { ITEM_INDEX: 0 }]);
+  s.sendAll([{ PLACE_COUNT: 1, LIST_ID: 1 }, { PLACE_INDEX: 0, LIST_ID: 1 }]);
+  s.sendAll([{ PLACE_COUNT: 1, LIST_ID: 2 }, { PLACE_INDEX: 0, LIST_ID: 2 }]);
+  while (f.pending.length) f.ack();
+  assert.deepEqual(f.log, [{ STATUS: 'x' }, { ITEM_COUNT: 1 }, { ITEM_INDEX: 0 }, { PLACE_COUNT: 1, LIST_ID: 2 }, { PLACE_INDEX: 0, LIST_ID: 2 }]);
+});
+
+test('sender: opts.timeout — a send never answered counts as a failure (retried, then the batch dropped)', () => {
+  const timers = [];
+  const log = [];
+  const s = protocol.createSender(d => log.push(d), {
+    retries: 1, timeout: 1000,
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length - 1; },
+    clearTimeout: id => { timers[id].live = false; },
+  });
+  s.sendAll([{ a: 1 }, { a: 2 }]);
+  s.sendAll([{ b: 1 }]);
+  assert.equal(timers[0].ms, 1000);
+  timers[0].fn();                        // no answer: retry
+  assert.deepEqual(log, [{ a: 1 }, { a: 1 }]);
+  timers[1].fn();                        // still none: give up on that batch, go on with the next
+  assert.deepEqual(log, [{ a: 1 }, { a: 1 }, { b: 1 }]);
+  assert.equal(s.pending(), 1);
+  const noTimer = protocol.createSender(() => {});
+  noTimer.sendAll([{ a: 1 }]);
+  assert.equal(noTimer.pending(), 1, 'without opts.timeout it waits for the answer');
 });

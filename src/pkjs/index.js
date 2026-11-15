@@ -108,12 +108,14 @@ function locate(cb) {
   }, LOCATE_OPTIONS);
 }
 
+// a message neither acknowledged nor refused by then is retried (a companion app that never calls back can't stall the queue)
+var SEND_TIMEOUT_MS = 15000;
 var sender = protocol.createSender(function (dict, onOk, onErr) {
   Pebble.sendAppMessage(dict, onOk, function (e) {
     log('send failed: ' + JSON.stringify(dict));
     onErr(e);
   });
-}, { retries: 2 });
+}, { retries: 2, timeout: SEND_TIMEOUT_MS });
 
 var sourceDeps = { http: http, clock: clock, storage: localStorage };
 
@@ -218,12 +220,13 @@ var scheduler = schedulerModule.createScheduler({
   log: log
 });
 
-// navigation (hold SELECT on the watch): guidance to a stop or through a scheduled trip, from the last list sent
+// navigation (hold SELECT on the watch): guidance to a stop, a saved location or through a scheduled trip, from the last list sent
 var nav = navModule.createNav({
   send: function (messages) { sender.sendAll(messages); },
   locate: locate,
   clock: clock,
   getList: function () { return session.lastList(); },
+  getPlaces: function () { return session.lastPlaces(); },
   getConfig: function () { return session.getConfig(); },
   getUnits: function () { return session.getPrefs().units; },
   getPlan: function (destId) {
@@ -293,7 +296,7 @@ Pebble.addEventListener('appmessage', function (e) {
   log('watch message: ' + JSON.stringify(e.payload));
   var msg = session.handleWatchMessage(e.payload);
   if (msg && msg.type === 'wakeup') scheduler.handleWakeup(msg.cookie);
-  else if (msg && msg.type === 'navStart') nav.start(msg.listId, msg.index);
+  else if (msg && msg.type === 'navStart') nav.start(msg.listId, msg.index, !!msg.places);
   else if (msg && msg.type === 'navStop') nav.stop(true);
 });
 

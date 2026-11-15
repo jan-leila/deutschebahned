@@ -12,7 +12,8 @@
 #define BUS_DIST_LEN 8
 #define BUS_DIR_LEN 4
 
-enum { BUS_KIND_PICKUP = 0, BUS_KIND_DROPOFF = 1, BUS_KIND_TRIP = 2 };  // TRIP: a planned trip leg (pinned first)
+enum { BUS_KIND_PICKUP = 0, BUS_KIND_DROPOFF = 1, BUS_KIND_TRIP = 2, BUS_KIND_PLACE = 3 };  // TRIP: a planned trip leg (pinned
+                                                                                          // first); PLACE: a saved location
 
 typedef struct {
   bool present;
@@ -40,6 +41,30 @@ typedef struct {
   char status[BUS_STATUS_LEN];
 } BusModel;
 
+// Saved locations (PLACE_* messages): their own small list, shown above the first row. Aplite has the RAM for fewer.
+#if defined(PBL_PLATFORM_APLITE)
+#define BUS_MAX_PLACES 4
+#else
+#define BUS_MAX_PLACES 8
+#endif
+#define BUS_PLACE_LEN 48
+
+typedef struct {
+  bool present;
+  char name[BUS_PLACE_LEN];
+  char address[BUS_PLACE_LEN];  // "" = none
+  int32_t color;                // 0xRRGGBB, -1 = none
+  int16_t bearing;              // degrees 0..359, -1 = none
+  char dist[BUS_DIST_LEN];
+  int32_t walk;                 // seconds, -1 = none
+} BusPlace;
+
+typedef struct {
+  int32_t list_id;
+  uint8_t count;
+  BusPlace items[BUS_MAX_PLACES];
+} BusPlaces;
+
 void bus_model_init(BusModel *m);
 void bus_model_begin_list(BusModel *m, int32_t list_id, int count);
 bool bus_model_set_item(BusModel *m, int32_t list_id, int index, int kind, const char *badge,
@@ -63,6 +88,18 @@ bool bus_color_prefers_dark_text(int32_t rgb);
 // What the screen shows for a direction code: "NB" -> "North", "SB" -> "South", "EB" -> "East", "WB" -> "West";
 // anything else (incl. "") is returned as it is. Never NULL (NULL -> "").
 const char *bus_dir_name(const char *code);
+
+void bus_places_init(BusPlaces *p);                                   // list_id -1, count 0
+void bus_places_begin(BusPlaces *p, int32_t list_id, int count);      // count clamped 0..BUS_MAX_PLACES; all cleared
+// false (no change) on list mismatch / bad index; strings cut at a UTF-8 boundary (NULL → ""); bearing outside 0..359 → -1;
+// negative walk → -1
+bool bus_places_set(BusPlaces *p, int32_t list_id, int index, const char *name, const char *address, int32_t color,
+                    int32_t bearing, const char *dist, int32_t walk);
+// The place shown on wheel row `row`: rows run from the last place down to the best one (index 0) at the bottom, next
+// to the main list's first row. NULL unless the row exists and that place has arrived.
+const BusPlace *bus_places_at_row(const BusPlaces *p, int row);
+// A place as a tile for the row drawing: kind PLACE, title = name, route = address, no badge / times / lanes, lead -1.
+void bus_place_as_item(const BusPlace *p, BusItem *out);
 
 void bus_format_relative(int32_t seconds, char *buf, size_t n);
 void bus_format_clock(int32_t epoch, bool clock24, char *buf, size_t n);

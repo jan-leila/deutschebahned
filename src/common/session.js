@@ -5,6 +5,8 @@ var settings = require('./settings');
 var protocol = require('./protocol');
 var view = require('./view');
 var weather = require('./weather');
+var context = require('./context');
+var places = require('./places');
 
 var STORAGE_KEYS = { config: 'busWatch.config', samples: 'busWatch.samples', learned: 'busWatch.learned', prefs: 'busWatch.prefs' };
 
@@ -51,6 +53,8 @@ function createSession(deps) {
   var rerun = false;      // a refresh was requested by applySettings while one was running
   var forecast = null;    // the last forecast fetched (weather.parse), resent when the units change
   var weatherShown = false;
+  var placeListId = 0;
+  var lastPlaces = null;  // { listId, items, pos, cfg, ctx, sent } the saved locations as last sent (ranked)
 
   function send(messages) {
     try {
@@ -97,6 +101,34 @@ function createSession(deps) {
     listId++;
     send(protocol.encodeList(listId, items, status, { units: prefs.units, showWalk: config.showWalk, deadZone: config.walkDeadZone, showArrow: config.showArrow }));
     return listId;
+  }
+
+  // The moment, for ranking and learning (context.js): weekday, time of day, month and, unless training.useWeather is
+  // off, the weather from the last forecast fetched.
+  function momentAt(now) {
+    var w = config.training.useWeather && forecast ? weather.slice(forecast, now) : null;
+    return context.at(now, w);
+  }
+
+  // Saved locations, ranked like the main list, sent as their own list when what the watch shows changes (a new list id
+  // then); otherwise the watch's list keeps its id and only the candidates for learning are updated.
+  function placeOpts() {
+    return { units: prefs.units, showWalk: config.showWalk, showArrow: config.showArrow };
+  }
+  function sendPlaces(cfg, pos, ctx, force) {
+    var items = context.augment(places.buildItems(cfg, pos), ctx);
+    var ranked = getRanking().rank(items, { places: cfg.places, maxItems: places.MAX_PLACES }, learned);
+    var msgs = protocol.encodePlaces(0, ranked, placeOpts());
+    var key = JSON.stringify(msgs);
+    if (!force && lastPlaces && lastPlaces.sent === key) {
+      lastPlaces = { listId: lastPlaces.listId, items: ranked, pos: pos, cfg: cfg, ctx: ctx, sent: key };
+      return;
+    }
+    if (!ranked.length && !lastPlaces && !force) return;   // nothing saved and nothing shown yet
+    placeListId++;
+    for (var i = 0; i < msgs.length; i++) msgs[i].LIST_ID = placeListId;
+    send(msgs);
+    lastPlaces = { listId: placeListId, items: ranked, pos: pos, cfg: cfg, ctx: ctx, sent: key };
   }
 
   // the runtime config (view.build) at pos; null = every transit system
@@ -154,6 +186,7 @@ function createSession(deps) {
       var id = sendList(last.items, 'Updated ' + clockText(clock()));
       last.listId = id;
     }
+    if (unitsChanged && lastPlaces) sendPlaces(lastPlaces.cfg, lastPlaces.pos, lastPlaces.ctx, true);
     if (unitsChanged && config.showWeather) sendWeather();
     return true;
   }
@@ -167,21 +200,26 @@ function createSession(deps) {
     send([protocol.encodeWeather(w, prefs.units)]);
   }
 
+  // The forecast is also wanted for learning (training.useWeather) when the panel is off.
+  function wantWeather() {
+    return (config.showWeather || config.training.useWeather) && typeof deps.weather === 'function';
+  }
+
   function updateWeather(pos) {
-    if (!config.showWeather || typeof deps.weather !== 'function') {
+    if (!config.showWeather && weatherShown) {
+      weatherShown = false;
+      send([protocol.encodeWeather(null)]);
+    }
+    if (!wantWeather()) {
       forecast = null;
-      if (weatherShown) {
-        weatherShown = false;
-        send([protocol.encodeWeather(null)]);
-      }
       return;
     }
     if (!pos) return;
     deps.weather(pos, function (err, data) {
       if (err) return log('weather failed: ' + errorText(err));
-      if (!config.showWeather) return;
+      if (!wantWeather()) return;
       forecast = data;
-      sendWeather();
+      if (config.showWeather) sendWeather();
     });
   }
 
@@ -220,14 +258,14 @@ function createSession(deps) {
       }
     }
 
-    if (!config.showWeather) updateWeather(null);
+    if (!wantWeather() || !config.showWeather) updateWeather(null);
     sendStatus('Locating...');
     locate(function (err, pos) {
       if (err) return finish(err);
       if (!pos) return finish(new Error('no position'));
-      if (config.showWeather) updateWeather(pos);
+      if (wantWeather()) updateWeather(pos);
       sendStatus('Loading...');
-      var prov, cache, cfg;
+      var prov, cache, cfg, now = clock(), ctx = momentAt(now);
       try {
         cfg = runtimeConfig(pos);
         prov = getProvider();
@@ -235,19 +273,23 @@ function createSession(deps) {
       } catch (e) {
         return finish(e);
       }
-      var now = clock();
+      try {
+        sendPlaces(cfg, pos, ctx, false);
+      } catch (e) {
+        log('places failed: ' + errorText(e));
+      }
       getPlanner().gather(prov, cfg, pos, now, cache, function (gErr, data) {
         if (gErr) return finish(gErr);
         var ranked;
         try {
           if (data && data.errors && data.errors.length) log('gather errors: ' + data.errors.join('; '));
-          var items = getPlanner().buildItems(cfg, data, pos, now);
+          var items = context.augment(getPlanner().buildItems(cfg, data, pos, now), ctx);
           var pinned = pinnedItems(cfg, data, pos, now);
           ranked = getRanking().rank(items, cfg, learned);
           var list = withPinned(pinned, ranked);
           var status = list.length === 0 ? 'No buses nearby' : 'Updated ' + clockText(clock());
           var id = sendList(list, status);
-          last = { listId: id, items: list, pinned: pinned, ranked: ranked, pos: pos, now: now, cfg: cfg, data: data };
+          last = { listId: id, items: list, pinned: pinned, ranked: ranked, pos: pos, now: now, cfg: cfg, data: data, ctx: ctx };
           ranked = list;
         } catch (e) {
           return finish(e);
@@ -285,29 +327,45 @@ function createSession(deps) {
     }
     var candidates = last.ranked || last.items;
     index -= pinned.length;
-    var opt = getOptimize();
-    var rank = getRanking();
-    samples.push(opt.makeSample(candidates, index, last.pos, clock()));
+    var cfg = last.cfg || runtimeConfig(last.pos);
+    record(candidates, index, last.pos, last.ctx, cfg);
+
+    var ranked = getRanking().rank(candidates, cfg, learned);
+    var list = withPinned(pinned, ranked);
+    var newId = sendList(list, 'Learned (' + samples.length + ' picks)');
+    last = { listId: newId, items: list, pinned: pinned, ranked: ranked, pos: last.pos, now: last.now, cfg: cfg, data: last.data,
+             ctx: last.ctx };
+    return true;
+  }
+
+  // SELECT on a saved location: a pick among the places as the watch showed them; they are re-ranked and re-sent.
+  function selectPlace(id, index) {
+    var lp = lastPlaces;
+    if (!lp || id !== lp.listId) return false;
+    if (typeof index !== 'number' || index !== Math.floor(index) || index < 0 || index >= lp.items.length) return false;
+    record(lp.items, index, lp.pos, lp.ctx, lp.cfg);
+    sendPlaces(lp.cfg, lp.pos, lp.ctx, true);
+    return true;
+  }
+
+  // one pick → a sample (kept: the newest training.maxSamples), then training when it is automatic
+  function record(candidates, index, pos, ctx, cfg) {
+    samples.push(getOptimize().makeSample(candidates, index, pos, clock(), ctx || null));
     var max = config.training.maxSamples;
     if (samples.length > max) samples = samples.slice(samples.length - max);
     writeJson(STORAGE_KEYS.samples, samples);
+    if (config.training.autoTrain) retrain(cfg);
+  }
 
-    var cfg = last.cfg || runtimeConfig(last.pos);
-    if (config.training.autoTrain) {
-      try {
-        var result = opt.train(samples, function (k) { return rank.weightFor(k, cfg, null); }, cfg.training);
-        learned = (result && isPlainObject(result.weights)) ? result.weights : {};
-        writeJson(STORAGE_KEYS.learned, learned);
-      } catch (e) {
-        log('training failed: ' + errorText(e));
-      }
+  function retrain(cfg) {
+    var rank = getRanking();
+    try {
+      var result = getOptimize().train(samples, function (k) { return rank.weightFor(k, cfg, null); }, cfg.training);
+      learned = (result && isPlainObject(result.weights)) ? result.weights : {};
+      writeJson(STORAGE_KEYS.learned, learned);
+    } catch (e) {
+      log('training failed: ' + errorText(e));
     }
-
-    var ranked = rank.rank(candidates, cfg, learned);
-    var list = withPinned(pinned, ranked);
-    var newId = sendList(list, 'Learned (' + samples.length + ' picks)');
-    last = { listId: newId, items: list, pinned: pinned, ranked: ranked, pos: last.pos, now: last.now, cfg: cfg, data: last.data };
-    return true;
   }
 
   function handleWatchMessage(payload) {
@@ -317,6 +375,7 @@ function createSession(deps) {
       return null;
     }
     if (msg.type === 'select') select(msg.listId, msg.index);
+    else if (msg.type === 'placeSelect') selectPlace(msg.listId, msg.index);
     else if (msg.type === 'prefs') setPrefs(msg);
     return msg;   // e.g. {type: 'wakeup'} is routed to the scheduler by the composition root
   }
@@ -332,6 +391,13 @@ function createSession(deps) {
     if (result.clearSamples) {
       samples = [];
       writeJson(STORAGE_KEYS.samples, samples);
+    } else if (result.samples instanceof Array) {
+      // picks removed on the settings page: keep the rest, and learn again from them unless learned weights came too
+      var kept = [];
+      for (var i = 0; i < result.samples.length; i++) if (isPlainObject(result.samples[i])) kept.push(result.samples[i]);
+      samples = kept.slice(Math.max(0, kept.length - config.training.maxSamples));
+      writeJson(STORAGE_KEYS.samples, samples);
+      if (!result.hasOwnProperty('learned') && config.training.autoTrain) retrain(runtimeConfig(null));
     }
     provider = null;
     routeCache = {};
@@ -348,8 +414,10 @@ function createSession(deps) {
     getSamples: function () { return samples; },
     getLearned: function () { return learned; },
     lastList: function () { return last; },
+    lastPlaces: function () { return lastPlaces; },
     refresh: refresh,
     select: select,
+    selectPlace: selectPlace,
     handleWatchMessage: handleWatchMessage,
     configPageParams: function () { return { config: config, samples: samples, learned: learned, prefs: prefs }; },
     applySettings: applySettings

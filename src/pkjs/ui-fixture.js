@@ -9,7 +9,7 @@
 // emu-set-time calls while the app runs, so the clock drifts during a run; every test hook therefore also sends
 // {TEST_NOW: FIXED_NOW}, which the watch then shows its times against (times carry +20 s of slack).
 //
-// On 'ready': the main list + a wakeup list (cookie 1 fires at FIXED_NOW + 70 s; reported back as 'UI-FIXTURE wakeup 1').
+// On 'ready': the main list + the saved locations + a wakeup list (cookie 1 fires at FIXED_NOW + 70 s; reported back as 'UI-FIXTURE wakeup 1').
 // Every NAV_START (long SELECT) from the watch logs 'UI-FIXTURE refresh' and runs the next entry of STEPS; a step can set
 // the watch's test hook ({REFRESH: v}, CONTRACTS.md §11: v >= 0 freezes the marquee clock at v ms, MARQUEE_END at the
 // end of its scroll, v <= -1000 freezes the wheel between rows), send another list, a notification, or an empty list.
@@ -133,6 +133,22 @@ function sendNotify() {
   }]);
 }
 
+// Saved locations (§19): UP on the first row shows them, the best one (index 0) at the bottom.
+function sendPlaces() {
+  var places = [
+    { title: 'Home', address: '3010 Lyndale Av S, Minneapolis', bearing: 200, dist: '0.6mi', walk: 720, color: 0x771473 },
+    { title: 'Work', address: '600 Hennepin Av', bearing: 20, dist: '2.9mi', walk: 3600, color: -1 },
+    { title: 'Midtown Global Market', address: '920 E Lake St', bearing: 95, dist: '1.4mi', walk: 1740, color: -1 },
+    { title: 'Gym', address: '', bearing: 300, dist: '0.3mi', walk: 330, color: -1 }
+  ];
+  var messages = [{ LIST_ID: 1, PLACE_COUNT: places.length }];
+  for (var i = 0; i < places.length; i++) {
+    messages.push({ LIST_ID: 1, PLACE_INDEX: i, ITEM_TITLE: places[i].title, ITEM_ROUTE: places[i].address,
+                    ITEM_COLOR: places[i].color, ITEM_BEARING: places[i].bearing, ITEM_DIST: places[i].dist, ITEM_WALK: places[i].walk });
+  }
+  sender.sendAll(messages);
+}
+
 // Every hook also pins the watch's display clock to FIXED_NOW (TEST_NOW): emu-set-time doesn't stick while an app runs.
 function hook(v) { sender.sendAll([{ REFRESH: v, TEST_NOW: FIXED_NOW }]); }
 
@@ -178,6 +194,7 @@ function sendWeather() {
 Pebble.addEventListener('ready', function () {
   console.log('UI-FIXTURE ready');
   sendList(mainItems());
+  sendPlaces();
   sendWeather();
   sendWakeups();
 });
@@ -192,6 +209,8 @@ Pebble.addEventListener('appmessage', function (e) {
   if (!msg) return;
   if (msg.type === 'select') {
     console.log('UI-FIXTURE select ' + msg.listId + ' ' + msg.index);
+  } else if (msg.type === 'placeSelect') {
+    console.log('UI-FIXTURE place ' + msg.listId + ' ' + msg.index);
   } else if (msg.type === 'navStart') {
     console.log('UI-FIXTURE refresh');
     if (step < STEPS.length) STEPS[step++]();

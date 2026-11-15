@@ -10,8 +10,12 @@ test('makeSample copies only what training needs', () => {
     { kind: 'dropoff', key: 'b', title: 'B', times: [2], features: { 'conn:x|1': 5 } },
   ];
   const s = optimize.makeSample(items, 1, { lat: 1.5, lon: 2.5 }, 1234);
-  assert.deepEqual(s, { t: 1234, lat: 1.5, lon: 2.5, chosen: 1,
+  assert.deepEqual(s, { t: 1234, lat: 1.5, lon: 2.5, chosen: 1, kind: 'dropoff', label: 'B',
     candidates: [{ key: 'a', features: { 'stop:1': 10, 'route:x': 60 } }, { key: 'b', features: { 'conn:x|1': 5 } }] });
+  // the context it was picked in, and the chosen tile's badge with its title
+  const c = optimize.makeSample([{ key: 'a', badge: '44', title: 'Lake St', kind: 'pickup' }, items[1]], 0, null, 1, { dow: 2, temp: null });
+  assert.deepEqual(c.ctx, { dow: 2, temp: null });
+  assert.equal(c.label, '44 · Lake St');
   items[0].features['stop:1'] = 999;
   assert.equal(s.candidates[0].features['stop:1'], 10, 'deep copy');
 });

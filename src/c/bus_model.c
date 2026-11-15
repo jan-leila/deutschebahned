@@ -63,6 +63,53 @@ bool bus_model_set_item(BusModel *m, int32_t list_id, int index, int kind, const
   return true;
 }
 
+void bus_places_init(BusPlaces *p) {
+  memset(p, 0, sizeof *p);
+  p->list_id = -1;
+}
+
+void bus_places_begin(BusPlaces *p, int32_t list_id, int count) {
+  if (count < 0) count = 0;
+  if (count > BUS_MAX_PLACES) count = BUS_MAX_PLACES;
+  memset(p->items, 0, sizeof p->items);
+  p->list_id = list_id;
+  p->count = (uint8_t)count;
+}
+
+bool bus_places_set(BusPlaces *p, int32_t list_id, int index, const char *name, const char *address, int32_t color,
+                    int32_t bearing, const char *dist, int32_t walk) {
+  if (list_id != p->list_id || index < 0 || index >= p->count) return false;
+  BusPlace *pl = &p->items[index];
+  pl->present = true;
+  copy_utf8(pl->name, sizeof pl->name, name);
+  copy_utf8(pl->address, sizeof pl->address, address);
+  copy_utf8(pl->dist, sizeof pl->dist, dist);
+  pl->color = color;
+  pl->bearing = (bearing >= 0 && bearing < 360) ? (int16_t)bearing : -1;
+  pl->walk = walk >= 0 ? walk : -1;
+  return true;
+}
+
+const BusPlace *bus_places_at_row(const BusPlaces *p, int row) {
+  if (row < 0 || row >= p->count) return NULL;
+  const BusPlace *pl = &p->items[p->count - 1 - row];
+  return pl->present ? pl : NULL;
+}
+
+void bus_place_as_item(const BusPlace *p, BusItem *out) {
+  memset(out, 0, sizeof *out);
+  out->present = true;
+  out->kind = BUS_KIND_PLACE;
+  copy_utf8(out->title, sizeof out->title, p->name);
+  copy_utf8(out->route, sizeof out->route, p->address);
+  copy_utf8(out->dist, sizeof out->dist, p->dist);
+  out->color = p->color;
+  out->bearing = p->bearing;
+  out->lanes = 1;
+  out->walk = p->walk;
+  out->lead = -1;
+}
+
 bool bus_model_set_route(BusModel *m, int32_t list_id, int index, const char *route) {
   if (list_id != m->list_id || index < 0 || index >= m->count) return false;
   copy_utf8(m->items[index].route, sizeof m->items[index].route, route);
@@ -201,6 +248,12 @@ void bus_format_detail(const BusItem *it, int32_t now, bool clock24, char *buf, 
     append(buf, n, &len, a);
     append(buf, n, &len, " \xC2\xB7 ");
     append(buf, n, &len, b);
+    return;
+  }
+  if (it->kind == BUS_KIND_PLACE) {  // the address (walk, arrow and distance are drawn beside it)
+    size_t len = 0;
+    buf[0] = 0;
+    append(buf, n, &len, it->route);
     return;
   }
   if (it->kind != BUS_KIND_DROPOFF) {

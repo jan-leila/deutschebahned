@@ -91,11 +91,19 @@ summary { cursor: pointer; color: var(--accent); font-size: 14px; padding: 6px 0
 .status.err { color: var(--danger); }
 body:not(.has-listRoutes) .needs-listRoutes, body:not(.has-routeInfo) .needs-routeInfo,
 body:not(.has-stopInfo) .needs-stopInfo { display: none !important; }
-.destination-row { grid-template-columns: 1fr 1fr; }
-.destination-row .c-name, .destination-row .c-address, .destination-row .address-results { grid-column: 1 / -1; }
-.destination-row .c-address { display: grid; grid-template-columns: 1fr auto; gap: 2px 6px; align-items: center; }
-.destination-row .c-address input { grid-column: 1; }
-.destination-row .c-address .find-address { grid-column: 2; grid-row: 2; }
+.destination-row, .place-row { grid-template-columns: 1fr 1fr; }
+.destination-row .c-name, .destination-row .c-address, .destination-row .address-results,
+.place-row .c-name, .place-row .c-address, .place-row .address-results { grid-column: 1 / -1; }
+.destination-row .c-address, .place-row .c-address { display: grid; grid-template-columns: 1fr auto; gap: 2px 6px; align-items: center; }
+.destination-row .c-address input, .place-row .c-address input { grid-column: 1; }
+.destination-row .c-address .find-address, .place-row .c-address .find-address { grid-column: 2; grid-row: 2; }
+.picks { display: grid; gap: 6px; margin: 6px 0 10px; }
+.pick { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 11px; background: var(--card); }
+.pick .p-what { font-weight: 600; overflow-wrap: anywhere; }
+.pick .p-when { grid-column: 1; color: var(--muted); font-size: 13px; }
+.pick .remove { position: static; grid-column: 2; grid-row: 1 / span 2; }
+.pick.gone { display: none; }
 .destination-row input[type=time] { width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 9px;
   background: var(--input); font-size: 16px; color: var(--text); }
 .destination-row .c-enabled { flex-direction: row; align-items: center; gap: 8px; align-self: end; padding-bottom: 6px; font-size: 13.5px; color: var(--text); }
@@ -201,6 +209,7 @@ header .titles { flex: 1; min-width: 0; }
     <button type="button" class="nav-item" data-go="systems"><span class="nav-title">Transit systems</span><span class="nav-summary"></span></button>
     <button type="button" class="nav-item" data-go="routes"><span class="nav-title">Routes</span><span class="nav-summary"></span></button>
     <button type="button" class="nav-item" data-go="stops"><span class="nav-title">Stops</span><span class="nav-summary"></span></button>
+    <button type="button" class="nav-item" data-go="places"><span class="nav-title">Places</span><span class="nav-summary"></span></button>
     <button type="button" class="nav-item" data-go="trips"><span class="nav-title">Trips</span><span class="nav-summary"></span></button>
     <button type="button" class="nav-item" data-go="nearby"><span class="nav-title">Nearby &amp; timing</span><span class="nav-summary"></span></button>
     <button type="button" class="nav-item" data-go="learning"><span class="nav-title">Learning</span><span class="nav-summary"></span></button>
@@ -241,6 +250,19 @@ header .titles { flex: 1; min-width: 0; }
     <div id="stops" class="list"></div>
     <div class="empty">No stops yet.</div>
     <button type="button" class="add" id="add-stop">+ Add stop</button>
+  </section>
+</div>
+
+<div class="page" data-page="places" data-title="Places" data-sub="Saved locations, one press away." hidden>
+  <section>
+    <p class="help">On the watch, press <b>UP</b> on the first line to see your places, each with an arrow, the distance and the walking
+      time; keep pressing UP for more and <b>DOWN</b> or <b>BACK</b> to return. Hold <b>SELECT</b> on one to be guided there.
+      They're ordered like the rest of the list: <b>Scale</b> is a weight per meter of walking to it, <b>0</b> leaves the order to
+      learning (a <b>negative</b> number brings it up when it's close). Type an <b>address</b> and press Find, or use your position.
+      The original Pebble shows the first four.</p>
+    <div id="places" class="list"></div>
+    <div class="empty">No places yet.</div>
+    <button type="button" class="add" id="add-place">+ Add place</button>
   </section>
 </div>
 
@@ -349,12 +371,21 @@ header .titles { flex: 1; min-width: 0; }
       <button type="button" id="reset-learned" class="danger">Reset learned</button>
       <button type="button" id="clear-samples" class="danger">Clear picks</button>
     </div>
-    <p class="help"><b>Bake</b> copies the learned weights into your route and stop scales and then clears them.</p>
+    <p class="help"><b>Bake</b> copies the learned weights into your route, stop and place scales and then clears them (the
+      ones tied to a day, a time or the weather stay learned).</p>
+    <h2>Recent picks</h2>
+    <p class="help">What each pick was learned from: the line you chose, when, and the weather. Picked one by mistake? Remove it
+      and the app learns again from the rest when you save.</p>
+    <div id="picks" class="picks"></div>
+    <button type="button" class="add" id="more-picks" hidden>Show more</button>
     <div class="table-wrap"><table id="learned"></table></div>
     <details>
       <summary>Training options</summary>
       <label class="field check"><span class="name">Train automatically</span><span class="hint">after each pick</span>
         <input type="checkbox" data-field="training.autoTrain"></label>
+      <label class="field check"><span class="name">Learn from the weather</span><span class="hint">the temperature and chance of
+        rain where you are (Open-Meteo) count, so a line you take when it rains can come first then; fetched even with the weather panel off</span>
+        <input type="checkbox" data-field="training.useWeather"></label>
       <label class="field"><span class="name">Learning rate</span><span class="hint">step size</span>
         <input type="number" step="any" data-field="training.learningRate"></label>
       <label class="field"><span class="name">Iterations</span><span class="hint">optimizer steps per training</span>
@@ -400,10 +431,13 @@ header .titles { flex: 1; min-width: 0; }
     catalogs: isObj(P.catalogs) ? P.catalogs : {},
     learnedChanged: false,
     clearSamples: false,
+    samplesChanged: false,   // picks removed on the Learning page
+    picksShown: 20,
     returnTo: typeof P.return_to === 'string' && P.return_to ? P.return_to : 'pebblejs://close#'
   };
 
   var MAX_DESTINATIONS = settings.MAX_DESTINATIONS || 8;
+  var MAX_PLACES = settings.MAX_PLACES || 8;
   var MAX_PROVIDERS = settings.MAX_PROVIDERS || 8;
   var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -493,6 +527,7 @@ header .titles { flex: 1; min-width: 0; }
       systems: names.length ? names.join(', ') : 'None yet: add one to get started',
       routes: c.routes.length ? routeNames(c.routes) : 'None yet',
       stops: c.stops.length ? stopNames(c.stops) : 'None yet',
+      places: c.places.length ? routeNames(c.places) : 'None yet',
       trips: c.destinations.length ? plural(c.destinations.length, 'trip') : 'None',
       nearby: 'Stops within ' + distanceText(c.stopRadius) + ' · refresh every ' + c.refreshInterval + ' s',
       learning: plural(state.samples.length, 'pick') + ' · ' + plural(learnedKeys().length, 'learned weight')
@@ -573,6 +608,12 @@ header .titles { flex: 1; min-width: 0; }
     raw.destinations = [];
     var dr = qsa(document, '#destinations .destination-row');
     for (i = 0; i < dr.length; i++) raw.destinations.push(readDestination(dr[i]));
+    raw.places = [];
+    var plr = placeRows();
+    for (i = 0; i < plr.length; i++) {
+      raw.places.push({ id: rowValue(plr[i], 'id'), name: rowValue(plr[i], 'name'), address: rowValue(plr[i], 'address'),
+                        lat: rowValue(plr[i], 'lat'), lon: rowValue(plr[i], 'lon'), scale: rowValue(plr[i], 'scale') });
+    }
     return settings.normalize(raw);
   }
 
@@ -590,10 +631,12 @@ header .titles { flex: 1; min-width: 0; }
     clear($('routes'));
     clear($('stops'));
     clear($('destinations'));
+    clear($('places'));
     for (i = 0; i < c.providers.length; i++) addProvider(c.providers[i]);
     for (i = 0; i < c.routes.length; i++) addRoute(c.routes[i]);
     for (i = 0; i < c.stops.length; i++) addStop(c.stops[i]);
     for (i = 0; i < c.destinations.length; i++) addDestination(c.destinations[i]);
+    for (i = 0; i < c.places.length; i++) addPlace(c.places[i]);
     updateButtons();
     updateLocationMode();
     renderLearned();
@@ -1191,6 +1234,9 @@ header .titles { flex: 1; min-width: 0; }
     var n = destinationRows().length, btn = $('add-destination');
     btn.disabled = n >= MAX_DESTINATIONS;
     btn.textContent = n >= MAX_DESTINATIONS ? 'At most ' + MAX_DESTINATIONS + ' trips' : '+ Add trip';
+    var pl = placeRows().length, plb = $('add-place');
+    plb.disabled = pl >= MAX_PLACES;
+    plb.textContent = pl >= MAX_PLACES ? 'At most ' + MAX_PLACES + ' places' : '+ Add place';
     var p = providerRows().length, pb = $('add-provider');
     pb.disabled = p >= MAX_PROVIDERS;
     pb.textContent = p >= MAX_PROVIDERS ? 'At most ' + MAX_PROVIDERS + ' systems' : '+ Add transit system';
@@ -1351,6 +1397,54 @@ header .titles { flex: 1; min-width: 0; }
     return row;
   }
 
+  // ---- places (saved locations) ---------------------------------------------------------------------------------
+  // Same address lookup as a trip (findAddress / usePlace / nameFromPosition work on any row with these inputs).
+  function placeRows() { return qsa(document, '#places .place-row'); }
+  function addPlace(values) {
+    if (placeRows().length >= MAX_PLACES) return null;
+    values = values || { name: '', lat: '', lon: '', address: '', scale: 0 };
+    var row = el('div', 'row place-row');
+    row.appendChild(makeInput('id', 'hidden', values.id || ''));
+    var name = makeInput('name', 'text', values.name);
+    name.autocapitalize = 'words';
+    name.placeholder = 'blank = the name of the place';
+    row.appendChild(labelled('c-name', 'Name', name));
+    var address = makeInput('address', 'text', values.address || '');
+    address.placeholder = 'e.g. 600 Hennepin Ave, Minneapolis';
+    address.setAttribute('enterkeyhint', 'search');
+    var addrLabel = labelled('c-address', 'Address', address);
+    var find = el('button', 'find-address small', 'Find');
+    addrLabel.appendChild(find);
+    row.appendChild(addrLabel);
+    row.appendChild(el('div', 'search-results address-results'));
+    find.onclick = function () { findAddress(row); };
+    address.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); findAddress(row); } });
+    var lat = makeInput('lat', 'number', values.lat), lon = makeInput('lon', 'number', values.lon);
+    row.appendChild(labelled('c-lat', 'Latitude', lat));
+    row.appendChild(labelled('c-lon', 'Longitude', lon));
+    lat.addEventListener('change', function () { nameFromPosition(row); });
+    lon.addEventListener('change', function () { nameFromPosition(row); });
+    row.appendChild(labelled('c-scale', 'Scale', makeInput('scale', 'number', values.scale || 0)));
+    var line = el('div', 'line');
+    var status = el('span', 'status');
+    var here = el('button', 'here small', 'Use my position');
+    here.onclick = function () {
+      locate(status, function (la, lo) {
+        lat.value = coord(la);
+        lon.value = coord(lo);
+        nameFromPosition(row, true);
+      });
+    };
+    line.appendChild(here);
+    line.appendChild(status);
+    row.appendChild(line);
+    addRemove(row);
+    addDragHandle(row);
+    $('places').appendChild(row);
+    updateButtons();
+    return row;
+  }
+
   // ---- route colors (64 Pebble colors: each channel 00/55/AA/FF) -------------------------------------------------
   var LEVELS = ['00', '55', 'AA', 'FF'];
   var PEBBLE_COLORS = [];
@@ -1474,8 +1568,36 @@ header .titles { flex: 1; min-width: 0; }
     keys.sort();
     return keys;
   }
+  var CONTEXT_LABELS = { tod1s: 'by time of day', tod1c: 'by time of day', tod2s: 'by time of day (twice a day)',
+    tod2c: 'by time of day (twice a day)', yrs: 'by time of year', yrc: 'by time of year', temp: 'when warm', rain: 'when rain is likely' };
+  function findIn(list, id) {
+    for (var i = 0; list && i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+  // a tile's key ('pickup:STOP:ROUTE', 'dropoff:ROUTE|STOP', 'place:ID', 'trip:…') → what it shows
+  function tileLabel(key, rt) {
+    var sep = key.indexOf(':'), kind = key.slice(0, sep), rest = key.slice(sep + 1), r, s;
+    if (kind === 'place') { var pl = findIn(rt.places, rest); return pl ? pl.name : 'a place (not saved)'; }
+    if (kind === 'pickup') {
+      var bits = rest.split(':');
+      s = findIn(rt.stops, bits[0]); r = findIn(rt.routes, bits.slice(1).join(':'));
+      return (r ? r.name : 'a route') + ' at ' + (s ? s.name : 'a nearby stop');
+    }
+    if (kind === 'dropoff') {
+      var bar = rest.indexOf('|');
+      r = findIn(rt.routes, rest.slice(0, bar)); s = findIn(rt.stops, rest.slice(bar + 1));
+      return (r ? r.name : 'a route') + ' to ' + (s ? s.name : 'a stop');
+    }
+    return kind;
+  }
   function keyLabel(key, rt) {
+    var cx = BW.context.split(key);
+    if (cx.part) {
+      var when = cx.part.indexOf('dow') === 0 ? 'on ' + DAY_NAMES[+cx.part.slice(3)] + 's' : CONTEXT_LABELS[cx.part] || cx.part;
+      return tileLabel(cx.base, rt) + ' ' + when;
+    }
     var i, sep = key.indexOf(':'), kind = key.slice(0, sep), id = key.slice(sep + 1);
+    if (kind === 'place') { var pl = findIn(rt.places, id); return 'walking to ' + (pl ? pl.name : 'a place (not saved)'); }
     var list = kind === 'route' ? rt.routes : rt.stops;
     for (i = 0; list && i < list.length; i++) {
       if (list[i].id !== id) continue;
@@ -1485,6 +1607,7 @@ header .titles { flex: 1; min-width: 0; }
   }
 
   function renderLearned() {
+    renderPicks();
     var table = $('learned');
     clear(table);
     var learned = state.learned || {};
@@ -1524,6 +1647,56 @@ header .titles { flex: 1; min-width: 0; }
     }
   }
 
+  // ---- recent picks: newest first, each removable ---------------------------------------------------------------
+  function pickLabel(sm, rt) {
+    if (sm.label) return sm.label;
+    var c = sm.candidates && sm.candidates[sm.chosen];
+    return (c && typeof c.key === 'string' && c.key.indexOf(':') > 0 && tileLabel(c.key, rt)) || 'A line no longer saved';
+  }
+  function pickWhen(sm) {
+    var parts = [];
+    if (typeof sm.t === 'number') {
+      var d = new Date(sm.t * 1000);
+      parts.push(DAY_NAMES[d.getDay()] + ' ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' +
+                 format.clock(sm.t, prefs.clock24));
+    }
+    var cx = sm.ctx || {};
+    if (typeof cx.temp === 'number') {
+      parts.push(Math.round(prefs.units === 'metric' ? cx.temp : cx.temp * 9 / 5 + 32) + (prefs.units === 'metric' ? '°C' : '°F'));
+    }
+    if (typeof cx.rain === 'number') parts.push(cx.rain + '% rain');
+    var n = sm.candidates ? sm.candidates.length : 0;
+    parts.push((sm.kind === 'place' ? 'out of ' + plural(n, 'place') : 'out of ' + plural(n, 'line')));
+    return parts.join(' · ');
+  }
+  function renderPicks() {
+    var box = $('picks'), more = $('more-picks');
+    clear(box);
+    var rt = runtime(), n = state.samples.length, shown = 0;
+    if (!n) { box.appendChild(el('div', 'empty', 'No picks yet. Press SELECT on a line on the watch.')); more.hidden = true; return; }
+    for (var i = n - 1; i >= 0 && shown < state.picksShown; i--, shown++) {
+      (function (idx) {
+        var sm = state.samples[idx], row = el('div', 'pick');
+        row.appendChild(el('span', 'p-what', pickLabel(sm, rt)));
+        row.appendChild(el('span', 'p-when', pickWhen(sm)));
+        var rm = el('button', 'remove', '×');
+        rm.title = 'Remove this pick';
+        rm.setAttribute('aria-label', 'Remove this pick');
+        rm.onclick = function () {
+          state.samples.splice(idx, 1);
+          state.samplesChanged = true;
+          $('train-result').textContent = 'Pick removed; learning starts over from the remaining picks when you save.';
+          renderLearned();
+          renderSummaries();
+        };
+        row.appendChild(rm);
+        box.appendChild(row);
+      })(i);
+    }
+    more.hidden = n <= state.picksShown;
+    more.textContent = 'Show ' + Math.min(20, n - state.picksShown) + ' more';
+  }
+
   function pct(x) { return Math.round(x * 100) + '%'; }
 
   function trainNow() {
@@ -1544,11 +1717,16 @@ header .titles { flex: 1; min-width: 0; }
 
   function bakeLearned() {
     if (!state.learned) { $('train-result').textContent = 'Nothing to bake: no learned weights.'; return; }
-    var baked = view.bake(readForm(), state.learned);
-    state.learned = null;
+    var baked = view.bake(readForm(), state.learned), kept = null;
+    for (var k in state.learned) {
+      if (!state.learned.hasOwnProperty(k) || !BW.context.split(k).part) continue;
+      kept = kept || {};
+      kept[k] = state.learned[k];   // tied to a day, time or weather: there's no scale for it, so it stays learned
+    }
+    state.learned = kept;
     state.learnedChanged = true;
     fillForm(baked);
-    $('train-result').textContent = 'Learned weights copied into your route and stop scales. Save to keep them.';
+    $('train-result').textContent = 'Learned weights copied into your route, stop and place scales. Save to keep them.';
   }
 
   function resetLearned() {
@@ -1561,6 +1739,7 @@ header .titles { flex: 1; min-width: 0; }
   function clearSamples() {
     state.samples = [];
     state.clearSamples = true;
+    state.samplesChanged = false;
     $('train-result').textContent = 'Recorded picks will be deleted when you save.';
     renderLearned();
   }
@@ -1570,6 +1749,7 @@ header .titles { flex: 1; min-width: 0; }
     var result = { config: readForm() };
     if (state.learnedChanged) result.learned = state.learned ? state.learned : null;
     if (state.clearSamples) result.clearSamples = true;
+    else if (state.samplesChanged) result.samples = state.samples;
     document.location.href = state.returnTo + encodeURIComponent(JSON.stringify(result));
   }
 
@@ -1610,6 +1790,11 @@ header .titles { flex: 1; min-width: 0; }
     var row = addDestination();
     if (row) qs(row, 'input[name=name]').focus();
   };
+  $('add-place').onclick = function () {
+    var row = addPlace();
+    if (row) qs(row, 'input[name=name]').focus();
+  };
+  $('more-picks').onclick = function () { state.picksShown += 20; renderPicks(); };
   $('train-now').onclick = trainNow;
   $('bake-learned').onclick = bakeLearned;
   $('reset-learned').onclick = resetLearned;

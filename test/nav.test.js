@@ -233,3 +233,20 @@ test('no routing source configured: the fetcher is never called', () => {
   h.n.start(5, 0);
   assert.equal(called, 0);
 });
+
+test('place: walk to the saved location, then arrive (from the places list)', () => {
+  const sent = [];
+  const place = { kind: 'place', key: 'place:home', title: 'Home', color: '', lat: STOP.lat, lon: STOP.lon };
+  const n = nav.createNav({
+    send: m => sent.push(...m), locate: cb => cb(null, HOME), clock: () => NOW,
+    getList: () => ({ listId: 5, items: [pickup], data }), getPlaces: () => ({ listId: 2, items: [place] }),
+    getConfig: () => ({ schedule: { walkSpeed: 1.3 }, clock24: true, routingUrl: '' }), getUnits: () => 'metric',
+    getPlan: () => null, setInterval: () => 1, clearInterval: () => {},
+  });
+  assert.equal(n.start(5, 0, true), false, 'the places list has its own id');
+  assert.equal(n.start(2, 0, true), true);
+  const steps = sent.filter(m => 'NAV_INDEX' in m);
+  assert.deepEqual(steps.map(m => [m.NAV_KIND, m.NAV_TEXT]), [[KIND.walk, 'Walk to Home'], [KIND.arrive, 'Arrive at Home']]);
+  assert.equal(sent.find(m => 'NAV_STATE' in m).NAV_LDIST, '400m');
+  assert.deepEqual(nav.buildSteps({ kind: 'place', title: 'X' }, {}).map(st => st.type), ['info']);
+});

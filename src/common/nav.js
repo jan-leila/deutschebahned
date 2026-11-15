@@ -1,4 +1,4 @@
-// Navigation to a pickup stop, a drop-off stop or a scheduled trip (CONTRACTS.md §18). The watch shows the steps as a
+// Navigation to a pickup stop, a drop-off stop, a saved location or a scheduled trip (CONTRACTS.md §18). The watch shows the steps as a
 // scrollable list with the current one open (arrow, distance, time left); the phone follows the GPS, advances through
 // the steps and re-sends what changed. With a routing source (routing.js) a walking step is replaced by its turns;
 // without one it is a straight arrow. All I/O is injected. ES5.
@@ -44,6 +44,13 @@ function buildSteps(item, ctx) {
     if (!to) return [{ type: 'info', text: 'No location for ' + item.title, to: null, color: item.color }];
     steps.push({ type: 'walk', text: 'Walk to ' + item.title, to: point(to), color: item.color });
     steps.push({ type: 'wait', text: 'Wait for the ' + item.badge, to: point(to), color: item.color, times: item.times || [] });
+    return steps;
+  }
+  if (item.kind === 'place') {
+    to = point(item);
+    if (!to) return [{ type: 'info', text: 'No location for ' + item.title, to: null, color: item.color }];
+    steps.push({ type: 'walk', text: 'Walk to ' + item.title, to: to, color: item.color });
+    steps.push({ type: 'arrive', text: 'Arrive at ' + item.title, to: to, color: item.color });
     return steps;
   }
   if (item.kind === 'dropoff') {
@@ -122,7 +129,7 @@ function describeStep(step, prev, o) {
 }
 
 // createNav(deps): deps = {send(messages), locate(cb), clock(), getList() → the session's last list
-// ({listId, items, data}), getConfig(), getUnits() → 'metric'|'imperial', getPlan(destId) → Plan|null,
+// ({listId, items, data}), getPlaces() → the saved locations as last sent ({listId, items}), getConfig(), getUnits() → 'metric'|'imperial', getPlan(destId) → Plan|null,
 // route? (routing.createFetcher), setInterval?, clearInterval?, log?}
 function createNav(deps) {
   var log = deps.log || function () {};
@@ -248,10 +255,10 @@ function createNav(deps) {
     if (!silent) send([protocol.encodeNavLive(null)]);
   }
 
-  // listId / index: the watch's selection (index -1 = nothing selected)
-  function start(listId, index) {
+  // listId / index: the watch's selection (index -1 = nothing selected); places: it is in the saved locations' list
+  function start(listId, index, places) {
     stop(true);
-    var list = deps.getList();
+    var list = places ? (typeof deps.getPlaces === 'function' ? deps.getPlaces() : null) : deps.getList();
     if (!list || list.listId !== listId || typeof index !== 'number' || index < 0 || index >= list.items.length) {
       log('nav: nothing to navigate to');
       return false;

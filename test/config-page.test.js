@@ -119,13 +119,14 @@ test('config page: a home menu of pages; one page at a time; back returns home',
     assert.equal(await page.eval(`document.getElementById('back').hidden`), true);
     const summaries = await page.eval(`Object.fromEntries([...document.querySelectorAll('.nav-item')].map(b =>
       [b.getAttribute('data-go'), b.querySelector('.nav-summary').textContent]))`);
-    assert.deepEqual(Object.keys(summaries), ['systems', 'routes', 'stops', 'trips', 'nearby', 'learning']);
+    assert.deepEqual(Object.keys(summaries), ['systems', 'routes', 'stops', 'places', 'trips', 'nearby', 'learning']);
+    assert.equal(summaries.places, 'None yet');
     assert.equal(summaries.systems, 'King County, Mock (demo data)');
     assert.equal(summaries.routes, '44, 43');
     assert.equal(summaries.stops, 'Home, 1_10914');
     assert.match(summaries.nearby, /^Stops within 820 ft/);
     assert.equal(summaries.learning, '2 picks · 1 learned weight');
-    for (const name of ['systems', 'routes', 'stops', 'trips', 'nearby', 'learning']) {
+    for (const name of ['systems', 'routes', 'stops', 'places', 'trips', 'nearby', 'learning']) {
       await page.eval(`document.querySelector('.nav-item[data-go=${name}]').click()`);
       assert.ok(await until(page, `${visiblePage} === '${name}'`), name);
       assert.equal(await page.eval(`document.getElementById('back').hidden`), false);
@@ -745,5 +746,79 @@ test('config page: a name the user typed is kept; lookup failures show in the ro
     assert.equal(out.config.schedule.lastTransfer, 900);
     assert.equal(out.config.destinations[0].address, 'x');
     assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+// ---- places and recent picks (§19) ---------------------------------------------------------------------------
+test('config page: places are shown, edited, looked up by address and saved; at most 8', { skip }, async () => {
+  const places = [{ id: 'home', name: 'Home', lat: 44.97, lon: -93.26, address: '1 Main St', scale: -1 }];
+  const page = await load(destParams({ config: Object.assign({}, destParams().config, { places }) }), geoStub());
+  try {
+    assert.equal(await page.eval(`document.querySelector('.nav-item[data-go=places] .nav-summary').textContent`), 'Home');
+    await page.eval(`showPage('places')`);
+    assert.equal(await page.eval(`document.querySelectorAll('#places .place-row').length`), 1);
+    assert.equal(await page.eval(`document.querySelector('#places .place-row input[name=address]').value`), '1 Main St');
+    await page.eval(`document.getElementById('add-place').click()`);
+    const row = `document.querySelectorAll('#places .place-row')[1]`;
+    await page.eval(set(`${row}.querySelector('input[name=address]')`, '1600 Pennsylvania Ave'));
+    await page.eval(`${row}.querySelector('.find-address').click()`);
+    assert.ok(await until(page, `${row}.querySelectorAll('.address-results .result').length > 0`), 'matches listed');
+    await page.eval(`${row}.querySelector('.address-results .result').click()`);
+    const out = await saved(page);
+    assert.equal(out.config.places.length, 2);
+    assert.deepEqual(out.config.places[0], places[0]);
+    assert.ok(out.config.places[1].name && Number.isFinite(out.config.places[1].lat) && out.config.places[1].lat !== 0);
+    assert.equal(out.config.places[1].id, 'place1');
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+  const many = await load(destParams());
+  try {
+    for (let i = 0; i < 9; i++) await many.eval(`document.getElementById('add-place').click()`);
+    assert.equal(await many.eval(`document.querySelectorAll('#places .place-row').length`), 8);
+    assert.equal(await many.eval(`document.getElementById('add-place').disabled`), true);
+  } finally { await many.close(); }
+});
+
+test('config page: recent picks, newest first, with context; removing one sends the rest; context weights are labelled', { skip }, async () => {
+  const t = Math.floor(new Date(2026, 10, 16, 8, 5).getTime() / 1000);   // a Monday
+  const picks = [
+    { t: t - 86400, lat: 0, lon: 0, chosen: 0, kind: 'pickup', label: '44 · Lake St', ctx: { dow: 0, temp: 3.2, rain: 40 },
+      candidates: [{ key: 'pickup:onebusaway/1_29247:onebusaway/1_100225', features: {} }, { key: 'b', features: {} }] },
+    { t, lat: 0, lon: 0, chosen: 1, candidates: [{ key: 'a', features: {} },
+      { key: 'pickup:onebusaway/1_29247:onebusaway/1_100223', features: {} }] },
+  ];
+  const lw = { 'pickup:onebusaway/1_29247:onebusaway/1_100225@dow1': 2, 'pickup:onebusaway/1_29247:onebusaway/1_100225@rain': 1 };
+  const page = await load(params({ samples: picks, learned: lw, prefs: METRIC }));
+  try {
+    await page.eval(`showPage('learning')`);
+    const shown = await page.eval(`[...document.querySelectorAll('#picks .pick')].map(p => [p.querySelector('.p-what').textContent,
+      p.querySelector('.p-when').textContent])`);
+    assert.equal(shown.length, 2);
+    assert.equal(shown[0][0], '43 at Home', 'no label stored: named from the saved route and stop');
+    assert.match(shown[0][1], /^Mon .* 08:05 · out of 2 lines$/);
+    assert.equal(shown[1][0], '44 · Lake St');
+    assert.match(shown[1][1], /3°C · 40% rain · out of 2 lines$/);
+    const table = await page.eval(`document.getElementById('learned').textContent`);
+    assert.match(table, /44 at Home on Mons/);
+    assert.match(table, /44 at Home when rain is likely/);
+    await page.eval(`document.querySelector('#picks .pick .remove').click()`);
+    assert.equal(await page.eval(`document.querySelectorAll('#picks .pick').length`), 1);
+    assert.equal(await page.eval(`document.getElementById('sample-count').textContent.trim()`), '1');
+    // baking keeps the weights tied to a day / the weather
+    await page.eval(`document.getElementById('bake-learned').click()`);
+    const out = await saved(page);
+    assert.deepEqual(out.samples, [picks[0]]);
+    assert.equal('clearSamples' in out, false);
+    assert.deepEqual(out.learned, lw);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test('config page: learning from the weather is a training option, on by default', { skip }, async () => {
+  const page = await load(params());
+  try {
+    assert.equal(await page.eval(`document.querySelector('[data-field="training.useWeather"]').checked`), true);
+    await page.eval(`document.querySelector('[data-field="training.useWeather"]').click()`);
+    assert.equal((await saved(page)).config.training.useWeather, false);
   } finally { await page.close(); }
 });

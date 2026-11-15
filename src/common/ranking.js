@@ -37,6 +37,10 @@ function weightFor(key, config, learned) {
     var r = findById(c.routes, p.id);
     return orZero(r ? r.scale : undefined);
   }
+  if (p.prefix === 'place') {
+    var pl = findById(c.places, p.id);
+    return orZero(pl ? pl.scale : undefined);
+  }
   return 0;
 }
 
