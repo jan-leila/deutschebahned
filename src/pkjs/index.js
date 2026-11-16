@@ -12,6 +12,7 @@ var weather = require('../common/weather');
 var routing = require('../common/routing');
 var navModule = require('../common/nav');
 var voiceModule = require('../common/voice');
+var storageMigrate = require('../common/storage-migrate');
 // Data sources are plug-ins: this composition root is the only place that picks them.
 var sources = require('../sources/registry').createRegistry(require('../sources/all'));
 
@@ -25,7 +26,7 @@ var RETURN_TO = 'pebblejs://close#';
 var CATALOG_DELAY_MS = 15000;   // let the first refresh finish before indexing routes and stops
 
 function log(msg) {
-  console.log('[bus-watch] ' + msg);
+  console.log('[deutschebahned] ' + msg);
 }
 
 function clock() {
@@ -117,6 +118,10 @@ var sender = protocol.createSender(function (dict, onOk, onErr) {
     onErr(e);
   });
 }, { retries: 2, timeout: SEND_TIMEOUT_MS });
+
+// before anything reads storage: settings saved under the old 'busWatch.' keys move to 'deutschebahned.' once
+var migratedKeys = storageMigrate.migrate(localStorage);
+if (migratedKeys) log('moved ' + migratedKeys + ' stored entries to the new key names');
 
 var sourceDeps = { http: http, clock: clock, storage: localStorage };
 

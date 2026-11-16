@@ -29,7 +29,7 @@ const countingHttp = (url, cb) => { requests++; http(url, cb); };
 
 const store = new Map();
 const storage = { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) };
-storage.setItem('busWatch.config', JSON.stringify({
+storage.setItem('deutschebahned.config', JSON.stringify({
   version: 2,
   providers: [{ id: 'metrotransit', type: 'metrotransit' }],
   location: { mode: 'fixed', lat, lon },

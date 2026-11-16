@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Bus Watch settings</title>
+<title>Deutschebahned settings</title>
 <style>
 :root {
   --bg: #f2f3f5; --card: #ffffff; --text: #1b1d21; --muted: #646a73; --line: #dde0e5;
@@ -198,13 +198,13 @@ header .titles { flex: 1; min-width: 0; }
 <header>
   <button type="button" id="back" aria-label="Back" hidden>‹</button>
   <div class="titles">
-    <h1 id="page-title">Bus Watch</h1>
+    <h1 id="page-title">Deutschebahned</h1>
     <p id="page-sub">Nearby pickups and drop-offs on your wrist.</p>
   </div>
 </header>
 <main>
 
-<div class="page" data-page="home" data-title="Bus Watch" data-sub="Nearby pickups and drop-offs on your wrist.">
+<div class="page" data-page="home" data-title="Deutschebahned" data-sub="Nearby pickups and drop-offs on your wrist.">
   <div class="nav">
     <button type="button" class="nav-item" data-go="systems"><span class="nav-title">Transit systems</span><span class="nav-summary"></span></button>
     <button type="button" class="nav-item" data-go="routes"><span class="nav-title">Routes</span><span class="nav-summary"></span></button>
@@ -415,10 +415,10 @@ header .titles { flex: 1; min-width: 0; }
   <button type="button" class="primary" id="save">Save</button>
 </div></div>
 
-<!--BUSWATCH-MODULES-->
+<!--DEUTSCHEBAHNED-MODULES-->
 <script>
 (function () {
-  var BW = window.BusWatch;
+  var BW = window.Deutschebahned;
   var settings = BW.settings, view = BW.view, catalog = BW.catalog, ranking = BW.ranking, optimize = BW.optimize,
       format = BW.format, registry = BW.registry, geo = BW.geo;
   var P = window.__params && typeof window.__params === 'object' ? window.__params : {};

@@ -62,12 +62,12 @@ const refresh = s => new Promise((resolve, reject) => s.refresh((e, items) => (e
 const statuses = sent => sent.filter(m => 'STATUS' in m && !('ITEM_COUNT' in m)).map(m => m.STATUS);
 
 test('storage keys', () => {
-  assert.deepEqual(STORAGE_KEYS, { config: 'busWatch.config', samples: 'busWatch.samples', learned: 'busWatch.learned',
-    prefs: 'busWatch.prefs' });
+  assert.deepEqual(STORAGE_KEYS, { config: 'deutschebahned.config', samples: 'deutschebahned.samples', learned: 'deutschebahned.learned',
+    prefs: 'deutschebahned.prefs' });
 });
 
 test('load: defaults on empty or corrupt storage', () => {
-  const { session } = harness({ storage: { 'busWatch.config': '{bad', 'busWatch.samples': 'nope', 'busWatch.learned': '[]x' } });
+  const { session } = harness({ storage: { 'deutschebahned.config': '{bad', 'deutschebahned.samples': 'nope', 'deutschebahned.learned': '[]x' } });
   session.load();
   assert.deepEqual(session.getConfig(), settings.defaults());
   assert.deepEqual(session.getSamples(), []);
@@ -77,9 +77,9 @@ test('load: defaults on empty or corrupt storage', () => {
 
 test('load: reads and normalizes stored values', () => {
   const { session } = harness({ storage: {
-    'busWatch.config': JSON.stringify({ version: 2, providers: [{ id: 'p', type: 'mock' }], maxItems: '5' }),
-    'busWatch.samples': JSON.stringify([{ chosen: 0, candidates: [] }]),
-    'busWatch.learned': JSON.stringify({ 'stop:p/a': -2 }) } });
+    'deutschebahned.config': JSON.stringify({ version: 2, providers: [{ id: 'p', type: 'mock' }], maxItems: '5' }),
+    'deutschebahned.samples': JSON.stringify([{ chosen: 0, candidates: [] }]),
+    'deutschebahned.learned': JSON.stringify({ 'stop:p/a': -2 }) } });
   session.load();
   assert.equal(session.getConfig().maxItems, 5);
   assert.equal(session.getSamples().length, 1);
@@ -88,10 +88,10 @@ test('load: reads and normalizes stored values', () => {
 
 test('load: a version 1 config is migrated, with its learned weights and samples', () => {
   const h = harness({ storage: {
-    'busWatch.config': JSON.stringify({ provider: { type: 'onebusaway', apiKey: 'k' }, routes: [{ id: 'r', scale: -2 }],
+    'deutschebahned.config': JSON.stringify({ provider: { type: 'onebusaway', apiKey: 'k' }, routes: [{ id: 'r', scale: -2 }],
       connections: [{ routeId: 'r', stopId: 'z', name: 'Home', scale: -3 }], stopScales: { a: -1 } }),
-    'busWatch.samples': JSON.stringify([{ chosen: 0, candidates: [{ key: 'x', features: { 'stop:a': 5, 'conn:r|z': 7, 'route:r': 9 } }] }]),
-    'busWatch.learned': JSON.stringify({ 'stop:a': -2, 'conn:r|z': -4, 'route:r': -1, other: 3 }) } });
+    'deutschebahned.samples': JSON.stringify([{ chosen: 0, candidates: [{ key: 'x', features: { 'stop:a': 5, 'conn:r|z': 7, 'route:r': 9 } }] }]),
+    'deutschebahned.learned': JSON.stringify({ 'stop:a': -2, 'conn:r|z': -4, 'route:r': -1, other: 3 }) } });
   h.session.load();
   const c = h.session.getConfig();
   assert.deepEqual(c.providers.map(p => [p.id, p.type, p.apiKey]), [['onebusaway', 'onebusaway', 'k']]);
@@ -100,15 +100,15 @@ test('load: a version 1 config is migrated, with its learned weights and samples
   assert.deepEqual(h.session.getLearned(), { 'stop:onebusaway/a': -2, 'ride:onebusaway/z': -4, 'route:onebusaway/r': -1, other: 3 });
   assert.deepEqual(h.session.getSamples()[0].candidates[0].features,
     { 'stop:onebusaway/a': 5, 'ride:onebusaway/z': 7, 'route:onebusaway/r': 9 });
-  assert.equal(JSON.parse(h.storage.getItem('busWatch.config')).version, 2, 'saved migrated');
-  assert.deepEqual(JSON.parse(h.storage.getItem('busWatch.learned')), h.session.getLearned());
+  assert.equal(JSON.parse(h.storage.getItem('deutschebahned.config')).version, 2, 'saved migrated');
+  assert.deepEqual(JSON.parse(h.storage.getItem('deutschebahned.learned')), h.session.getLearned());
   // loading again changes nothing
   h.session.load();
   assert.deepEqual(h.session.getLearned(), { 'stop:onebusaway/a': -2, 'ride:onebusaway/z': -4, 'route:onebusaway/r': -1, other: 3 });
 });
 
 test('refresh: the planner and ranking get the runtime view at the position', async () => {
-  const h = harness({ storage: { 'busWatch.config': JSON.stringify({ version: 2,
+  const h = harness({ storage: { 'deutschebahned.config': JSON.stringify({ version: 2,
     providers: [{ id: 'near', type: 'mock' }, { id: 'far', type: 'mock', coverage: { mode: 'manual', lat: -40, lon: 170, radius: 10000 } }],
     routes: [{ providerId: 'near', id: 'A' }, { providerId: 'far', id: 'B' }] }) } });
   h.session.load();
@@ -143,7 +143,7 @@ test('refresh (gps): statuses, then a ranked list with an incrementing list id',
 });
 
 test('refresh (fixed location) skips locate', async () => {
-  const h = harness({ storage: { 'busWatch.config': JSON.stringify({ location: { mode: 'fixed', lat: 1, lon: 2 } }) } });
+  const h = harness({ storage: { 'deutschebahned.config': JSON.stringify({ location: { mode: 'fixed', lat: 1, lon: 2 } }) } });
   h.session.load();
   await refresh(h.session);
   assert.equal(h.calls.locate, 0);
@@ -190,12 +190,12 @@ test('select: records a sample, trains with the config prior, re-sends the re-ra
   assert.deepEqual(samples[0], { t: NOW, lat: 10, lon: 20, chosen: 1,
     candidates: [{ key: 'p1', features: withCtx[0].features }, { key: 'd1', features: withCtx[1].features }] });
   assert.equal(samples[0].candidates[0].features['p1@dow' + new Date(NOW * 1000).getDay()], context.UNIT);
-  assert.equal(JSON.parse(h.storage.getItem('busWatch.samples')).length, 1);
+  assert.equal(JSON.parse(h.storage.getItem('deutschebahned.samples')).length, 1);
   assert.equal(h.calls.train.length, 1);
   assert.equal(h.calls.train[0].prior, -1, 'prior is weightFor(key, config, null)');
   assert.deepEqual(h.calls.train[0].opts, settings.defaults().training);
   assert.deepEqual(h.session.getLearned(), { flip: 1 });
-  assert.deepEqual(JSON.parse(h.storage.getItem('busWatch.learned')), { flip: 1 });
+  assert.deepEqual(JSON.parse(h.storage.getItem('deutschebahned.learned')), { flip: 1 });
   const header = h.sent.find(m => 'ITEM_COUNT' in m);
   assert.equal(header.LIST_ID, 2);
   assert.equal(header.STATUS, 'Learned (1 picks)');
@@ -214,7 +214,7 @@ test('select: stale list id or bad index is ignored', async () => {
 });
 
 test('select: autoTrain off records only; samples capped at maxSamples (newest kept)', async () => {
-  const h = harness({ storage: { 'busWatch.config': JSON.stringify({ training: { autoTrain: false, maxSamples: 2 } }) } });
+  const h = harness({ storage: { 'deutschebahned.config': JSON.stringify({ training: { autoTrain: false, maxSamples: 2 } }) } });
   h.session.load();
   await refresh(h.session);
   let id = 1;
@@ -242,7 +242,7 @@ test('handleWatchMessage dispatches and returns the decoded message', async () =
 
 test("lists are encoded with the watch's units", async () => {
   const items = [{ kind: 'pickup', key: 'p', title: 'P', times: [NOW + 60], distance: 350, bearing: 90, features: {} }];
-  const metric = harness({ items, storage: { 'busWatch.prefs': JSON.stringify({ units: 'metric', clock24: true, known: true }) } });
+  const metric = harness({ items, storage: { 'deutschebahned.prefs': JSON.stringify({ units: 'metric', clock24: true, known: true }) } });
   metric.session.load();
   await refresh(metric.session);
   assert.equal(metric.sent.find(m => 'ITEM_INDEX' in m).ITEM_DIST, '350m');
@@ -260,15 +260,15 @@ test("lists are encoded with the watch's units", async () => {
 
 test('applySettings: saves normalized config, learned/clear handling, rebuilds provider, refreshes', async () => {
   const h = harness({ storage: {
-    'busWatch.samples': JSON.stringify([{ chosen: 0, candidates: [] }]),
-    'busWatch.learned': JSON.stringify({ 'stop:a': -2 }) } });
+    'deutschebahned.samples': JSON.stringify([{ chosen: 0, candidates: [] }]),
+    'deutschebahned.learned': JSON.stringify({ 'stop:a': -2 }) } });
   h.session.load();
   await refresh(h.session);
   const before = h.calls.lastGather.cache;
   h.session.applySettings({ config: { maxItems: '3', foo: 1 } });
   await new Promise(r => setTimeout(r, 20));
   assert.equal(h.session.getConfig().maxItems, 3);
-  assert.equal(JSON.parse(h.storage.getItem('busWatch.config')).maxItems, 3);
+  assert.equal(JSON.parse(h.storage.getItem('deutschebahned.config')).maxItems, 3);
   assert.deepEqual(h.session.getLearned(), { 'stop:a': -2 }, 'learned kept when not given');
   assert.equal(h.session.getSamples().length, 1, 'samples kept unless cleared');
   assert.equal(h.calls.createProvider, 2, 'provider rebuilt');
@@ -279,7 +279,7 @@ test('applySettings: saves normalized config, learned/clear handling, rebuilds p
   await new Promise(r => setTimeout(r, 20));
   assert.deepEqual(h.session.getLearned(), {});
   assert.deepEqual(h.session.getSamples(), []);
-  assert.deepEqual(JSON.parse(h.storage.getItem('busWatch.samples')), []);
+  assert.deepEqual(JSON.parse(h.storage.getItem('deutschebahned.samples')), []);
   h.session.applySettings({ config: {}, learned: { 'route:r': -0.3 } });
   assert.deepEqual(h.session.getLearned(), { 'route:r': -0.3 });
 });
@@ -297,7 +297,7 @@ test('watch prefs: saved, re-send the last list when the units change, known onc
   const header = h.sent.find(m => 'ITEM_COUNT' in m);
   assert.ok(header && header.LIST_ID === 2, 'list re-sent with a new id');
   assert.equal(h.sent.find(m => 'ITEM_INDEX' in m).ITEM_DIST, '350m');
-  assert.deepEqual(JSON.parse(h.storage.getItem('busWatch.prefs')), { clock24: true, units: 'metric', known: true });
+  assert.deepEqual(JSON.parse(h.storage.getItem('deutschebahned.prefs')), { clock24: true, units: 'metric', known: true });
   h.sent.length = 0;
   assert.equal(h.session.setPrefs({ clock24: true, units: 'metric' }), false, 'unchanged');
   assert.equal(h.session.setPrefs({ clock24: false, units: null }), true, 'units unknown: kept');
@@ -327,7 +327,7 @@ test('lists follow the showWalk / showArrow settings', async () => {
   const m = on.sent.find(x => 'ITEM_INDEX' in x);
   assert.equal(m.ITEM_WALK, 270);
   assert.equal(m.ITEM_BEARING, 90);
-  const off = harness({ items, storage: { 'busWatch.config': JSON.stringify({ version: 2, providers: [{ id: 'p', type: 'mock' }],
+  const off = harness({ items, storage: { 'deutschebahned.config': JSON.stringify({ version: 2, providers: [{ id: 'p', type: 'mock' }],
     showWalk: false, showArrow: false }) } });
   off.session.load();
   await refresh(off.session);
@@ -350,14 +350,14 @@ test('weather: fetched at the refresh position and sent in the watch units; no p
   await tick();
   assert.equal(asked.length, 1, 'fetched for learning (training.useWeather) even with the panel off');
   assert.equal(off.sent.some(m => 'WEATHER_COUNT' in m), false);
-  const none = harness({ weather, storage: { 'busWatch.config': JSON.stringify({ training: { useWeather: false } }) } });
+  const none = harness({ weather, storage: { 'deutschebahned.config': JSON.stringify({ training: { useWeather: false } }) } });
   none.session.load();
   await refresh(none.session);
   await tick();
   assert.equal(asked.length, 1, 'neither the panel nor learning wants it: not fetched');
   asked.length = 0;
 
-  const on = harness({ weather, storage: { 'busWatch.config': weatherOn() } });
+  const on = harness({ weather, storage: { 'deutschebahned.config': weatherOn() } });
   on.session.load();
   on.session.setPrefs({ clock24: true, units: 'metric' });
   await refresh(on.session);
@@ -376,7 +376,7 @@ test('weather: fetched at the refresh position and sent in the watch units; no p
 test('weather: a failed fetch sends nothing; turning it off hides the panel once', async () => {
   let fail = true;
   const weather = (pos, cb) => setTimeout(() => (fail ? cb(new Error('down')) : cb(null, FORECAST)), 0);
-  const h = harness({ weather, storage: { 'busWatch.config': weatherOn() } });
+  const h = harness({ weather, storage: { 'deutschebahned.config': weatherOn() } });
   h.session.load();
   await refresh(h.session);
   await tick();
@@ -406,7 +406,7 @@ test('places: sent as their own list on refresh, ranked; unchanged → not sent 
   assert.equal(placeMsgs(none.sent).length, 0);
   assert.equal(none.session.lastPlaces(), null);
 
-  const h = harness({ storage: { 'busWatch.config': PLACES_CONFIG() } });
+  const h = harness({ storage: { 'deutschebahned.config': PLACES_CONFIG() } });
   h.session.load();
   h.session.setPrefs({ clock24: true, units: 'metric' });
   await refresh(h.session);
@@ -427,7 +427,7 @@ test('places: sent as their own list on refresh, ranked; unchanged → not sent 
 });
 
 test('places: SELECT records a pick with its context and label, trains, and re-sends them (new id)', async () => {
-  const h = harness({ storage: { 'busWatch.config': PLACES_CONFIG() } });
+  const h = harness({ storage: { 'deutschebahned.config': PLACES_CONFIG() } });
   h.session.load();
   await refresh(h.session);
   h.sent.length = 0;
@@ -476,7 +476,7 @@ test('applySettings: picks removed on the settings page are dropped and learned 
   h.calls.train.length = 0;
   h.session.applySettings({ config: h.session.getConfig(), samples: keep });
   assert.deepEqual(h.session.getSamples(), keep);
-  assert.deepEqual(JSON.parse(h.storage.getItem('busWatch.samples')), keep);
+  assert.deepEqual(JSON.parse(h.storage.getItem('deutschebahned.samples')), keep);
   assert.equal(h.calls.train.length, 1);
   assert.equal(h.calls.train[0].n, 1);
   h.calls.train.length = 0;

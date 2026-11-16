@@ -8,7 +8,7 @@ var weather = require('./weather');
 var context = require('./context');
 var places = require('./places');
 
-var STORAGE_KEYS = { config: 'busWatch.config', samples: 'busWatch.samples', learned: 'busWatch.learned', prefs: 'busWatch.prefs' };
+var STORAGE_KEYS = { config: 'deutschebahned.config', samples: 'deutschebahned.samples', learned: 'deutschebahned.learned', prefs: 'deutschebahned.prefs' };
 
 function isPlainObject(v) {
   return v !== null && typeof v === 'object' && !(v instanceof Array);

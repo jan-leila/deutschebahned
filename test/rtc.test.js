@@ -126,7 +126,7 @@ test('rtc: route is cached in storage per agency for 7 days; concurrent calls sh
   const [a, b] = await Promise.all([call(first.p.route, '10109'), call(first.p.route, '10109')]);
   assert.deepEqual(a, b);
   assert.equal(first.f.calls.length, 2);
-  assert.ok(storage.keys().every(k => k.startsWith('busWatch.rtc.las-vegas-rtc.')));
+  assert.ok(storage.keys().every(k => k.startsWith('deutschebahned.rtc.las-vegas-rtc.')));
   const second = make({}, { storage, now: NOW + 6 * 86400 });
   assert.deepEqual(await call(second.p.route, '10109'), a);
   assert.equal(second.f.calls.length, 0);

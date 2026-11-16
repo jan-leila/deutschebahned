@@ -9,8 +9,8 @@ def options(ctx):
 
 def configure(ctx):
     ctx.load('pebble_sdk')
-    # The SDK names the bundle after the checkout directory; pin it so scripts can rely on build/bus-watch.pbw.
-    ctx.env.BUNDLE_NAME = 'bus-watch.pbw'
+    # The SDK names the bundle after the checkout directory; pin it so scripts can rely on build/deutschebahned.pbw.
+    ctx.env.BUNDLE_NAME = 'deutschebahned.pbw'
 
 def build(ctx):
     # src/pkjs/config-page.js is generated from config/ (and not committed); regenerate it before the JS is globbed.

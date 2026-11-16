@@ -197,7 +197,7 @@ test('wmata: bus route from jRouteDetails (+ jRoutes for the long name), stored 
   const again = make({ storage });
   assert.deepEqual(await call(again.p.route, 'D80'), r);
   assert.equal(again.calls.length, 0);
-  assert.ok(storage.keys().every(k => k.startsWith('busWatch.wmata.')));
+  assert.ok(storage.keys().every(k => k.startsWith('deutschebahned.wmata.')));
 });
 
 test('wmata: route long name falls back to the details Name; concurrent calls share one fetch; unknown route → error', async () => {

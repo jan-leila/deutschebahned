@@ -13,7 +13,7 @@ var DEFAULT_BASE_URL = 'https://api-v3.mbta.com';
 var MAX_IN_FLIGHT = 4;
 var MAX_BATCH = 20;           // stop / route ids per batched request
 var MAX_ROUTE_BATCH = 6;      // routes per /route_patterns request (shapes make these large)
-var CACHE_PREFIX = 'busWatch.mbta.';
+var CACHE_PREFIX = 'deutschebahned.mbta.';
 var CACHE_TTL = 7 * 86400;    // seconds
 
 var COMPASS = { north: 'Northbound', south: 'Southbound', east: 'Eastbound', west: 'Westbound' };

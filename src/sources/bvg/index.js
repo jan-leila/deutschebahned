@@ -6,7 +6,7 @@ var util = require('../util');
 
 var DEFAULT_BASE_URL = 'https://v6.bvg.transport.rest';
 var MAX_IN_FLIGHT = 3;
-var CACHE_PREFIX = 'busWatch.bvg.';
+var CACHE_PREFIX = 'deutschebahned.bvg.';
 var ROUTE_TTL = 7 * 86400;      // seconds: built routes in storage
 var NEARBY_TTL = 300;           // seconds: stopsNear answers kept in memory (same rounded position / radius)
 var NEARBY_RESULTS = 100;

@@ -9,7 +9,7 @@
 var directions = require('./directions');
 
 var TTL = 7 * 86400;
-var PREFIX = 'busWatch.catalog.';
+var PREFIX = 'deutschebahned.catalog.';
 var DEFAULT_LIMIT = 6;
 
 function str(v) { return v == null ? '' : String(v); }

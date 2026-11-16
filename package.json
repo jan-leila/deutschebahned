@@ -1,5 +1,5 @@
 {
-  "name": "bus-watch",
+  "name": "deutschebahned",
   "author": "leyla",
   "version": "0.7.0",
   "keywords": [
@@ -13,7 +13,7 @@
     "build:config": "node tools/build-config.js"
   },
   "pebble": {
-    "displayName": "Bus Watch",
+    "displayName": "Deutschebahned",
     "uuid": "7df2b6a7-ddc2-40db-951f-26fc5dbdf5d5",
     "sdkVersion": "3",
     "enableMultiJS": true,

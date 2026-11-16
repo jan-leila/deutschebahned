@@ -1,4 +1,4 @@
-# Bus Watch — module contracts
+# Deutschebahned — module contracts
 
 Each part is built and tested on its own against the contract below. **Contract tests in `test/` are
 the spec**: when this document and a test disagree, the test wins (and this doc gets fixed).
@@ -259,7 +259,7 @@ APIs used (NexTrip v2 + Schedule v1; JSON, CORS open): `GET {base}/nextrip/{stop
   direction → ordered stops (`name = stop_name`); 4) coordinates per stop from `/nextrip/{stopId}` → `stops[0].latitude/longitude`
   (shared stop-coordinate cache; a stop whose lookup fails is left out of `stopIds`, `paths` and `stops`); 5) each direction's
   `paths = [ordered stop coordinates]`. At most **4 requests in flight** per provider; concurrent `route()` calls for one id share a
-  single fetch. Built routes are cached in `storage` under keys starting `busWatch.mt.` for **7 days** (`clock()` based).
+  single fetch. Built routes are cached in `storage` under keys starting `deutschebahned.mt.` for **7 days** (`clock()` based).
 - `stopsNear(pos, r)`: every stop of the `routeIds` routes (via `route()`) within `r`, merged by id (`routeIds` = the configured routes
   serving it, in `routeIds` order), nearest first. No routes → `[]`. Routes that fail are skipped; all failing → error.
 - `vehicles(routeId)`: `/nextrip/vehicles/{routeId}` → entries with `location_time > 0` and non-zero lat/lon →
@@ -305,7 +305,7 @@ buses are their own route). `tripKey = tripId`. Names drop a trailing ` (Berlin)
   Direction `{id: origin + '>' + destination, name: trip.direction without a leading 'S ' / 'U ' / 'S+U ', stopIds, paths: [polyline, else
   stop positions]}`; patterns contained in a longer one are dropped. `shortName = line.name`, `longName = '<product>: <origin> - <destination>'`,
   `color` = a built-in VBB table (U1–U9, S-Bahn; Berlin trams `BE1414`, buses `A5027D`; else `''`). Complete routes stored under
-  `busWatch.bvg.route.<id>` for **7 days**.
+  `deutschebahned.bvg.route.<id>` for **7 days**.
 - `vehicles(id)`: the route's bounding box + 0.01° → `/radar?…&results=256&duration=30&frames=1&polylines=false` → that route's movements.
 - `routeInfo = route`; `stopInfo`: a stop already seen, else `/stops/{id}`; `listRoutes`: lines of the catalog tile around `center`.
 - `catalog`: no line list exists (`/lines` is 404), ≈ 13 000 stops, so it is **bounded**: 7 tiles `/locations/nearby?…&distance=15000&results=1000`
@@ -321,7 +321,7 @@ Fixtures `test/fixtures/wmata-*.json` are real responses (public demo key). Test
 
 Ids: bus route `RouteID` (`'D80'`), bus stop `StopID`; rail route = line code (`RD OR SV BL YL GR`), rail stop = the platform's station
 code (`'A01'`). `/^[A-Z]\d\d$/` ids are stations, the six line codes are rail lines, everything else is bus. Rail colours built in; bus `''`.
-Cached in `storage` under `busWatch.wmata.` for **7 days** (`routes`, `stations`, `lines`, `path.<line>`, `route.<id>`).
+Cached in `storage` under `deutschebahned.wmata.` for **7 days** (`routes`, `stations`, `lines`, `path.<line>`, `route.<id>`).
 
 - `stopsNear`: `/Bus.svc/json/jStops?Lat&Lon&Radius` + stations of `/Rail.svc/json/jStations` within `r`; nearest first.
 - `arrivals` (bus): `/NextBusService.svc/json/jPredictions?StopID=` → `{routeId: RouteID, tripKey: TripID, time: now + Minutes*60,
@@ -446,7 +446,7 @@ All ids in and out are refs (`'pid/id'`): stop ids, route ids, `routeIds` of sto
 ## 3b. `src/common/catalog.js` — route / stop search index (pure + storage helpers)
 
 ```js
-TTL = 7 days; PREFIX = 'busWatch.catalog.'      // storage key = PREFIX + providerId
+TTL = 7 days; PREFIX = 'deutschebahned.catalog.'      // storage key = PREFIX + providerId
 signature(entry)                 // type|baseUrl|apiKey — an index is only used for the system settings it was built with
 pack(data, {t, sig}) → {v: 1, t, sig, routes: [[id, shortName, longName]], stops: [[id, name, [route index…], lat?, lon?]]}
 unpack(packed) → {t, sig, routes: [{id, shortName, longName}], stops: [{id, name, routeIds, lat?, lon?}]} | null
@@ -669,7 +669,7 @@ createSession(deps) → session
 deps = { storage /*getItem,setItem,removeItem*/, clock /*() → epoch s*/, locate /*cb(err,pos)*/,
          createProvider /*(config) → provider*/, send /*(messages[]) → void*/, log /*optional*/,
          planner, ranking, optimize /*optional: default to the real modules*/ }
-STORAGE_KEYS = { config: 'busWatch.config', samples: 'busWatch.samples', learned: 'busWatch.learned', prefs: 'busWatch.prefs' }
+STORAGE_KEYS = { config: 'deutschebahned.config', samples: 'deutschebahned.samples', learned: 'deutschebahned.learned', prefs: 'deutschebahned.prefs' }
 deps.locale  // optional: the phone's locale, for the units guess before the watch has said
 ```
 
@@ -724,10 +724,21 @@ list on `ready` and logs `UI-FIXTURE select <listId> <index>` / `UI-FIXTURE refr
 Its items carry badges and colors (e.g. Metro Transit `2` `771473`, `B Line` `ED1B2E`, `Blue` `00539F`, one item with no color).
 It keeps at least 8 items so the wheel has rows above and below the selection.
 
+## 9a. `src/common/storage-migrate.js` — one-time storage key rename
+
+`migrate(storage) → movedCount`, called by `index.js` before anything reads `localStorage`. Every key was once stored as
+`busWatch.<name>`; it now lives at `deutschebahned.<name>`. Once `deutschebahned.migrated` is set, it does nothing.
+- When the storage can list its keys (`length` / `key(i)`), every `busWatch.` key moves.
+- Otherwise it moves `config samples learned prefs plans handled` plus `catalog.<id>` for each provider in the old config.
+  Unlisted source caches stay behind and are rebuilt.
+- A key already present under the new prefix wins, and the old copy is removed.
+- If a copy of a settings key fails (storage full), it stops without setting the flag and retries next launch. A cache that
+  fails to copy is dropped.
+
 ## 10. Settings page — `config/config-page.html` + `tools/build-config.js`
 
 `tools/build-config.js` inlines `src/common/{geo,settings,view,catalog,federation,ranking,optimize,directions,format}.js` and `src/sources/**`
-into the page (tiny CommonJS shim resolving relative paths, exposing `window.BusWatch = {geo, settings, view, catalog, federation, ranking,
+into the page (tiny CommonJS shim resolving relative paths, exposing `window.Deutschebahned = {geo, settings, view, catalog, federation, ranking,
 optimize, directions, format, registry}` where `registry = createRegistry(require('src/sources/all'))`) and writes `src/pkjs/config-page.js`
 (`module.exports = "<html…"`; generated, not committed — `pebble build` and `tools/run-tests.js` regenerate it), keeping a literal
 `<!--PARAMS-->` marker in `<head>`. Self-contained: no external URLs. Mobile-friendly. The page is opened as a percent-encoded `data:`
@@ -1023,7 +1034,7 @@ toWakeups(triggers, now)           // → [{time, cookie}] for triggers with tim
 createScheduler(deps) → scheduler
 deps = { storage, clock, locate /*cb(err,pos)*/, getConfig /*() → config*/, getSource /*() → provider*/,
          sendWakeups /*(wakeups[])*/, notify /*({title, body, color})*/, log?, router?, triggers? /*default: the real modules*/ }
-STORAGE_KEYS = { plans: 'busWatch.plans', handled: 'busWatch.handled' }
+STORAGE_KEYS = { plans: 'deutschebahned.plans', handled: 'deutschebahned.handled' }
 ```
 
 - `load()`; `plans()` → `{destId: {occurrence, plan, summary, plannedAt}}` (summary = `router.summary` or `'No route found'`).

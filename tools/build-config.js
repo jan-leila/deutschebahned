@@ -5,7 +5,7 @@
 // The modules are wrapped in a tiny CommonJS shim. Module ids are root-relative paths without `.js`
 // (e.g. 'src/sources/metrotransit/index'); require() resolves './x' / '../x' against the requiring
 // module's directory and also tries '<id>/index'. Exposed as
-// window.BusWatch = {geo, settings, ranking, optimize, directions, format, registry}
+// window.Deutschebahned = {geo, settings, ranking, optimize, directions, format, registry}
 // with registry = createRegistry(require('src/sources/all')).
 //
 // usage: node tools/build-config.js
@@ -14,7 +14,7 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const COMMON = ['geo', 'settings', 'view', 'catalog', 'federation', 'geocode', 'ranking', 'optimize', 'directions', 'format', 'context'];
-const MODULES_MARKER = '<!--BUSWATCH-MODULES-->';
+const MODULES_MARKER = '<!--DEUTSCHEBAHNED-MODULES-->';
 const PARAMS_MARKER = '<!--PARAMS-->';
 
 function fail(msg) {
@@ -98,7 +98,7 @@ const bundle = [
   '    return module.exports;',
   '  }',
   scriptSafe(defs),
-  '  window.BusWatch = {',
+  '  window.Deutschebahned = {',
   COMMON.map(m => '    ' + m + ": load('src/common/" + m + "'),").join('\n'),
   "    registry: load('src/sources/registry').createRegistry(load('src/sources/all'))",
   '  };',

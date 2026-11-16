@@ -171,7 +171,7 @@ async function main(argv) {
 
   execFileSync(process.execPath, [path.join(ROOT, 'tools', 'build-config.js')], { stdio: 'inherit' });
   const dest = path.join(OUT, update ? 'baseline' : 'current');
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'buswatch-settings-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'deutschebahned-settings-'));
   let fail = 0;
   try {
     for (const scheme of schemes) {
@@ -203,8 +203,8 @@ async function main(argv) {
   if (update) { console.log('[settings-screenshots] baseline written to ' + dest); return fail; }
 
   // compare only the schemes (and with --only, the scenes) that ran
-  const cmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'buswatch-cmp-'));
-  const cmpCur = fs.mkdtempSync(path.join(os.tmpdir(), 'buswatch-cur-'));
+  const cmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'deutschebahned-cmp-'));
+  const cmpCur = fs.mkdtempSync(path.join(os.tmpdir(), 'deutschebahned-cur-'));
   try {
     for (const scheme of schemes) {
       fs.mkdirSync(path.join(cmpBase, scheme), { recursive: true });

@@ -60,8 +60,8 @@ if ! PKJS_ENTRY=src/pkjs/ui-fixture.js pebble build >"$STATE/build.log" 2>&1; th
   bad "pebble build failed (see $STATE/build.log)"
   exit 1
 fi
-PBW="$STATE/bus-watch-ui-fixture.pbw"
-cp build/bus-watch.pbw "$PBW"
+PBW="$STATE/deutschebahned-ui-fixture.pbw"
+cp build/deutschebahned.pbw "$PBW"
 
 cleanup  # start from a fresh emulator
 # The fixture's times are relative to its FIXED_NOW: pin the emulator clock to it (also makes its wakeup fire).

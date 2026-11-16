@@ -217,7 +217,7 @@ test('mta: route is cached in storage (7 days) and shared between concurrent cal
   const [r1, r2] = await Promise.all([call(a.p.route, 'MTA NYCT_B63'), call(a.p.routeInfo, 'MTA NYCT_B63')]);
   assert.equal(a.urls.length, 1);
   assert.deepEqual(r1, r2);
-  assert.deepEqual(storage.keys(), ['busWatch.mta.route.MTA NYCT_B63']);
+  assert.deepEqual(storage.keys(), ['deutschebahned.mta.route.MTA NYCT_B63']);
   // a new provider (same storage) answers without requests
   const b = make({}, { storage });
   assert.deepEqual(await call(b.p.route, 'MTA NYCT_B63'), r1);

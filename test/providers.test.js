@@ -350,7 +350,7 @@ test('createProvider: metrotransit is the default and gets storage + configured 
   const stops = await call(p.stopsNear, { lat: 44.96265, lon: -93.2895 }, 200);
   assert.equal(stops.length, 2);
   assert.ok(urls[0].startsWith(MT));
-  assert.ok([...store.m.keys()].some(k => k.startsWith('busWatch.mt.')), 'route geometry cached in storage');
+  assert.ok([...store.m.keys()].some(k => k.startsWith('deutschebahned.mt.')), 'route geometry cached in storage');
 });
 
 // ---------------------------------------------------------------- catalog methods (settings page helpers, CONTRACTS.md §3)

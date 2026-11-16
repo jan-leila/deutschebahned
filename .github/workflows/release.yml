@@ -68,7 +68,7 @@ jobs:
             [ -e ~/.local/share/pebble-sdk/SDKs/4.9.169 ] || pebble sdk install 4.9.169
             pebble build
           '
-          ls build/bus-watch.pbw
+          ls build/deutschebahned.pbw
 
       - name: Publish release
         if: steps.check.outputs.exists == 'false'
@@ -76,8 +76,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ steps.version.outputs.version }}
         run: |
-          cp build/bus-watch.pbw "bus-watch-$TAG.pbw"  # bundle name is pinned in wscript
-          gh release create "$TAG" "bus-watch-$TAG.pbw" \
+          cp build/deutschebahned.pbw "deutschebahned-$TAG.pbw"  # bundle name is pinned in wscript
+          gh release create "$TAG" "deutschebahned-$TAG.pbw" \
             --target "$GITHUB_SHA" --title "$TAG" --generate-notes
 
       - name: Bump version on main

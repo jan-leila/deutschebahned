@@ -1,4 +1,4 @@
-// Bus Watch — watch UI: a custom-drawn "rotating drum" list of the items the phone sends (see CONTRACTS.md §11).
+// Deutschebahned — watch UI: a custom-drawn "rotating drum" list of the items the phone sends (see CONTRACTS.md §11).
 // Layout math lives in bus_wheel.c; this file only draws slots, handles buttons, animation and AppMessage.
 #include <pebble.h>
 #include "bus_model.h"

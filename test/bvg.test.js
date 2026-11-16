@@ -248,7 +248,7 @@ test('bvg: route is cached in storage and shared by concurrent callers', async (
   const [r1, r2] = await Promise.all([call(p.route, '11000000:tram:M4'), call(p.route, '11000000:tram:M4')]);
   assert.equal(a.urls.length, 5);
   assert.deepEqual(r1, r2);
-  assert.ok(storage.m.has('busWatch.bvg.route.11000000:tram:M4'));
+  assert.ok(storage.m.has('deutschebahned.bvg.route.11000000:tram:M4'));
   const b = fakeHttp([]);
   const q = createBvg({ baseUrl: BASE }, b.http, { clock, storage });
   assert.deepEqual(await call(q.route, '11000000:tram:M4'), JSON.parse(JSON.stringify(r1)));

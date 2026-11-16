@@ -12,7 +12,7 @@ function installFakes(storedConfig) {
   const opened = [];
   const intervals = [];
   const declared = [];
-  const store = new Map(storedConfig ? [['busWatch.config', JSON.stringify(storedConfig)]] : []);
+  const store = new Map(storedConfig ? [['deutschebahned.config', JSON.stringify(storedConfig)]] : []);
   globalThis.Pebble = {
     addEventListener: (name, fn) => { (handlers[name] = handlers[name] || []).push(fn); },
     sendAppMessage: (dict, ok) => { messages.push(dict); setTimeout(() => ok && ok({}), 0); },
@@ -58,7 +58,7 @@ test('pkjs glue: ready -> list, select -> sample, settings page open/close', asy
 
     fakes.fire('appmessage', { payload: { SELECT_INDEX: 0, LIST_ID: header.LIST_ID } });
     await tick();
-    assert.equal(JSON.parse(fakes.store.get('busWatch.samples')).length, 1, 'sample stored');
+    assert.equal(JSON.parse(fakes.store.get('deutschebahned.samples')).length, 1, 'sample stored');
     assert.ok(fakes.messages.some(m => /^Learned \(1 picks\)$/.test(m.STATUS || '')));
 
     fakes.fire('showConfiguration');
@@ -75,8 +75,8 @@ test('pkjs glue: ready -> list, select -> sample, settings page open/close', asy
     const result = { config: Object.assign({}, params.config, { maxItems: 3 }), clearSamples: true };
     fakes.fire('webviewclosed', { response: encodeURIComponent(JSON.stringify(result)) });
     await tick(100);
-    assert.equal(JSON.parse(fakes.store.get('busWatch.config')).maxItems, 3);
-    assert.deepEqual(JSON.parse(fakes.store.get('busWatch.samples')), []);
+    assert.equal(JSON.parse(fakes.store.get('deutschebahned.config')).maxItems, 3);
+    assert.deepEqual(JSON.parse(fakes.store.get('deutschebahned.samples')), []);
     assert.equal(fakes.messages.filter(m => 'ITEM_COUNT' in m).pop().ITEM_COUNT <= 3, true);
 
     assert.deepEqual(params.sources.map(s => s.type), ['metrotransit', 'onebusaway', 'bvg', 'wmata', 'mta', 'bay511', 'mbta', 'cta', 'rtc', 'mock'], 'source plug-ins listed');
@@ -108,7 +108,7 @@ test('pkjs glue: ready -> list, select -> sample, settings page open/close', asy
     await tick(300);
     const wake = fakes.messages.filter(m => 'WAKEUP_COUNT' in m).pop();
     assert.ok(wake && wake.WAKEUP_COUNT >= 1, 'wakeups sent: ' + JSON.stringify(fakes.messages.filter(m => !('ITEM_INDEX' in m))));
-    assert.ok(JSON.parse(fakes.store.get('busWatch.plans')).work, 'plan stored');
+    assert.ok(JSON.parse(fakes.store.get('deutschebahned.plans')).work, 'plan stored');
     fakes.fire('showConfiguration');
     const html2 = decodeURIComponent(fakes.opened[1].slice(fakes.opened[1].indexOf(',') + 1));
     assert.ok(JSON.parse(html2.match(/window\.__params = (\{.*?\});<\/script>/s)[1]).plans.work, 'plans passed to the page');

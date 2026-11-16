@@ -5,7 +5,7 @@
 var format = require('./format');
 var view = require('./view');
 
-var STORAGE_KEYS = { plans: 'busWatch.plans', handled: 'busWatch.handled' };
+var STORAGE_KEYS = { plans: 'deutschebahned.plans', handled: 'deutschebahned.handled' };
 var MAX_HANDLED = 100;
 var NO_ROUTE = 'No route found';
 

@@ -130,7 +130,7 @@ test('bay511: routes and operator data are cached in storage (no requests from a
   const storage = memStorage();
   const a = make(SF, { storage });
   await call(a.p.route, 'SF:14');
-  assert.ok([...storage.map.keys()].every(k => k.startsWith('busWatch.511.')));
+  assert.ok([...storage.map.keys()].every(k => k.startsWith('deutschebahned.511.')));
   const b = make(SF, { storage });
   const r = await call(b.p.route, 'SF:14');
   await call(b.p.stopInfo, 'SF:13008');
@@ -164,7 +164,7 @@ test('bay511: a stop without coordinates is left out and the route is not cached
   const { p } = make(Object.assign({}, SF, { 'patterns?|operator_id=SF|line_id=14': pat }), { storage });
   const r = await call(p.route, 'SF:14');
   assert.deepEqual(r.directions[1].stopIds, ['SF:15552', 'SF:15554', 'SF:15556', 'SF:15558']);
-  assert.equal(storage.getItem('busWatch.511.route.SF:14'), null);
+  assert.equal(storage.getItem('deutschebahned.511.route.SF:14'), null);
 });
 
 test('bay511: BART line colors from the line name; line wrapper {content: [...]}', async () => {

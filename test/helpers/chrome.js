@@ -23,7 +23,7 @@ function findChrome() {
 async function openPage(url, opts = {}) {
   const bin = findChrome();
   if (!bin) throw new Error('no chromium');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'buswatch-chrome-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'deutschebahned-chrome-'));
   const env = Object.assign({}, process.env, opts.timezone ? { TZ: opts.timezone } : {}, opts.locale ? { LANG: opts.locale.replace('-', '_') + '.UTF-8' } : {});
   // --hide-scrollbars, no font hinting and a fixed colour profile keep screenshots stable across machines
   const proc = spawn(bin, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--hide-scrollbars',

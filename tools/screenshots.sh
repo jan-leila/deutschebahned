@@ -73,8 +73,8 @@ if ! PKJS_ENTRY=src/pkjs/ui-fixture.js pebble build >"$STATE/build.log" 2>&1; th
   echo "[screenshots] pebble build failed (see $STATE/build.log)" >&2
   exit 1
 fi
-PBW="$STATE/bus-watch-ui-fixture.pbw"
-cp build/bus-watch.pbw "$PBW"
+PBW="$STATE/deutschebahned-ui-fixture.pbw"
+cp build/deutschebahned.pbw "$PBW"
 pebble clean >/dev/null 2>&1  # the fixture bundle must never be mistaken for the real app
 
 e() { timeout 30 pebble "$1" --emulator "$P" "${@:2}" >/dev/null 2>&1; }

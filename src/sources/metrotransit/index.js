@@ -6,7 +6,7 @@ var util = require('../util');
 
 var DEFAULT_BASE_URL = 'https://svc.metrotransit.org';
 var MAX_IN_FLIGHT = 4;
-var CACHE_PREFIX = 'busWatch.mt.';
+var CACHE_PREFIX = 'deutschebahned.mt.';
 var CACHE_TTL = 7 * 86400; // seconds
 
 function toError(e) {

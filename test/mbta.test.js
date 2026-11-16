@@ -274,7 +274,7 @@ test('mbta: built routes are kept in storage (7 days, paths as encoded polylines
   let t = NOW;
   const first = fakeHttp(LIVE);
   const built = await call(createMbta({}, first.http, { clock: () => t, storage }).route, 'Blue');
-  const raw = storage.getItem('busWatch.mbta.route.Blue');
+  const raw = storage.getItem('deutschebahned.mbta.route.Blue');
   assert.ok(raw);
   assert.equal(typeof JSON.parse(raw).v.directions[0].paths[0], 'string');
 

@@ -23,7 +23,7 @@ function world(extra, pos) {
   pos = pos || CENTER;
   const sent = [];
   const storage = memoryStorage();
-  storage.setItem('busWatch.config', JSON.stringify(Object.assign({
+  storage.setItem('deutschebahned.config', JSON.stringify(Object.assign({
     version: 2,
     providers: [{ id: 'mock', type: 'mock' }],
     location: { mode: "gps", lat: CENTER.lat, lon: CENTER.lon },

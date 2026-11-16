@@ -15,7 +15,7 @@ var DEFAULT_HOST = 'https://api.goswift.ly';
 var DEFAULT_AGENCY = 'las-vegas-rtc';
 var KEY_URL = 'https://goswift.ly/realtime-api-key';
 var MAX_IN_FLIGHT = 3;
-var CACHE_PREFIX = 'busWatch.rtc.';
+var CACHE_PREFIX = 'deutschebahned.rtc.';
 var CACHE_TTL = 7 * 86400; // seconds
 
 function toError(e) {

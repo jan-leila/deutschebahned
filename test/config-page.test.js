@@ -53,7 +53,7 @@ async function load(params, extraHead) {
   assert.ok(html.includes('<!--PARAMS-->'), 'page keeps the <!--PARAMS--> marker');
   assert.ok(!/(src|href)=["']https?:/i.test(html), 'page must not load external resources');
   const injected = '<script>window.__params = ' + JSON.stringify(params).replace(/</g, '\\u003c') + ';</script>' + (extraHead || '');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'buswatch-page-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'deutschebahned-page-'));
   const file = path.join(dir, 'page.html');
   fs.writeFileSync(file, html.replace('<!--PARAMS-->', injected));
   const page = await openPage('file://' + file);
@@ -133,7 +133,7 @@ test('config page: a home menu of pages; one page at a time; back returns home',
       await page.eval(`document.getElementById('back').click()`);
       assert.ok(await until(page, `${visiblePage} === 'home'`), 'back from ' + name);
     }
-    assert.match(await page.eval(`document.getElementById('page-title').textContent`), /Bus Watch/);
+    assert.match(await page.eval(`document.getElementById('page-title').textContent`), /Deutschebahned/);
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });

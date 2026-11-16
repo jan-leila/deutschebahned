@@ -1,4 +1,4 @@
-// Pure-C list model and text formatting for the Bus Watch UI (no pebble.h; host-tested).
+// Pure-C list model and text formatting for the Deutschebahned UI (no pebble.h; host-tested).
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>

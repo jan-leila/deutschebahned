@@ -83,7 +83,7 @@ function memoryStorage() {
 
 test('session: pinned tiles first, never ranked or trained on, total ≤ MAX_ITEMS', async () => {
   const storage = memoryStorage();
-  storage.setItem('busWatch.config', JSON.stringify({ location: { mode: 'fixed', lat: P.lat, lon: P.lon }, maxItems: 12 }));
+  storage.setItem('deutschebahned.config', JSON.stringify({ location: { mode: 'fixed', lat: P.lat, lon: P.lon }, maxItems: 12 }));
   const sent = [];
   const ranked = Array.from({ length: 12 }, (_, i) => ({ kind: 'pickup', key: 'p' + i, title: 'P' + i, times: [T + i], features: { ['route:r' + i]: i } }));
   const pin = [{ kind: 'trip', pinned: true, key: 'trip:work:1', title: 'Pinned', times: [T, T + 1, 0], features: {} }];
@@ -116,7 +116,7 @@ test('scheduler.refreshActive re-plans a trip in progress until the first bus de
     plan: (src, req, cb) => { calls++; setTimeout(() => cb(null, { ...plan, leaveAt: plan.leaveAt + calls }), 0); },
     describe: () => 'body', summary: () => 'summary',
   };
-  storage.setItem('busWatch.plans', JSON.stringify({ work: { occurrence: T + 3600, plan, summary: 's', plannedAt: T } }));
+  storage.setItem('deutschebahned.plans', JSON.stringify({ work: { occurrence: T + 3600, plan, summary: 's', plannedAt: T } }));
   const sch = createScheduler({ storage, clock: () => now, locate: () => assert.fail('fixed'), getConfig: () => config,
     getSource: () => ({}), sendWakeups: () => {}, notify: () => {}, router: fakeRouter });
   sch.load();

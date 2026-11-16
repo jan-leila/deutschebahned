@@ -42,7 +42,7 @@ On the watch the list is a **rotating drum**. The selected row is full size, wit
 ```
 nix-shell                       # pebble.nix pinned with npins (see shell.nix)
 pebble sdk install 4.9.169      # once
-pebble build                    # -> build/bus-watch.pbw (also regenerates src/pkjs/config-page.js from config/)
+pebble build                    # -> build/deutschebahned.pbw (also regenerates src/pkjs/config-page.js from config/)
 pebble install --emulator basalt
 ```
 
@@ -76,6 +76,6 @@ Each part is tested on its own (see `CONTRACTS.md` for the interfaces):
 
 ## Releases
 
-Releases follow binary-watch's process (`.github/workflows/release.yml`). Each push to the `release` branch builds `bus-watch.pbw` and publishes it as a GitHub release `v<version>` (version from `package.json`), with the asset `bus-watch-v<version>.pbw`. If that release already exists the run stops without building. After a release, the workflow commits a minor version bump to `main` (`tools/bump-version.js`; Pebble only uses major.minor). If `main` was already bumped by hand, it is left alone.
+Releases follow binary-watch's process (`.github/workflows/release.yml`). Each push to the `release` branch builds `deutschebahned.pbw` and publishes it as a GitHub release `v<version>` (version from `package.json`), with the asset `deutschebahned-v<version>.pbw`. If that release already exists the run stops without building. After a release, the workflow commits a minor version bump to `main` (`tools/bump-version.js`; Pebble only uses major.minor). If `main` was already bumped by hand, it is left alone.
 
 To release: `git push origin-github main:release`.
