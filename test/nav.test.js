@@ -37,15 +37,25 @@ function harness(over) {
   return { n, sent, logs, cfg, move: p => { pos = p; }, at: t => { now = t; }, tick: () => iv && iv(), running: () => iv !== null };
 }
 
-// the guidance the watch has now: its step list and live state
+// the guidance the watch has now: its rows (the last list's window, in order) and live state
 function state(h) {
   const live = h.sent.filter(m => 'NAV_STATE' in m).pop();
   const at = h.sent.map(m => 'NAV_COUNT' in m).lastIndexOf(true);
   const steps = [];
-  for (let i = at + 1; i < h.sent.length && 'NAV_INDEX' in h.sent[i]; i++) steps.push(h.sent[i]);
-  return { live, steps, current: live && steps[live.NAV_CURRENT] };
+  for (let i = at + 1; i < h.sent.length && 'NAV_INDEX' in h.sent[i]; i++) steps[h.sent[i].NAV_INDEX] = h.sent[i];
+  return { live, steps, count: h.sent[at] && h.sent[at].NAV_COUNT, current: live && steps[live.NAV_CURRENT] };
 }
-const KIND = { walk: 0, board: 1, ride: 2, wait: 3, arrive: 4, info: 5, turn: 6 };
+const KIND = { walk: 0, board: 1, ride: 2, wait: 3, arrive: 4, info: 5, turn: 6, stop: 7, fold: 8 };
+// NAV_RAIL → [marker, top, bottom] as names
+function rail(m) {
+  const line = ['none', 'line', 'dash'];
+  return [['none', 'stop', 'here'][m.NAV_RAIL & 3], line[(m.NAV_RAIL >> 2) & 3], line[(m.NAV_RAIL >> 4) & 3]];
+}
+
+// a route with nine stops 400 m apart heading east, s0 at STOP
+const LINE = Array.from({ length: 9 }, (_, i) => Object.assign({ id: 'L' + i, name: 'Stop ' + i }, geo.offset(STOP, i * 400, 90)));
+const lineData = { routes: { r9: { stops: Object.fromEntries(LINE.map(s => [s.id, s])),
+  directions: [{ id: 'w', stopIds: LINE.map(s => s.id).reverse() }, { id: 'e', stopIds: LINE.map(s => s.id) }] } }, stops: [] };
 
 test('pickup: a list of two steps, an arrow to the stop, then "wait" once you are there', () => {
   const h = harness();
@@ -207,16 +217,115 @@ test('routing source: the walking step becomes its turns', () => {
   assert.equal(calls.length, 1, 'fetched once per step');
 });
 
-test('routing source: more turns than the list has room for are thinned', () => {
+test('routing source: every turn is kept; the rows show the next few, the rest folded, the last turn', () => {
   const pts = [];
-  for (let i = 1; i <= 40; i++) pts.push({ lat: HOME.lat, lon: HOME.lon + i * 0.0001, text: 'Turn ' + i });
+  for (let i = 1; i <= 40; i++) pts.push({ ...geo.offset(HOME, i * 80, 90), text: 'Turn ' + i });
   const h = harness({ config: { routingUrl: 'https://r/{to}' }, route: (tpl, f, t, cb) => cb(null, pts) });
   h.n.start(5, 0);
   h.tick();
-  const s = state(h);
-  assert.equal(s.steps.length, 16);
-  assert.equal(s.steps[14].NAV_TEXT, 'Turn 40');
-  assert.equal(s.steps[15].NAV_TEXT, 'Wait for the 44');
+  let s = state(h);
+  assert.deepEqual(s.steps.map(x => x.NAV_TEXT), ['Turn 1', 'Turn 2', 'Turn 3', 'Turn 4', '35 more turns', 'Turn 40', 'Wait for the 44']);
+  assert.equal(s.steps[4].NAV_KIND, KIND.fold);
+  assert.deepEqual(s.steps.slice(0, 6).map(r => rail(r)[0]), ['none', 'none', 'none', 'none', 'none', 'none']);
+  assert.deepEqual(rail(s.steps[1]).slice(1), ['dash', 'dash'], 'walking: a dashed line through every row');
+  assert.deepEqual(rail(s.steps[6]), ['stop', 'dash', 'none'], 'the stop you wait at: a circle');
+  // half way: the turns behind are folded too
+  for (let i = 0; i < 19; i++) { h.move(pts[i]); h.tick(); }
+  s = state(h);
+  assert.deepEqual(s.steps.map(x => x.NAV_TEXT),
+    ['17 earlier turns', 'Turn 18', 'Turn 19', 'Turn 20', 'Turn 21', 'Turn 22', 'Turn 23', '16 more turns', 'Turn 40', 'Wait for the 44']);
+  assert.equal(s.current.NAV_TEXT, 'Turn 20');
+});
+
+test('trip: the ride lists its stops while you are on it; other legs fold to one or two rows', () => {
+  const tplan = { legs: [
+    { mode: 'walk', meters: 400, seconds: 300, toName: 'Stop 0' },
+    { mode: 'bus', routeId: 'r9', routeName: '9', color: '0000ff', dir: 'EB', dirId: 'e', boardStopId: 'L0', boardStopName: 'Stop 0',
+      alightStopId: 'L8', alightStopName: 'Stop 8', departAt: NOW + 600, arriveAt: NOW + 1800 },
+    { mode: 'walk', meters: 200, seconds: 150, toName: 'Work' }] };
+  const sent = [];
+  let pos = HOME, now = NOW, iv = null;
+  const n = nav.createNav({
+    send: m => sent.push(...m), locate: cb => cb(null, pos), clock: () => now,
+    getList: () => ({ listId: 5, items: [trip], data: lineData }),
+    getConfig: () => ({ schedule: { walkSpeed: 1.3 }, clock24: true, routingUrl: '',
+                        destinations: [{ id: 'work', name: 'Work', ...geo.offset(LINE[8], 200, 0) }] }),
+    getUnits: () => 'metric', getPlan: () => tplan, setInterval: fn => { iv = fn; return 1; }, clearInterval: () => {}
+  });
+  const h = { sent };
+  n.start(5, 0);
+  let s = state(h);
+  assert.deepEqual(s.steps.map(x => x.NAV_TEXT), ['Walk to Stop 0', 'Board 9 EB', 'Get off at Stop 8', 'Walk to Work', 'Arrive at Work']);
+  assert.equal(s.steps[2].NAV_SUB, '8 stops · Arrive ' + c24(NOW + 1800));
+  assert.deepEqual(s.steps.map(rail), [['none', 'none', 'dash'], ['stop', 'dash', 'line'], ['stop', 'line', 'dash'],
+                                       ['none', 'dash', 'dash'], ['stop', 'dash', 'none']]);
+  assert.equal(s.steps[1].NAV_COLOR, 0x0000ff);
+  // at the stop: boarding opens the ride
+  pos = LINE[0]; iv();
+  s = state(h);
+  assert.deepEqual(s.steps.map(x => x.NAV_TEXT),
+    ['Walk to Stop 0', 'Board 9 EB', 'Stop 1', 'Stop 2', 'Stop 3', '4 more stops', 'Get off at Stop 8', 'Walk to Work', 'Arrive at Work']);
+  assert.equal(s.current.NAV_TEXT, 'Board 9 EB');
+  assert.equal(s.steps[5].NAV_KIND, KIND.fold);
+  assert.deepEqual(rail(s.steps[5]), ['none', 'line', 'line']);
+  // riding, a little past Stop 4: it is the stop you are at (filled), the ones behind and ahead around it
+  now = NOW + 700; pos = geo.offset(LINE[4], 100, 90); iv();
+  s = state(h);
+  assert.deepEqual(s.steps.map(x => x.NAV_TEXT),
+    ['Walk to Stop 0', '2 earlier stops', 'Stop 2', 'Stop 3', 'Stop 4', 'Stop 5', 'Stop 6', 'Stop 7', 'Get off at Stop 8', 'Walk to Work', 'Arrive at Work']);
+  assert.equal(s.current.NAV_TEXT, 'Stop 4');
+  assert.equal(s.current.NAV_SUB, '4 stops to Stop 8');
+  assert.deepEqual(rail(s.current), ['here', 'line', 'line']);
+  assert.equal(rail(s.steps[3])[0], 'stop');
+  assert.match(s.live.NAV_LSUB, /^Arrive/);
+  // just before Stop 5 it is still Stop 4; at it, Stop 5
+  pos = geo.offset(LINE[5], 100, 270); iv();
+  assert.equal(state(h).current.NAV_TEXT, 'Stop 4');
+  pos = LINE[5]; iv();
+  assert.equal(state(h).current.NAV_TEXT, 'Stop 5');
+  // back towards Stop 4 (GPS noise): it never goes back
+  pos = geo.offset(LINE[4], 50, 90); iv();
+  assert.equal(state(h).current.NAV_TEXT, 'Stop 5');
+});
+
+test('dropoff: the ride starts at the stop nearest you on the way to yours', () => {
+  const sent = [];
+  const item = { kind: 'dropoff', key: 'dropoff:x', badge: '9', title: 'Stop 6', color: '00ff00', routeId: 'r9', stopId: 'L6', times: [] };
+  const n = nav.createNav({
+    send: m => sent.push(...m), locate: cb => cb(null, geo.offset(LINE[2], 20, 0)), clock: () => NOW,
+    getList: () => ({ listId: 5, items: [item], data: lineData }),
+    getConfig: () => ({ schedule: { walkSpeed: 1.3 }, clock24: true, routingUrl: '' }), getUnits: () => 'metric',
+    getPlan: () => null, setInterval: () => 1, clearInterval: () => {}
+  });
+  n.start(5, 0);
+  const s = state({ sent });
+  assert.deepEqual(s.steps.map(x => x.NAV_TEXT), ['Stop 2', 'Stop 3', 'Stop 4', 'Stop 5', 'Get off here']);
+  assert.equal(s.current.NAV_TEXT, 'Stop 2');
+  assert.deepEqual(s.steps.map(r => rail(r)[0]), ['here', 'stop', 'stop', 'stop', 'stop']);
+  assert.deepEqual(rail(s.steps[4]), ['stop', 'line', 'none']);
+  assert.deepEqual(nav.rideStops(lineData, 'r9', null, null, 'L6', LINE[7]).map(x => x.id), ['L7', 'L6'],
+    'past your stop: the other direction takes you back');
+  assert.deepEqual(nav.rideStops(lineData, 'r9', 'e', 'L6', 'L2', null).map(x => x.id), ['L6', 'L5', 'L4', 'L3', 'L2'],
+    'the given direction does not serve them in that order: the one that does');
+  assert.equal(nav.rideStops(lineData, 'r9', 'e', 'L6', 'zz', null), null);
+});
+
+test('fetch: the window of rows around the one the watch scrolled to', () => {
+  const pts = [];
+  for (let i = 1; i <= 40; i++) pts.push({ ...geo.offset(HOME, i * 80, 90), text: 'Turn ' + i });
+  const h = harness({ config: { routingUrl: 'https://r/{to}' }, route: (tpl, f, t, cb) => cb(null, pts) });
+  h.n.fetch(3);
+  assert.equal(h.sent.length, 0, 'nothing running: nothing sent');
+  h.n.start(5, 0);
+  h.tick();
+  const n = h.sent.length;
+  h.n.fetch(6);
+  const got = h.sent.slice(n);
+  assert.equal(got[0].NAV_INDEX, 6);
+  assert.equal(got[0].NAV_TEXT, 'Wait for the 44');
+  assert.ok(got.every(m => 'NAV_INDEX' in m));
+  h.n.fetch('x');
+  assert.equal(h.sent.length, n + got.length);
 });
 
 test('routing source failing: the straight arrow stays', () => {

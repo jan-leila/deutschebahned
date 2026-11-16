@@ -164,20 +164,44 @@ var STEPS = [
   function () { sendList(tripItems()); hook(0); },// 8 planned-trip tiles pinned first
   function () { sendNotify(); },                  // 9 notification window
   function () { sendList([], 'No stops nearby'); }, // 10 empty list / status screen
-  function () { sendNav(0, '4 min left', '320ft', 90); },     // 11 navigation: walking to the stop
-  function () { sendNav(2, 'Arrive in 12 min', '2.1mi', 45); }  // 12 navigation: riding, the first steps done
+  function () { sendNav(NAV_WALKING, 0, '4 min left', '320ft', 90); },   // 11 navigation: walking to the stop
+  function () { sendNav(NAV_RIDING, 4, 'Arrive in 12 min', '2.1mi', 45); } // 12 navigation: riding, at a stop along the way
 ];
 
-// Navigation (§18): a planned trip's steps, then the live guidance of step `current`.
-function sendNav(current, sub, dist, bearing) {
-  var C = 0x771473, steps = [
-    { NAV_INDEX: 0, NAV_KIND: 0, NAV_TEXT: 'Walk to Franklin Av & Lyndale Av S', NAV_SUB: '2 at 8:09 AM', NAV_DIST: '320ft', NAV_DIR: 'EB', NAV_COLOR: C },
-    { NAV_INDEX: 1, NAV_KIND: 1, NAV_TEXT: 'Board 2 East', NAV_SUB: 'Franklin Av \u00B7 8:09 AM', NAV_DIST: '', NAV_DIR: 'EB', NAV_COLOR: C },
-    { NAV_INDEX: 2, NAV_KIND: 2, NAV_TEXT: 'Ride to Franklin Station', NAV_SUB: 'Arrive 8:24 AM', NAV_DIST: '5.2mi', NAV_DIR: 'EB', NAV_COLOR: C },
-    { NAV_INDEX: 3, NAV_KIND: 0, NAV_TEXT: 'Walk to Work', NAV_SUB: '3 min walk', NAV_DIST: '700ft', NAV_DIR: 'NB', NAV_COLOR: C },
-    { NAV_INDEX: 4, NAV_KIND: 4, NAV_TEXT: 'Arrive at Work', NAV_SUB: '', NAV_DIST: '', NAV_DIR: '', NAV_COLOR: C }];
-  sender.sendAll([{ NAV_COUNT: steps.length }].concat(steps,
-    [{ NAV_STATE: 1, NAV_CURRENT: current, NAV_LSUB: sub, NAV_LDIST: dist, NAV_BEARING: bearing }]));
+// Navigation (§18): a planned trip's rows (with their rails: NAV_RAIL = marker | top << 2 | bottom << 4), then the live
+// guidance of row `current`. Walking: every leg folded; riding: the ride open around the stop you are at.
+var RAIL = { walkFirst: 2 << 4, walk: 2 << 2 | 2 << 4, board: 1 | 2 << 2 | 1 << 4, stop: 1 | 1 << 2 | 1 << 4,
+             here: 2 | 1 << 2 | 1 << 4, fold: 1 << 2 | 1 << 4, foldFirst: 2 << 2 | 1 << 4, alight: 1 | 1 << 2 | 2 << 4, end: 1 | 2 << 2 };
+function navRow(kind, text, sub, dist, dir, rail) {
+  return { NAV_KIND: kind, NAV_TEXT: text, NAV_SUB: sub, NAV_DIST: dist, NAV_DIR: dir, NAV_COLOR: 0x771473, NAV_RAIL: rail };
+}
+var NAV_WALKING = [
+  navRow(0, 'Walk to Franklin Av & Lyndale Av S', '2 at 8:09 AM', '320ft', 'EB', RAIL.walkFirst),
+  navRow(1, 'Board 2 East', 'Franklin Av \u00B7 8:09 AM', '', 'EB', RAIL.board),
+  navRow(2, 'Get off at Franklin Station', '9 stops \u00B7 Arrive 8:24 AM', '5.2mi', 'EB', RAIL.alight),
+  navRow(0, 'Walk to Work', '3 min walk', '700ft', 'NB', RAIL.walk),
+  navRow(4, 'Arrive at Work', '', '', '', RAIL.end)];
+var NAV_RIDING = [
+  navRow(0, 'Walk to Franklin Av & Lyndale Av S', '2 at 8:09 AM', '320ft', 'EB', RAIL.walkFirst),
+  navRow(8, '2 earlier stops', '', '', '', RAIL.foldFirst),
+  navRow(7, 'Franklin Av & Nicollet Av', '', '', '', RAIL.stop),
+  navRow(7, 'Franklin Av & 4th Av S', '', '', '', RAIL.stop),
+  navRow(7, 'Franklin Av & Chicago Av', '5 stops to Franklin Station', '', '', RAIL.here),
+  navRow(7, 'Franklin Av & Park Av', '', '', '', RAIL.stop),
+  navRow(7, 'Franklin Av & 11th Av S', '', '', '', RAIL.stop),
+  navRow(7, 'Franklin Av & Cedar Av', '', '', '', RAIL.stop),
+  navRow(8, '1 more stop', '', '', '', RAIL.fold),
+  navRow(2, 'Get off at Franklin Station', '9 stops \u00B7 Arrive 8:24 AM', '5.2mi', 'EB', RAIL.alight),
+  navRow(0, 'Walk to Work', '3 min walk', '700ft', 'NB', RAIL.walk),
+  navRow(4, 'Arrive at Work', '', '', '', RAIL.end)];
+function sendNav(rows, current, sub, dist, bearing) {
+  var msgs = [{ NAV_COUNT: rows.length, NAV_WINDOW: current }];
+  for (var i = 0; i < rows.length; i++) {
+    var m = { NAV_INDEX: i };
+    for (var k in rows[i]) if (rows[i].hasOwnProperty(k)) m[k] = rows[i][k];
+    msgs.push(m);
+  }
+  sender.sendAll(msgs.concat([{ NAV_STATE: 1, NAV_CURRENT: current, NAV_LSUB: sub, NAV_LDIST: dist, NAV_BEARING: bearing }]));
 }
 
 // Weather panel (§17): 24 hours from FIXED_NOW, 4° now warming to 9° in the afternoon, a rainy spell in between.

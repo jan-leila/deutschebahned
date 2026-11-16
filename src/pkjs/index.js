@@ -316,6 +316,7 @@ Pebble.addEventListener('appmessage', function (e) {
   if (msg && msg.type === 'wakeup') scheduler.handleWakeup(msg.cookie);
   else if (msg && msg.type === 'navStart') nav.start(msg.listId, msg.index, !!msg.places);
   else if (msg && msg.type === 'navStop') nav.stop(true);
+  else if (msg && msg.type === 'navFetch') nav.fetch(msg.index);
 });
 
 Pebble.addEventListener('route', function (e) {

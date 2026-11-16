@@ -146,29 +146,62 @@ function encodePlaces(listId, items, opts) {
   return out;
 }
 
-// Navigation (CONTRACTS.md §18): the step list, then the live guidance of the current step.
-var NAV_MAX_STEPS = 16;
-var NAV_KIND = { walk: 0, board: 1, ride: 2, wait: 3, arrive: 4, info: 5, turn: 6 };
+// Navigation (CONTRACTS.md §18): the row list, then the live guidance of the current row. The list has any length;
+// the watch keeps NAV_WINDOW rows of it (row i in slot i % NAV_WINDOW) and asks for others (NAV_FETCH) as you scroll.
+var NAV_WINDOW = 16;
+var NAV_WINDOW_BEFORE = 5;   // rows before the centre in a window
+var NAV_MAX_ROWS = 1000;
+var NAV_KIND = { walk: 0, board: 1, ride: 2, wait: 3, arrive: 4, info: 5, turn: 6, stop: 7, fold: 8 };
+// NAV_RAIL = marker | top << 2 | bottom << 4: the line beside the row (a stop's circle, the line to the rows around)
+var NAV_MARKER = { none: 0, stop: 1, here: 2 };
+var NAV_LINE = { none: 0, line: 1, dash: 2 };
 
-// steps = [{type, text, sub, meters, dir, color}] → [{NAV_COUNT: n}, {NAV_INDEX: i, NAV_KIND, NAV_TEXT, NAV_SUB,
-// NAV_DIST (the step's length, '' when unknown), NAV_DIR, NAV_COLOR} × n]
-function encodeNavList(steps, units) {
-  steps = steps || [];
-  var n = Math.min(steps.length, NAV_MAX_STEPS);
-  var out = [{ NAV_COUNT: n }];
-  for (var i = 0; i < n; i++) {
-    var st = steps[i] || {};
-    out.push({
-      NAV_INDEX: i,
-      NAV_KIND: NAV_KIND.hasOwnProperty(st.type) ? NAV_KIND[st.type] : NAV_KIND.info,
-      NAV_TEXT: truncateUtf8(st.text, NAV_TEXT_MAX_BYTES),
-      NAV_SUB: truncateUtf8(st.sub, NAV_TEXT_MAX_BYTES),
-      NAV_DIST: encodeDistance(typeof st.meters === 'number' ? st.meters : null, units),
-      NAV_DIR: encodeDir(st.dir),
-      NAV_COLOR: encodeColor(st.color)
-    });
+// rows [lo, hi) the watch is sent around row `center` of a list of `count` (same rule as bus_nav_window on the watch)
+function navWindow(center, count) {
+  count = Math.max(0, Math.min(toInt(count), NAV_MAX_ROWS));
+  var lo = Math.max(0, Math.min(toInt(center) - NAV_WINDOW_BEFORE, count - NAV_WINDOW));
+  return { lo: lo, hi: Math.min(count, lo + NAV_WINDOW) };
+}
+
+function encodeRail(r) {
+  r = r || {};
+  var m = NAV_MARKER[r.marker] || 0, t = NAV_LINE[r.top] || 0, b = NAV_LINE[r.bottom] || 0;
+  return m | t << 2 | b << 4;
+}
+
+// row = {type, text, sub, meters, dir, color, rail} → {NAV_INDEX: i, NAV_KIND, NAV_TEXT, NAV_SUB, NAV_DIST (the row's
+// length, '' when unknown), NAV_DIR, NAV_COLOR, NAV_RAIL}
+function encodeNavRow(i, row, units) {
+  row = row || {};
+  return {
+    NAV_INDEX: i,
+    NAV_KIND: NAV_KIND.hasOwnProperty(row.type) ? NAV_KIND[row.type] : NAV_KIND.info,
+    NAV_TEXT: truncateUtf8(row.text, NAV_TEXT_MAX_BYTES),
+    NAV_SUB: truncateUtf8(row.sub, NAV_TEXT_MAX_BYTES),
+    NAV_DIST: encodeDistance(typeof row.meters === 'number' ? row.meters : null, units),
+    NAV_DIR: encodeDir(row.dir),
+    NAV_COLOR: encodeColor(row.color),
+    NAV_RAIL: encodeRail(row.rail)
+  };
+}
+
+// The window of rows around `center`, the centre first and then outwards (what you look at arrives first).
+function encodeNavRows(rows, units, center) {
+  rows = rows || [];
+  var w = navWindow(center, rows.length), out = [], c = Math.max(w.lo, Math.min(toInt(center), w.hi - 1));
+  for (var d = 0; out.length < w.hi - w.lo; d++) {
+    if (c + d < w.hi) out.push(encodeNavRow(c + d, rows[c + d], units));
+    if (d > 0 && c - d >= w.lo) out.push(encodeNavRow(c - d, rows[c - d], units));
   }
   return out;
+}
+
+// A new list: [{NAV_COUNT: n, NAV_WINDOW: center}] then the window around `center` (the current row).
+function encodeNavList(rows, units, center) {
+  rows = rows || [];
+  var n = Math.min(rows.length, NAV_MAX_ROWS);
+  center = Math.max(0, Math.min(toInt(center), n - 1));
+  return [{ NAV_COUNT: n, NAV_WINDOW: center }].concat(encodeNavRows(rows.slice(0, n), units, center));
 }
 
 // Live guidance: n = {state: 1 guiding | 2 arrived, current (step index), sub (time left...), distance (m to the
@@ -249,6 +282,7 @@ function decodeWatchMessage(payload) {
     return { type: 'navStart', listId: Number(payload.LIST_ID), index: Number(payload.NAV_START) };
   }
   if (has(payload, 'NAV_STOP')) return { type: 'navStop' };
+  if (has(payload, 'NAV_FETCH')) return { type: 'navFetch', index: Number(payload.NAV_FETCH) };
   if (has(payload, 'WATCH_PREFS')) return decodePrefs(payload.WATCH_PREFS);
   return null;
 }
@@ -265,7 +299,7 @@ function decodePrefs(v) {
 // Sends messages one at a time through sendFn(dict, onOk, onErr) (= Pebble.sendAppMessage).
 // Each queued entry remembers its batch and which list it carries, if any: 'items' (an ITEM_COUNT header) or 'places'
 // (PLACE_COUNT); a newer list of the same kind supersedes it.
-var LIST_HEADERS = { ITEM_COUNT: 'items', PLACE_COUNT: 'places' };
+var LIST_HEADERS = { ITEM_COUNT: 'items', PLACE_COUNT: 'places', NAV_COUNT: 'nav' };
 function listKind(messages) {
   for (var i = 0; i < messages.length; i++) {
     for (var h in LIST_HEADERS) {
@@ -335,7 +369,7 @@ function createSender(sendFn, opts) {
   }
 
   return {
-    // A batch carrying a new list (ITEM_COUNT or PLACE_COUNT header) drops the queued messages of earlier batches of the
+    // A batch carrying a new list (ITEM_COUNT, PLACE_COUNT or NAV_COUNT header) drops the queued messages of earlier batches of the
     // same list; everything else queued (the other list, status, wakeups, notify) stays, in order. Others are appended.
     sendAll: function (messages) {
       messages = (messages || []).slice();
@@ -377,8 +411,14 @@ module.exports = {
   MAX_PLACES: MAX_PLACES,
   PLACE_TEXT_MAX_BYTES: PLACE_TEXT_MAX_BYTES,
   encodeNavLive: encodeNavLive,
-  NAV_MAX_STEPS: NAV_MAX_STEPS,
+  encodeNavRows: encodeNavRows,
+  navWindow: navWindow,
+  NAV_WINDOW: NAV_WINDOW,
+  NAV_WINDOW_BEFORE: NAV_WINDOW_BEFORE,
+  NAV_MAX_ROWS: NAV_MAX_ROWS,
   NAV_KIND: NAV_KIND,
+  NAV_MARKER: NAV_MARKER,
+  NAV_LINE: NAV_LINE,
   encodeWakeups: encodeWakeups,
   encodeNotify: encodeNotify,
   encodeWeather: encodeWeather,

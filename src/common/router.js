@@ -483,7 +483,7 @@ function buildPlan(cand, times, o, estimated) {
     var headsign = (!estimated && times[l].b.headsign) || leg.d.dir.name || '';
     legs.push({
       mode: 'bus', routeId: id, routeName: name, color: color,
-      dir: directions.label(route, leg.d.dir, leg.b.id), headsign: String(headsign),
+      dir: directions.label(route, leg.d.dir, leg.b.id), dirId: String(leg.d.dir.id), headsign: String(headsign),
       boardStopId: leg.b.id, boardStopName: leg.b.name, alightStopId: leg.a.id, alightStopName: leg.a.name,
       departAt: times[l].b.time, arriveAt: times[l].a.time, tripKey: estimated ? null : times[l].b.tripKey
     });

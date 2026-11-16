@@ -318,22 +318,43 @@ test('encodeList: ITEM_WALK carries the walking time; showWalk / showArrow false
   assert.equal(off.ITEM_DIST, '0.2mi', 'the distance is still shown');
 });
 
-test('encodeNavList: a header and one message per step, capped at NAV_MAX_STEPS', () => {
-  const steps = [{ type: 'walk', text: 'Walk to First', sub: '4 min walk', meters: 350, dir: 'EB', color: 'ff0000' },
-    { type: 'turn', text: 'é'.repeat(40), meters: 2100 }, { type: 'bogus' }];
-  const m = protocol.encodeNavList(steps, 'metric');
-  assert.deepEqual(m[0], { NAV_COUNT: 3 });
-  assert.deepEqual(m[1], { NAV_INDEX: 0, NAV_KIND: 0, NAV_TEXT: 'Walk to First', NAV_SUB: '4 min walk', NAV_DIST: '350m', NAV_DIR: 'EB', NAV_COLOR: 0xff0000 });
+test('encodeNavList: a header and one message per row of the window, its rail packed', () => {
+  const rows = [{ type: 'walk', text: 'Walk to First', sub: '4 min walk', meters: 350, dir: 'EB', color: 'ff0000',
+                  rail: { marker: 'none', top: 'none', bottom: 'dash' } },
+    { type: 'turn', text: 'é'.repeat(40), meters: 2100 }, { type: 'bogus', rail: { marker: 'here', top: 'line', bottom: 'dash' } }];
+  const m = protocol.encodeNavList(rows, 'metric', 0);
+  assert.deepEqual(m[0], { NAV_COUNT: 3, NAV_WINDOW: 0 });
+  assert.deepEqual(m[1], { NAV_INDEX: 0, NAV_KIND: 0, NAV_TEXT: 'Walk to First', NAV_SUB: '4 min walk', NAV_DIST: '350m', NAV_DIR: 'EB',
+                           NAV_COLOR: 0xff0000, NAV_RAIL: 2 << 4 });
   assert.equal(m[2].NAV_KIND, protocol.NAV_KIND.turn);
   assert.equal(m[2].NAV_TEXT, 'é'.repeat(23));
   assert.equal(m[2].NAV_DIST, '2.1km');
   assert.equal(m[2].NAV_COLOR, -1);
+  assert.equal(m[2].NAV_RAIL, 0);
   assert.equal(m[3].NAV_KIND, protocol.NAV_KIND.info);
   assert.equal(m[3].NAV_DIST, '');
-  const many = Array.from({ length: 30 }, () => ({ type: 'walk', text: 'x' }));
-  assert.equal(protocol.encodeNavList(many)[0].NAV_COUNT, protocol.NAV_MAX_STEPS);
-  assert.equal(protocol.encodeNavList(many).length, protocol.NAV_MAX_STEPS + 1);
-  assert.deepEqual(protocol.encodeNavList(null), [{ NAV_COUNT: 0 }]);
+  assert.equal(m[3].NAV_RAIL, 2 | 1 << 2 | 2 << 4);
+  assert.deepEqual(protocol.encodeNavList(null), [{ NAV_COUNT: 0, NAV_WINDOW: 0 }]);
+});
+
+test('encodeNavList: any length; only the window around the current row is sent, the current row first', () => {
+  const many = Array.from({ length: 40 }, (_, i) => ({ type: 'stop', text: 'Stop ' + i }));
+  const m = protocol.encodeNavList(many, 'metric', 20);
+  assert.deepEqual(m[0], { NAV_COUNT: 40, NAV_WINDOW: 20 });
+  assert.equal(m.length, 1 + protocol.NAV_WINDOW);
+  assert.deepEqual(m.slice(1, 4).map(x => x.NAV_INDEX), [20, 21, 19]);
+  assert.deepEqual(m.slice(1).map(x => x.NAV_INDEX).sort((a, b) => a - b), Array.from({ length: 16 }, (_, i) => 15 + i));
+  // the window stays inside the list at both ends
+  assert.deepEqual(protocol.navWindow(2, 40), { lo: 0, hi: 16 });
+  assert.deepEqual(protocol.navWindow(38, 40), { lo: 24, hi: 40 });
+  assert.deepEqual(protocol.navWindow(3, 5), { lo: 0, hi: 5 });
+  assert.equal(protocol.encodeNavList(Array.from({ length: 2000 }, () => ({})), 'metric', 0)[0].NAV_COUNT, protocol.NAV_MAX_ROWS);
+  // a fetch: the window around the row asked for, no header
+  const f = protocol.encodeNavRows(many, 'metric', 39);
+  assert.equal(f[0].NAV_INDEX, 39);
+  assert.ok(f.every(x => !('NAV_COUNT' in x)));
+  assert.equal(f.length, 16);
+  assert.deepEqual(protocol.decodeWatchMessage({ NAV_FETCH: 30 }), { type: 'navFetch', index: 30 });
 });
 
 test('encodeNavLive: state, current step, time left, distance and bearing; null closes', () => {

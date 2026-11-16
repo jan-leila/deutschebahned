@@ -738,9 +738,24 @@ static int s_nav_sel;            // selected step
 static int32_t s_nav_pos;        // drawn position, milli-rows
 static int32_t s_nav_anim_from;
 static uint32_t s_nav_anim_start;
-static char s_nav_status[24];
+static char s_nav_status[32];
+
+// Rows near the selection that the watch does not have: ask the phone for the window around it. If the outbox is
+// busy nothing is marked as on its way, so the next redraw asks again.
+static void nav_fetch_near(int sel) {
+  int idx = bus_nav_fetch_for(&s_nav, sel);
+  if (idx < 0) return;
+  DictionaryIterator *out;
+  if (app_message_outbox_begin(&out) != APP_MSG_OK) {
+    s_nav.cover_hi = s_nav.cover_lo;
+    return;
+  }
+  dict_write_int32(out, MESSAGE_KEY_NAV_FETCH, idx);
+  app_message_outbox_send();
+}
 
 static void nav_redraw(void) {
+  nav_fetch_near(s_nav_sel);
   if (s_nav_status_layer) {
     snprintf(s_nav_status, sizeof s_nav_status, "Step %d of %d", s_nav_sel + 1, s_nav.count ? (int)s_nav.count : 1);
     text_layer_set_text(s_nav_status_layer, s_nav_status);
@@ -786,6 +801,46 @@ static void nav_select_step(int sel, bool animate) {
   nav_redraw();
 }
 
+// The rail beside the rows: one x for every row on rectangular screens (a straight line through the wheel), inside each
+// row's own inset on round ones.
+#define RAIL_X 9          // rectangular screens
+#define RAIL_TEXT_GAP 9   // from the rail to the row's text
+#define RAIL_DASH 7       // walking: a dash every 7 px...
+#define RAIL_DASH_ON 4    // ... 4 px long (phase from the wheel's own y, so the dashes line up across rows)
+
+static int16_t rail_x(const WheelSlot *s) {
+  return PBL_IF_ROUND_ELSE(s->inset + 9, RAIL_X);
+}
+
+static void draw_rail_segment(GContext *ctx, int style, GColor c, int16_t cx, int16_t y0, int16_t y1) {
+  if (y1 <= y0 || style == BUS_RAIL_NO_LINE) return;
+  if (style == BUS_RAIL_LINE) {
+    fill_span(ctx, c, cx - 1, cx + 2, y0, y1);
+    return;
+  }
+  GColor g = PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack);
+  for (int16_t d = y0 - (int16_t)(((y0 % RAIL_DASH) + RAIL_DASH) % RAIL_DASH); d < y1; d += RAIL_DASH) {
+    fill_span(ctx, g, cx - 1, cx + 2, d < y0 ? y0 : d, d + RAIL_DASH_ON > y1 ? y1 : d + RAIL_DASH_ON);
+  }
+}
+
+// A stop: a circle in the route's colour (hollow; filled at the stop you are at), the lines to the rows above and below
+// meeting its edge. Elsewhere the lines run through the row.
+static void draw_rail(GContext *ctx, const BusNavStep *st, const WheelSlot *s, int16_t cx, int16_t cy) {
+  GColor c = route_color(st->color);
+  int marker = BUS_RAIL_MARKER(st->rail);
+  int16_t r = marker ? (s->level == 0 ? 6 : s->level == 1 ? 5 : 4) : 0;
+  draw_rail_segment(ctx, BUS_RAIL_TOP(st->rail), c, cx, s->y, cy - r);
+  draw_rail_segment(ctx, BUS_RAIL_BOTTOM(st->rail), c, cx, cy + r, s->y + s->h);
+  if (!marker) return;
+  graphics_context_set_fill_color(ctx, c);
+  graphics_fill_circle(ctx, GPoint(cx, cy), r);
+  if (marker == BUS_RAIL_STOP) {
+    graphics_context_set_fill_color(ctx, GColorWhite);
+    graphics_fill_circle(ctx, GPoint(cx, cy), r - 2);
+  }
+}
+
 static void draw_nav_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
   const BusNavStep *st = bus_nav_step(&s_nav, s->index);
   int16_t x = s->inset, w = width - 2 * s->inset;
@@ -795,6 +850,11 @@ static void draw_nav_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
 
   int16_t pad = s->level == 0 ? 4 : 3;
   int16_t ix = x + pad, iw = w - 2 * pad;
+  int16_t rx = rail_x(s);
+  if (rx + RAIL_TEXT_GAP > ix) {   // the text starts right of the rail
+    iw -= rx + RAIL_TEXT_GAP - ix;
+    ix = rx + RAIL_TEXT_GAP;
+  }
   // Level 0: a route-color band on top (kind, direction and the step's length) and a bar below.
   int16_t band_h = s->level == 0 ? ROUTE_BAND_H : 0;
   if (s->level == 0) {
@@ -848,10 +908,10 @@ static void draw_nav_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
   } else {
     title_cy = top + ih / 2;
   }
-
-  // Title: the instruction; at level 1 behind a small kind pill. The selected step's title scrolls when too wide.
-  int16_t tx = ix + (s->level == 0 && current ? 0 : 0), tw = iw;
-  if (s->level == 1 && st->kind != BUS_NAV_INFO) {
+  // Title: the instruction; at level 1 behind a small kind pill (not for the stops along a ride or a fold, which the
+  // rail already marks). The selected step's title scrolls when too wide.
+  int16_t tx = ix, tw = iw;
+  if (s->level == 1 && st->kind != BUS_NAV_INFO && st->kind != BUS_NAV_STOP && st->kind != BUS_NAV_FOLD) {
     FontMetrics pf = font_info(s_f14b);
     int16_t pw = text_width(bus_nav_kind_name(st->kind), s_f14b) + 6, ph = pf.cap + 5;
     graphics_context_set_fill_color(ctx, route_color(color));
@@ -873,6 +933,7 @@ static void draw_nav_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
   } else {
     draw_line(ctx, st->text, title_font, tx, tw, title_cy, GTextAlignmentLeft);
   }
+  draw_rail(ctx, st, s, rx, title_cy);   // after the title: the marquee clears the margin left of it
   if (mode == 'C') return;
 
   GColor detail_color = s->level == 0 ? (past ? dim : GColorBlack) : dim;
@@ -1224,13 +1285,14 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
   }
 #if HAS_NAV
   Tuple *nav_count = dict_find(iter, MESSAGE_KEY_NAV_COUNT);
-  if (nav_count) bus_nav_begin(&s_nav, (int)tuple_int(nav_count));
+  if (nav_count) bus_nav_begin(&s_nav, (int)tuple_int(nav_count), (int)tuple_int(dict_find(iter, MESSAGE_KEY_NAV_WINDOW)));
   Tuple *nav_index = dict_find(iter, MESSAGE_KEY_NAV_INDEX);
   if (nav_index) {
     bus_nav_set_step(&s_nav, (int)tuple_int(nav_index), (int)tuple_int(dict_find(iter, MESSAGE_KEY_NAV_KIND)),
                      tuple_str(dict_find(iter, MESSAGE_KEY_NAV_TEXT)), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_SUB)),
                      tuple_str(dict_find(iter, MESSAGE_KEY_NAV_DIST)), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_DIR)),
-                     tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_COLOR), -1));
+                     tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_COLOR), -1),
+                     (int)tuple_int(dict_find(iter, MESSAGE_KEY_NAV_RAIL)));
     nav_redraw();
   }
   Tuple *nav_state = dict_find(iter, MESSAGE_KEY_NAV_STATE);

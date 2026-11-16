@@ -1122,13 +1122,42 @@ the steps and sends what changed. **Aplite has no navigation** (not enough RAM: 
 - Watch → phone: `{NAV_START: index, LIST_ID}` (index −1 when no tile is selected → ignored) and `{NAV_STOP: 1}` (BACK, or the window
   closing). Decoded as `{type: 'navStart', listId, index}` / `{type: 'navStop'}`. `REFRESH` from the watch is no longer decoded
   (phone → watch, `REFRESH` is still the UI test hook).
-- Phone → watch, the **step list** `encodeNavList(steps, units)` → `[{NAV_COUNT: n ≤ NAV_MAX_STEPS 16}, {NAV_INDEX: i, NAV_KIND, NAV_TEXT,
-  NAV_SUB, NAV_DIST, NAV_DIR, NAV_COLOR} × n]`: `NAV_KIND` walk 0 · board 1 · ride 2 · wait 3 · arrive 4 · info 5 · turn 6; `NAV_TEXT` the
-  instruction, `NAV_SUB` its detail ("4 min walk · 44 at 8:10", "First · 8:10", "Arrive 8:20"), `NAV_DIST` the step's **length**
-  from the previous point (as `ITEM_DIST`, '' = unknown), `NAV_DIR` its travel direction (`NB EB SB WB`; a bus leg's own), `NAV_COLOR`
-  (≤ 47 bytes each). Sent when it changes (a walking step replaced by its turns, the first position known).
+- Phone → watch, the **row list** (any length, ≤ `NAV_MAX_ROWS` 1000), in windows: the watch keeps `NAV_WINDOW` 16 rows (row i in slot
+  i % 16). `encodeNavList(rows, units, center)` → `[{NAV_COUNT: n, NAV_WINDOW: center (the current row)}, …the window]`. The window is
+  `navWindow(center, n)` = rows `[lo, lo + 16)` with `lo = clamp(center − NAV_WINDOW_BEFORE 5, 0, n − 16)`. It is sent centre first,
+  then outwards. Each row is `{NAV_INDEX: i, NAV_KIND, NAV_TEXT, NAV_SUB, NAV_DIST, NAV_DIR, NAV_COLOR, NAV_RAIL}`.
+  - `NAV_KIND`: walk 0 · board 1 · ride 2 · wait 3 · arrive 4 · info 5 · turn 6 · stop 7 (a stop along a ride) · fold 8 (hidden rows).
+  - `NAV_TEXT` is the instruction. `NAV_SUB` is its detail ("4 min walk · 44 at 8:10", "First · 8:10", "8 stops · Arrive 8:20").
+  - `NAV_DIST` is the row's **length** from the previous point (as `ITEM_DIST`, '' = unknown). `NAV_DIR` is its travel direction
+    (`NB EB SB WB`; a bus leg's own). `NAV_COLOR` is the colour. Strings are ≤ 47 bytes each.
+  - `NAV_RAIL` = marker | top << 2 | bottom << 4. Markers: none 0 · stop 1 (hollow circle) · here 2 (filled: the stop you are at).
+    Lines: none 0 · line 1 (solid, the row's colour) · dash 2 (grey).
+
+  The list is sent with its header whenever a row changes. A header from the phone drops queued, unsent messages of an older nav list.
+  Watch → phone `{NAV_FETCH: i}` (→ `{type: 'navFetch', index}`) → `encodeNavRows(rows, units, i)`, the window around row i with
+  no header.
+- **Rows** (`src/common/nav-rows.js`, pure: `build(steps, i, {walkSpeed})` → `{rows, current}`): the steps split into legs. A walk is
+  one walk step or its turns. A ride is board? + ride, plus a wait / arrive step right after it, which happens at its last stop. Any
+  other step is a leg of its own.
+  - The leg you are on is **open**:
+    - A walk shows the 2 turns behind the current one and the 3 ahead, a fold row for the rest ("12 more turns", "3 earlier
+      turns"), and always its last turn.
+    - A ride shows its stops (`ride.stops`, see below) in the same way: before boarding, around its first stop; riding, around
+      `ride.at`, the stop you are at (marker here, sub "4 stops to <stop>"). It always shows the stop you get off at:
+      "Get off at <stop>", sub "8 stops · Arrive 8:20", or the wait / arrive step that ends the ride.
+  - Every other leg is **folded**: a walk is one row (a routed walk: its turns' total length), a ride is two (where you board,
+    where you get off).
+  - A fold of one row is just that row.
+  - Rails: stop rows of a ride, and wait / arrive rows, have a stop marker. Rows of one ride are joined by its line, everything
+    else by dashes. Info rows have no rail, and neither do the ends of the list.
+  - The current row is the "here" stop while riding, else the current step's row.
+- **Ride stops** (`rideStops(data, routeId, dirId, fromId, toId, pos)`): the stops of one direction of the route from `fromId` to
+  `toId`, leaving out stops without a position. Plan legs carry `dirId`, so that direction is tried first, and the first direction
+  serving both stops in order is used. A drop-off has no `fromId`: once the first position is known, its ride starts at the stop
+  nearest you before `toId`, over every direction. While riding, `ride.at` = the last stop passed: the nearest stop ahead, minus
+  one while you are still closer to the stop before it than that stop is to it, or itself within 40 m. It never goes back.
 - Phone → watch, the **live guidance** `encodeNavLive({state, current, sub, distance, bearing, units})` → `{NAV_STATE: 1 guiding |
-  2 arrived (the current step is the last kind: wait / arrive / info), NAV_CURRENT: step index, NAV_LSUB: time left ("4 min left",
+  2 arrived (the current step is the last kind: wait / arrive / info), NAV_CURRENT: row index, NAV_LSUB: time left ("4 min left",
   "Departs in 10 min", "Arrive in 12 min", "Next 5 min"), NAV_LDIST: distance to the step's target, NAV_BEARING: −1 = no arrow}`,
   sent when it changes (bearing in 5° steps); `encodeNavLive(null)` → `{NAV_STATE: 0}` closes the window.
 - Steps, from the session's last list (`lastList()` carries `data` for stop coordinates): *pickup* → walk to the stop, then "Wait for the 44"
@@ -1139,13 +1168,25 @@ the steps and sends what changed. **Aplite has no navigation** (not enough RAM: 
 - **Routing source** (`routingUrl`, optional): a URL template with `{fromLat} {fromLon} {toLat} {toLon}` (or `{from}` / `{to}` = `lat,lon`),
   fetched once per walking step. Answers understood: `{steps: [{text, lat, lon}]}`, `{points: [{lat, lon}] | [[lat, lon]]}`, OSRM
   (`routes[0].legs[].steps[].maneuver` → instructions, else `routes[0].geometry.coordinates`); ≤ 40 waypoints. The walking step is
-  replaced in the list by one `turn` step per waypoint (passed within 20 m; the last within 30 m), thinned to the room left in the
-  16 steps; a failed fetch keeps the straight arrow.
-- Watch: `bus_nav_begin / set_step / set_live` keep the list and the live state (strings cut at UTF-8 boundaries, bearing outside 0..359 →
-  −1; `set_live` returns true when the current step changed → scroll to it, one short vibration). The nav window is a wheel
-  (`bus_wheel`): level 0 = band with kind, direction and the step's length, the instruction (scrolls when long), then the detail and — for
-  the current step — time left beside an arrow over the distance; level 1 = kind pill + instruction + detail; done steps are dimmed; the
-  status line reads "Step 2 of 5". UP / DOWN look ahead or back, SELECT returns to the current step, BACK stops.
+  replaced by one `turn` step per waypoint (passed within 20 m; the last within 30 m), every one kept (the rows fold them). A failed
+  fetch keeps the straight arrow.
+- **Watch model:** `bus_nav_begin(count, center) / set_step(…, rail) / set_live` keep the rows and the live state.
+  - `begin` keeps the rows it has, marked stale, and draws them until they are re-sent. It drops rows past the new end.
+  - Strings are cut at UTF-8 boundaries, and a bearing outside 0..359 becomes −1.
+  - `set_live` returns true when the current row changed: the watch scrolls to it with one short vibration.
+  - `bus_nav_fetch_for(sel)`: when a row within 3 of the selection is missing or stale and not in the window on its way (the last
+    one sent or asked for), it gives the row to send as `NAV_FETCH`. It is checked on every redraw, and if the outbox is busy the
+    next redraw asks again.
+- **Watch display:** the nav window is a wheel (`bus_wheel`).
+  - **Rail:** left of every row, at x = 9 on rectangular screens (one straight line) or the row's inset + 9 on round ones. Stops are
+    a circle in the route colour with radius 6 / 5 / 4 by level, hollow (white inside) or filled for "here". Lines meet the
+    circle's edge, centred on the title line. A ride's line is 3 px in its colour. Walking is grey dashes, 4 px every 7 px, phased
+    on the wheel's y so they line up across rows. On B&W screens both are black.
+  - **Level 0:** a band with the kind, direction and the row's length, then the instruction (scrolls when long), then the detail.
+    The current row adds the time left beside an arrow over the distance.
+  - **Level 1:** a kind pill (none for stop and fold rows), the instruction and the detail.
+  - Done rows are dimmed. The status line reads "Step 2 of 5" (rows).
+  - UP / DOWN look ahead or back, SELECT returns to the current row, BACK stops.
   Tests: `test/nav.test.js`, `test/routing.test.js`, `test/c/test_bus_nav.c`.
 
 ## 19. Saved locations and the learning context — `src/common/places.js`, `src/common/context.js`, `protocol.encodePlaces`
