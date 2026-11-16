@@ -194,7 +194,7 @@ test('checkDue: check notification with a fresh plan, once per trigger (persiste
   env.router.planFn = req => busPlan(req, 1500, 'FF0000');   // live data: leave 5 min later
   await env.checkDue();
   assert.equal(env.notes.length, 1);
-  assert.deepEqual(env.notes[0], { title: 'Work: leave 7:35 AM', body: 'Take A Line', color: 'FF0000' });
+  assert.deepEqual(env.notes[0], { title: 'Work: leave 7:35 AM', body: 'Take A Line', color: 'FF0000', destinationId: 'work', planned: true });
   const last = env.router.calls[env.router.calls.length - 1];
   assert.deepEqual(last.req.origin, { lat: 44.95, lon: -93.25 }, 'fresh location');
   assert.equal(last.req.now, OCC - 2700);
@@ -220,8 +220,8 @@ test('checkDue: leave notification; clock24 and colors', async () => {
   env.now = OCC - 1800;                           // both work check (missed) and work leave are due
   await env.checkDue();
   assert.deepEqual(env.notes, [
-    { title: 'Work: leave 07:30', body: 'Take A Line (24h)', color: '' },
-    { title: 'Leave now: Work', body: 'Take A Line (24h)', color: '' },
+    { title: 'Work: leave 07:30', body: 'Take A Line (24h)', color: '', destinationId: 'work', planned: true },
+    { title: 'Leave now: Work', body: 'Take A Line (24h)', color: '', destinationId: 'work', planned: true },
   ]);
   assert.deepEqual(env.scheduler.handled(), ['work@' + OCC + ':check', 'work@' + OCC + ':leave']);
 });
@@ -230,7 +230,7 @@ test('checkDue: no plan -> "No route found to arrive by"', async () => {
   const env = setup({ router: fakeRouter(() => null) });
   await env.replan();                              // fallback check at 6:45 for work: already due
   await env.checkDue();
-  assert.deepEqual(env.notes, [{ title: 'Work', body: 'No route found to arrive by 8:00 AM', color: '' }]);
+  assert.deepEqual(env.notes, [{ title: 'Work', body: 'No route found to arrive by 8:00 AM', color: '', destinationId: 'work', planned: false }]);
 });
 
 test('checkDue: a failing fresh re-plan keeps (and notifies with) the stored plan', async () => {

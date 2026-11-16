@@ -1,6 +1,8 @@
-// Navigation to a pickup stop, a drop-off stop, a saved location or a scheduled trip (CONTRACTS.md §18). The watch shows the steps,
-// folded into rows (nav-rows.js), as a scrollable list with the current one open (arrow, distance, time left); the phone
-// follows the GPS, advances through the steps and re-sends what changed. With a routing source (routing.js) a walking
+// Trips: navigation to a pickup stop, a drop-off stop, a saved location or a scheduled trip (CONTRACTS.md §18). The watch
+// shows the steps, as legs with their steps folded out under them (nav-rows.js), in the trip view with the current one
+// open (arrow, distance, time left); the phone follows the GPS, advances through the steps and re-sends what changed. A
+// trip runs until it is cancelled or replaced, also while the watch shows its home screen. A scheduled trip is first
+// shown as a preview (its steps, nothing followed) that the watch can start. With a routing source (routing.js) a walking
 // step is replaced by its turns; without one it is a straight arrow. All I/O is injected. ES5.
 
 var geo = require('./geo');
@@ -33,6 +35,12 @@ function stopCoords(data, routeId, stopId) {
 
 function point(p) {
   return isPoint(p) ? { lat: p.lat, lon: p.lon } : null;
+}
+
+// a route's full name ("Franklin Av / Riverside Av"), '' when unknown
+function routeName(data, routeId) {
+  var route = data && data.routes && data.routes[routeId];
+  return route && route.longName ? String(route.longName) : '';
 }
 
 // The stops a ride passes, from fromId (null: the stop nearest `pos` before toId) to toId on one direction of the route
@@ -99,14 +107,14 @@ function stepsOf(item, ctx) {
   if (item.kind === 'pickup') {
     to = stopCoords(ctx.data, item.routeId, item.stopId);
     if (!to) return [{ type: 'info', text: 'No location for ' + item.title, to: null, color: item.color }];
-    steps.push({ type: 'walk', text: 'Walk to ' + item.title, to: point(to), color: item.color });
+    steps.push({ type: 'walk', text: 'Walk to ' + item.title, toName: item.title, to: point(to), color: item.color });
     steps.push({ type: 'wait', text: 'Wait for the ' + item.badge, to: point(to), color: item.color, times: item.times || [] });
     return steps;
   }
   if (item.kind === 'place') {
     to = point(item);
     if (!to) return [{ type: 'info', text: 'No location for ' + item.title, to: null, color: item.color }];
-    steps.push({ type: 'walk', text: 'Walk to ' + item.title, to: to, color: item.color });
+    steps.push({ type: 'walk', text: 'Walk to ' + item.title, toName: item.title, to: to, color: item.color });
     steps.push({ type: 'arrive', text: 'Arrive at ' + item.title, to: to, color: item.color });
     return steps;
   }
@@ -114,8 +122,9 @@ function stepsOf(item, ctx) {
     to = stopCoords(ctx.data, item.routeId, item.stopId);
     if (!to) return [{ type: 'info', text: 'No location for ' + item.title, to: null, color: item.color }];
     // its stops: from the one nearest you once your position is known (see update)
-    steps.push({ type: 'ride', text: 'Ride to ' + item.title, to: point(to), color: item.color, radius: RIDE_RADIUS,
-                 routeId: item.routeId, alightStopId: item.stopId, stops: undefined });
+    steps.push({ type: 'ride', text: 'Ride to ' + item.title, toName: item.title, to: point(to), color: item.color, radius: RIDE_RADIUS,
+                 routeId: item.routeId, alightStopId: item.stopId, stops: undefined, dir: item.dir || '',
+                 badge: item.badge || '', route: item.routeLongName || routeName(ctx.data, item.routeId) });
     steps.push({ type: 'arrive', text: 'Get off here', to: point(to), color: item.color });
     return steps;
   }
@@ -131,15 +140,19 @@ function stepsOf(item, ctx) {
     if (leg.mode === 'walk') {
       var next = legs[i + 1], target = next && next.mode === 'bus' ? stopCoords(ctx.data, next.routeId, next.boardStopId) : destPoint;
       if (!target) continue;
-      steps.push({ type: 'walk', text: 'Walk to ' + (leg.toName || (dest && dest.name) || 'the stop'), to: point(target),
+      var walkTo = leg.toName || (dest && dest.name) || 'the stop';
+      steps.push({ type: 'walk', text: 'Walk to ' + walkTo, toName: walkTo, to: point(target),
                    color: next && next.color ? next.color : item.color,
                    note: next && next.mode === 'bus' ? next.routeName + ' at ' + format.clock(next.departAt, ctx.clock24) : '' });
     } else if (leg.mode === 'bus') {
       var board = stopCoords(ctx.data, leg.routeId, leg.boardStopId), alight = stopCoords(ctx.data, leg.routeId, leg.alightStopId);
+      var route = routeName(ctx.data, leg.routeId) || (leg.headsign ? 'to ' + leg.headsign : '');
       steps.push({ type: 'board', text: 'Board ' + leg.routeName + (leg.dir ? ' ' + leg.dir : ''), to: point(board),
-                   color: leg.color, dir: leg.dir || '', departAt: leg.departAt, stopName: leg.boardStopName });
-      steps.push({ type: 'ride', text: 'Ride to ' + (leg.alightStopName || leg.alightStopId), to: point(alight), color: leg.color,
-                   dir: leg.dir || '', arriveAt: leg.arriveAt, radius: RIDE_RADIUS,
+                   color: leg.color, dir: leg.dir || '', departAt: leg.departAt, stopName: leg.boardStopName,
+                   badge: leg.routeName || '', route: route });
+      steps.push({ type: 'ride', text: 'Ride to ' + (leg.alightStopName || leg.alightStopId), toName: leg.alightStopName || '',
+                   to: point(alight), color: leg.color, dir: leg.dir || '', arriveAt: leg.arriveAt, radius: RIDE_RADIUS,
+                   badge: leg.routeName || '', route: route,
                    stops: rideStops(ctx.data, leg.routeId, leg.dirId, leg.boardStopId, leg.alightStopId, null) });
     }
   }
@@ -194,7 +207,10 @@ function describeStep(step, prev, o) {
 function createNav(deps) {
   var log = deps.log || function () {};
   var setIv = deps.setInterval || setInterval, clearIv = deps.clearInterval || clearInterval;
-  var active = null;   // {steps, i, item, data, timer, startedAt, locating, listKey, liveKey, described, rows (as last sent)}
+  // {steps, i, item, data, timer, startedAt, locating, listKey, liveKey, described, rows (as last sent), pos (last fix),
+  //  preview, startAt (a preview's first time), title, show (open the trip view with the next live message),
+  //  open / expand (legs opened / closed and fully shown on the watch, see nav-rows), legAt (the leg you are on)}
+  var active = null;
 
   function send(messages) {
     try {
@@ -224,11 +240,11 @@ function createNav(deps) {
   }
 
   // A walking step becomes its turns (the routing source's waypoints), all of them: the watch shows the ones around
-  // you (nav-rows.js); the walk itself stays on each turn as `walk` (its row while you are not on it).
+  // you (nav-rows.js); the walk itself stays on each turn as `walk` (its leg's header).
   function expand(a, step, points) {
     var at = a.steps.indexOf(step);
     if (at < 0 || !points.length) return;
-    var turns = [], walk = { text: step.text, note: step.note, color: step.color };
+    var turns = [], walk = { text: step.text, note: step.note, color: step.color, toName: step.toName };
     for (var j = 0; j < points.length; j++) {
       turns.push({ type: 'turn', text: points[j].text || (j === points.length - 1 ? step.text : 'Continue'), to: { lat: points[j].lat, lon: points[j].lon },
                    color: step.color, radius: j === points.length - 1 ? WALK_RADIUS : TURN_RADIUS,
@@ -249,7 +265,7 @@ function createNav(deps) {
   }
 
   function liveSub(step, toStep, now) {
-    var c = deps.getConfig(), t;
+    var t;
     if (step.type === 'walk' || step.type === 'turn') {
       return toStep === null ? '' : format.walk(format.walkSeconds(toStep, walkSpeed())) + ' left';
     }
@@ -262,38 +278,63 @@ function createNav(deps) {
     return '';
   }
 
+  // pos: the latest fix (null: none yet, a preview only)
   function update(pos) {
     var a = active, now = deps.clock();
     if (!a) return;
-    if (now - a.startedAt > MAX_RUN) return stop();
-    while (a.i < a.steps.length - 1 && stepDone(a.steps[a.i], pos, now)) a.i++;
+    if (pos) a.pos = pos;
+    if (!a.preview) {
+      if (now - a.startedAt > MAX_RUN) return stop();
+      while (a.i < a.steps.length - 1 && stepDone(a.steps[a.i], pos, now)) a.i++;
+    }
     var step = a.steps[a.i], units = deps.getUnits(), k;
-    if (!step.routed && wantRoute(step)) fetchRoute(a, step, pos);
+    if (!a.preview && !step.routed && wantRoute(step)) fetchRoute(a, step, pos);
     // a drop-off's ride starts where you are: its stops are known with the first position
-    for (k = a.i; k < a.steps.length; k++) {
+    for (k = a.i; pos && k < a.steps.length; k++) {
       var st = a.steps[k];
       if (st.type === 'ride' && st.stops === undefined) st.stops = rideStops(a.data, st.routeId, null, null, st.alightStopId, pos);
     }
-    if (step.type === 'ride' && step.stops) step.at = rideProgress(step, pos);
-    if (!a.described) {
+    if (!a.preview && step.type === 'ride' && step.stops) step.at = rideProgress(step, pos);
+    if (!a.described || (pos && !a.describedAt)) {   // (a preview is described before it has a position)
       describeAll(a, pos);
       a.described = true;
+      a.describedAt = !!pos;
     }
-    var built = navRows.build(a.steps, a.i, { walkSpeed: walkSpeed() }), msgs = [];
-    var listKey = units + JSON.stringify(built.rows);
+    var dist = !a.preview && pos && step.to ? geo.distance(pos, step.to) : null;
+    var built = navRows.build(a.steps, a.i, { walkSpeed: walkSpeed(), clock24: deps.getConfig().clock24, now: now,
+                                              live: dist, start: a.preview ? a.startAt : undefined, preview: a.preview,
+                                              open: a.open, expand: a.expand });
+    // a new leg: it opens (whatever was done to it on the watch before)
+    var leg = -1;
+    for (k = 0; k < built.legs.length; k++) if (a.i >= built.legs[k].from && a.i <= built.legs[k].to) leg = k;
+    if (!a.preview && leg !== a.legAt) {
+      var had = a.legAt !== undefined;
+      a.legAt = leg;
+      if (had && (a.open.hasOwnProperty(leg) || a.expand.hasOwnProperty(leg))) {
+        delete a.open[leg];
+        delete a.expand[leg];
+        return update(pos);
+      }
+    }
+    var msgs = [];
+    var listKey = units + JSON.stringify(built.rows) + ':' + built.head + ':' + built.headEnd;
     if (listKey !== a.listKey) {
       a.listKey = listKey;
       a.rows = built.rows;
-      msgs = msgs.concat(protocol.encodeNavList(built.rows, units, built.current));
+      msgs = msgs.concat(protocol.encodeNavList(built.rows, units, built.current, built.head, built.headEnd));
       a.liveKey = '';
     }
-    var dist = step.to ? geo.distance(pos, step.to) : null;
-    var live = { state: isTerminal(step) ? 2 : 1, current: built.current, sub: liveSub(step, dist, now), distance: dist,
-                 bearing: step.to ? geo.bearing(pos, step.to) : null, units: units };
-    var encoded = protocol.encodeNavLive(live), key = JSON.stringify(encoded);
+    var live = { state: a.preview ? 'preview' : isTerminal(step) ? 'arrived' : 'guiding', current: built.current,
+                 sub: a.preview ? '' : liveSub(step, dist, now), distance: dist,
+                 bearing: !a.preview && pos && step.to ? geo.bearing(pos, step.to) : null, units: units,
+                 title: a.title, show: a.show };
+    var encoded = protocol.encodeNavLive(live);
+    live.show = false;   // (opening the view is no change of its own)
+    var key = JSON.stringify(protocol.encodeNavLive(live));
     if (encoded.NAV_BEARING >= 0) key = key.replace(/"NAV_BEARING":\d+/, '"NAV_BEARING":' + Math.round(encoded.NAV_BEARING / 5));
     if (key !== a.liveKey) {
       a.liveKey = key;
+      a.show = false;
       msgs.push(encoded);
     }
     if (msgs.length) send(msgs);
@@ -318,35 +359,66 @@ function createNav(deps) {
     if (!silent) send([protocol.encodeNavLive(null)]);
   }
 
-  // listId / index: the watch's selection (index -1 = nothing selected); places: it is in the saved locations' list
+  // listId / index: the watch's selection (index -1 = nothing selected); places: it is in the saved locations' list.
+  // Starts a trip there, replacing the one running.
   function start(listId, index, places) {
-    stop(true);
     var list = places ? (typeof deps.getPlaces === 'function' ? deps.getPlaces() : null) : deps.getList();
     if (!list || list.listId !== listId || typeof index !== 'number' || index < 0 || index >= list.items.length) {
       log('nav: nothing to navigate to');
       return false;
     }
-    return begin(list.items[index], list.data);
+    stop(true);
+    return begin(list.items[index], list.data, {});
   }
 
   // item: a tile (as in a list) to navigate to; data: the planner Data its stop coordinates come from
   function startItem(item, data) {
-    stop(true);
     if (!item) return false;
-    return begin(item, data);
+    stop(true);
+    return begin(item, data, {});
   }
 
-  function begin(item, data) {
+  // A scheduled trip's steps for the watch to look at (and start: go), from its stored plan; no plan → one row saying
+  // `empty`. Replaces a preview, never a trip that is running (false).
+  function preview(destinationId, title, empty) {
+    if (active && !active.preview) return false;
+    stop(true);
+    var list = deps.getList();
+    return begin({ kind: 'trip', destinationId: destinationId, color: '' }, list ? list.data : null,
+                 { preview: true, title: title, empty: empty });
+  }
+
+  // the watch's "start trip" on a preview: follow it from now
+  function go() {
+    var a = active;
+    if (!a || !a.preview) return false;
+    a.preview = false;
+    a.title = '';
+    a.startedAt = deps.clock();
+    a.open = {};
+    a.expand = {};
+    a.listKey = '';
+    a.timer = setIv(poll, POLL_MS);
+    if (a.pos) update(a.pos);
+    poll();
+    return true;
+  }
+
+  function begin(item, data, opts) {
     var cfg = deps.getConfig(), now = deps.clock();
     var dest = null, plan = null, i;
     if (item.kind === 'trip') {
       plan = deps.getPlan(item.destinationId);
       for (i = 0; i < (cfg.destinations || []).length; i++) if (cfg.destinations[i].id === item.destinationId) dest = cfg.destinations[i];
     }
-    var steps = buildSteps(item, { data: data, now: now, clock24: cfg.clock24, plan: plan, destination: dest });
+    var steps = !plan && opts.empty ? [{ type: 'info', text: opts.empty, to: null, color: '', leg: 0 }]
+      : buildSteps(item, { data: data, now: now, clock24: cfg.clock24, plan: plan, destination: dest });
     active = { steps: steps, i: 0, item: item, data: data, startedAt: now, locating: false, listKey: '', liveKey: '',
-               described: false, timer: null, rows: null };
-    active.timer = setIv(poll, POLL_MS);
+               described: false, timer: null, rows: null, pos: null, preview: !!opts.preview,
+               startAt: plan && typeof plan.leaveAt === 'number' ? Math.max(now, plan.leaveAt) : now,
+               title: opts.title || '', show: true, open: {}, expand: {} };
+    if (active.preview) update(null);   // shown at once; a fix (once) adds the first walk's length
+    else active.timer = setIv(poll, POLL_MS);
     poll();
     return true;
   }
@@ -357,7 +429,28 @@ function createNav(deps) {
     send(protocol.encodeNavRows(active.rows, deps.getUnits(), index));
   }
 
-  return { start: start, startItem: startItem, stop: stop, fetch: fetch, active: function () { return !!active; } };
+  // a long SELECT on a row: a leg's header opens / closes that leg, a run of hidden rows shows every row of its leg
+  function unfold(index) {
+    var a = active, row = a && a.rows && a.rows[index];
+    if (!row || typeof index !== 'number') return false;
+    if (row.type === 'head') {
+      a.open[row.leg] = !row.open;
+      if (row.open) delete a.expand[row.leg];
+    } else if (row.fold) {
+      a.open[row.leg] = true;
+      a.expand[row.leg] = true;
+    } else {
+      return false;
+    }
+    if (a.pos || a.preview) update(a.pos);
+    return true;
+  }
+
+  return {
+    start: start, startItem: startItem, preview: preview, go: go, stop: stop, fetch: fetch, unfold: unfold,
+    active: function () { return !!active; },
+    guiding: function () { return !!active && !active.preview; }
+  };
 }
 
 module.exports = { createNav: createNav, buildSteps: buildSteps, stepDone: stepDone, rideStops: rideStops, POLL_MS: POLL_MS };

@@ -4,9 +4,16 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+// Aplite has the RAM for fewer rows (it keeps the first ones) and shorter names (cut at a UTF-8 boundary like any other).
+#if defined(PBL_PLATFORM_APLITE)
+#define BUS_MAX_ITEMS 8
+#define BUS_TITLE_LEN 40
+#define BUS_ROUTE_LEN 32
+#else
 #define BUS_MAX_ITEMS 12
 #define BUS_TITLE_LEN 64   // full stop names (scrolled on the watch when too wide)
 #define BUS_ROUTE_LEN 64   // route full name
+#endif
 #define BUS_BADGE_LEN 8
 #define BUS_STATUS_LEN 48
 #define BUS_DIST_LEN 8
@@ -57,6 +64,8 @@ typedef struct {
   int16_t bearing;              // degrees 0..359, -1 = none
   char dist[BUS_DIST_LEN];
   int32_t walk;                 // seconds, -1 = none
+  int32_t eta;                  // seconds to get there leaving now (PLACE_ETA), -1 = unknown
+  char badge[BUS_BADGE_LEN];    // the first bus of that trip, "" = on foot / unknown
 } BusPlace;
 
 typedef struct {
@@ -95,10 +104,14 @@ void bus_places_begin(BusPlaces *p, int32_t list_id, int count);      // count c
 // negative walk → -1
 bool bus_places_set(BusPlaces *p, int32_t list_id, int index, const char *name, const char *address, int32_t color,
                     int32_t bearing, const char *dist, int32_t walk);
+// How long getting to a place already set takes leaving now, and the bus that starts it ("" = walking); eta < 0 → -1.
+// Same list / index rules. bus_places_set resets them (-1, "").
+bool bus_places_set_eta(BusPlaces *p, int32_t list_id, int index, int32_t eta, const char *badge);
 // The place shown on wheel row `row`: rows run from the last place down to the best one (index 0) at the bottom, next
 // to the main list's first row. NULL unless the row exists and that place has arrived.
 const BusPlace *bus_places_at_row(const BusPlaces *p, int row);
-// A place as a tile for the row drawing: kind PLACE, title = name, route = address, no badge / times / lanes, lead -1.
+// A place as a tile for the row drawing: kind PLACE, title = name, route = address, badge = the bus to take, t[0] = the
+// travel time + 1 when a bus is taken (0 = none: the walk is the way there), no lanes, lead -1.
 void bus_place_as_item(const BusPlace *p, BusItem *out);
 
 void bus_format_relative(int32_t seconds, char *buf, size_t n);

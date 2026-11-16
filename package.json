@@ -90,7 +90,17 @@
       "PLACE_COUNT",
       "PLACE_INDEX",
       "PLACE_SELECT",
-      "PLACE_NAV"
+      "PLACE_NAV",
+      "NAV_BADGE",
+      "NAV_ROUTE",
+      "NAV_HEAD",
+      "NAV_HEAD_END",
+      "NAV_SHOW",
+      "NAV_TITLE",
+      "NAV_UNFOLD",
+      "NAV_GO",
+      "UNDO_SELECT",
+      "PLACE_ETA"
     ],
     "capabilities": [
       "configurable",

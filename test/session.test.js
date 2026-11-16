@@ -202,6 +202,23 @@ test('select: records a sample, trains with the config prior, re-sends the re-ra
   assert.deepEqual(h.sent.filter(m => 'ITEM_INDEX' in m).map(m => m.ITEM_TITLE), ['D1', 'P1'], 're-ranked with learned');
 });
 
+test('undo: the newest pick is forgotten, learnt from again and the list re-sent; nothing to undo → a status', async () => {
+  const h = harness();
+  h.session.load();
+  await refresh(h.session);
+  h.session.select(1, 1);
+  h.sent.length = 0;
+  assert.equal(h.session.handleWatchMessage({ UNDO_SELECT: 1 }).type, 'undoSelect');
+  assert.equal(h.session.getSamples().length, 0);
+  assert.equal(JSON.parse(h.storage.getItem('deutschebahned.samples')).length, 0);
+  assert.equal(h.calls.train.length, 2, 'trained again');
+  const header = h.sent.find(m => 'ITEM_COUNT' in m);
+  assert.equal(header.STATUS, 'Undid a pick (0 picks)');
+  h.sent.length = 0;
+  assert.equal(h.session.undoSelect(), false);
+  assert.deepEqual(h.sent, [{ STATUS: 'No pick to undo' }]);
+});
+
 test('select: stale list id or bad index is ignored', async () => {
   const h = harness();
   h.session.load();
@@ -293,7 +310,10 @@ test('watch prefs: saved, re-send the last list when the units change, known onc
   assert.equal(h.sent.length, 0);
   await refresh(h.session);
   h.sent.length = 0;
-  assert.deepEqual(h.session.handleWatchMessage({ WATCH_PREFS: 1 | 2 | 4 }), { type: 'prefs', clock24: true, units: 'metric' });
+  assert.deepEqual(h.session.handleWatchMessage({ WATCH_PREFS: 1 | 2 | 4 }), { type: 'prefs', clock24: true, units: 'metric', nav: false });
+  assert.equal(h.session.watchHasNav(), false);
+  assert.equal(h.session.handleWatchMessage({ WATCH_PREFS: 1 | 2 | 4 | 8 }).nav, true);
+  assert.equal(h.session.watchHasNav(), true);
   const header = h.sent.find(m => 'ITEM_COUNT' in m);
   assert.ok(header && header.LIST_ID === 2, 'list re-sent with a new id');
   assert.equal(h.sent.find(m => 'ITEM_INDEX' in m).ITEM_DIST, '350m');

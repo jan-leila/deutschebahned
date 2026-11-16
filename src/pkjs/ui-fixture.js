@@ -10,9 +10,10 @@
 // {TEST_NOW: FIXED_NOW}, which the watch then shows its times against (times carry +20 s of slack).
 //
 // On 'ready': the main list + the saved locations + a wakeup list (cookie 1 fires at FIXED_NOW + 70 s; reported back as 'UI-FIXTURE wakeup 1').
-// Every NAV_START (long SELECT) from the watch logs 'UI-FIXTURE refresh' and runs the next entry of STEPS; a step can set
-// the watch's test hook ({REFRESH: v}, CONTRACTS.md §11: v >= 0 freezes the marquee clock at v ms, MARQUEE_END at the
-// end of its scroll, v <= -1000 freezes the wheel between rows), send another list, a notification, or an empty list.
+// Every SELECT on a list row (a long SELECT) from the watch logs 'UI-FIXTURE refresh' and runs the next entry of STEPS;
+// a step can set the watch's test hook ({REFRESH: v}, CONTRACTS.md §11: v >= 0 freezes the marquee clock at v ms,
+// MARQUEE_END at the end of its scroll, v <= -1000 freezes the wheel between rows), send another list, a trip preview (a
+// notification on a watch without the trip view), a trip, or an empty list.
 // tools/screenshots.sh walks these steps in order: keep the two in sync.
 
 var protocol = require('../common/protocol');
@@ -22,6 +23,7 @@ var MARQUEE_END = 1000000000;
 
 var listId = 0;
 var step = 0;
+var watchNav = true;   // the watch has the trip view (WATCH_PREFS bit 3; aplite has not)
 
 var sender = protocol.createSender(function (dict, onOk, onErr) {
   Pebble.sendAppMessage(dict, onOk, onErr);
@@ -162,46 +164,75 @@ var STEPS = [
   function () { hook(0); },                       // 6 two-lane tile, long title
   function () { hook(MARQUEE_END); },             // 7 long title scrolled to its end
   function () { sendList(tripItems()); hook(0); },// 8 planned-trip tiles pinned first
-  function () { sendNotify(); },                  // 9 notification window
-  function () { sendList([], 'No stops nearby'); }, // 10 empty list / status screen
-  function () { sendNav(NAV_WALKING, 0, '4 min left', '320ft', 90); },   // 11 navigation: walking to the stop
-  function () { sendNav(NAV_RIDING, 4, 'Arrive in 12 min', '2.1mi', 45); } // 12 navigation: riding, at a stop along the way
+  function () { if (watchNav) sendNav(NAV_PREVIEW, 0, '', '', -1, 3, -1, -1, 'Work: leave 8:05 AM'); else sendNotify(); }, // 9 a scheduled trip is due
+  trip(function () { sendNav(NAV_WALKING, 1, '4 min left', '320ft', 90, 1, 0, 1); }),      // 10 a trip: walking to the stop
+  trip(function () { sendNav(NAV_RIDING, 5, 'Arrive in 12 min', '2.1mi', 45, 1, 1, 10); }), // 11 a trip: riding, at a stop on the way
+  function () { sendList([], 'No stops nearby'); } // 12 empty list / status screen (last: nothing to select there)
 ];
 
-// Navigation (§18): a planned trip's rows (with their rails: NAV_RAIL = marker | top << 2 | bottom << 4), then the live
-// guidance of row `current`. Walking: every leg folded; riding: the ride open around the stop you are at.
-var RAIL = { walkFirst: 2 << 4, walk: 2 << 2 | 2 << 4, board: 1 | 2 << 2 | 1 << 4, stop: 1 | 1 << 2 | 1 << 4,
-             here: 2 | 1 << 2 | 1 << 4, fold: 1 << 2 | 1 << 4, foldFirst: 2 << 2 | 1 << 4, alight: 1 | 1 << 2 | 2 << 4, end: 1 | 2 << 2 };
-function navRow(kind, text, sub, dist, dir, rail) {
-  return { NAV_KIND: kind, NAV_TEXT: text, NAV_SUB: sub, NAV_DIST: dist, NAV_DIR: dir, NAV_COLOR: 0x771473, NAV_RAIL: rail };
+// a step that needs the trip view: skipped on a watch without it (aplite)
+function trip(fn) {
+  fn.trip = true;
+  return fn;
 }
+
+// Trips (§18): a trip's rows (each leg a header with its steps under it while it is open; the rails: NAV_RAIL = marker |
+// top << 2 | bottom << 4, and FOLDED / OPEN for what a long SELECT does), then the live guidance of row `current`.
+// Walking: its leg open, the others closed; riding: the ride open around the stop you are at; a preview: every leg closed.
+var RAIL = { walk: 0, stop: 1 | 1 << 2 | 1 << 4, here: 2 | 1 << 2 | 1 << 4, fold: 1 << 2 | 1 << 4 | 64, foldFirst: 1 << 4 | 64,
+             alight: 1 | 1 << 2, end: 1, folded: 64, open: 128 };
+var PURPLE = 0x771473, GREY = 0x555555;
+function navRow(kind, text, sub, dist, dir, rail, color) {
+  return { NAV_KIND: kind, NAV_TEXT: text, NAV_SUB: sub, NAV_DIST: dist, NAV_DIR: dir, NAV_COLOR: color === undefined ? PURPLE : color,
+           NAV_RAIL: rail };
+}
+function headRow(text, route, badge, sub, dist, dir, rail, color) {
+  var r = navRow(9, text, sub, dist, dir, rail, color);
+  r.NAV_ROUTE = route;
+  r.NAV_BADGE = badge;
+  return r;
+}
+var WALK_HEAD = function (rail) {
+  return headRow('Franklin Av & Lyndale Av S', 'Walk \u00B7 2 at 8:09 AM', '', 'arr 8:06 AM', '320ft', 'EB', rail, GREY);
+};
+var RIDE_HEAD = function (rail, sub, dist) {
+  return headRow('Franklin Station', 'Franklin Av - Riverside Av - U of M', '2', sub, dist, 'EB', rail, PURPLE);
+};
+var WORK_HEAD = headRow('Work', 'Walk', '', 'arr 8:28 AM', '700ft', 'NB', RAIL.folded, GREY);
+var NAV_PREVIEW = [
+  headRow('Franklin Av & Lyndale Av S', 'Walk \u00B7 2 at 8:09 AM', '', 'arr 8:09 AM', '320ft', 'EB', RAIL.folded, GREY),
+  RIDE_HEAD(RAIL.folded, 'East \u00B7 arr 8:24 AM \u00B7 9 stops', '5.2mi'),
+  WORK_HEAD,
+  navRow(4, 'Arrive at Work', '8:28 AM', '', '', RAIL.end)];
 var NAV_WALKING = [
-  navRow(0, 'Walk to Franklin Av & Lyndale Av S', '2 at 8:09 AM', '320ft', 'EB', RAIL.walkFirst),
-  navRow(1, 'Board 2 East', 'Franklin Av \u00B7 8:09 AM', '', 'EB', RAIL.board),
-  navRow(2, 'Get off at Franklin Station', '9 stops \u00B7 Arrive 8:24 AM', '5.2mi', 'EB', RAIL.alight),
-  navRow(0, 'Walk to Work', '3 min walk', '700ft', 'NB', RAIL.walk),
-  navRow(4, 'Arrive at Work', '', '', '', RAIL.end)];
+  WALK_HEAD(RAIL.open),
+  navRow(0, 'Walk to Franklin Av & Lyndale Av S', '', '320ft', 'EB', RAIL.walk),
+  RIDE_HEAD(RAIL.folded, 'East \u00B7 arr 8:24 AM \u00B7 9 stops', '5.2mi'),
+  WORK_HEAD,
+  navRow(4, 'Arrive at Work', '8:28 AM', '', '', RAIL.end)];
 var NAV_RIDING = [
-  navRow(0, 'Walk to Franklin Av & Lyndale Av S', '2 at 8:09 AM', '320ft', 'EB', RAIL.walkFirst),
+  WALK_HEAD(RAIL.folded),
+  RIDE_HEAD(RAIL.open, 'East \u00B7 arr 8:24 AM \u00B7 5 stops', '2.1mi'),
   navRow(8, '2 earlier stops', '', '', '', RAIL.foldFirst),
-  navRow(7, 'Franklin Av & Nicollet Av', '', '', '', RAIL.stop),
-  navRow(7, 'Franklin Av & 4th Av S', '', '', '', RAIL.stop),
-  navRow(7, 'Franklin Av & Chicago Av', '5 stops to Franklin Station', '', '', RAIL.here),
-  navRow(7, 'Franklin Av & Park Av', '', '', '', RAIL.stop),
-  navRow(7, 'Franklin Av & 11th Av S', '', '', '', RAIL.stop),
-  navRow(7, 'Franklin Av & Cedar Av', '', '', '', RAIL.stop),
+  navRow(7, 'Franklin Av & Nicollet Av', '', '440ft', '', RAIL.stop),
+  navRow(7, 'Franklin Av & 4th Av S', '', '0.2mi', '', RAIL.stop),
+  navRow(7, 'Franklin Av & Chicago Av', '', '0.3mi', '', RAIL.here),
+  navRow(7, 'Franklin Av & Park Av', '8:16 AM', '0.2mi', '', RAIL.stop),
+  navRow(7, 'Franklin Av & 11th Av S', '8:18 AM', '0.3mi', '', RAIL.stop),
+  navRow(7, 'Franklin Av & Cedar Av', '8:20 AM', '0.4mi', '', RAIL.stop),
   navRow(8, '1 more stop', '', '', '', RAIL.fold),
-  navRow(2, 'Get off at Franklin Station', '9 stops \u00B7 Arrive 8:24 AM', '5.2mi', 'EB', RAIL.alight),
-  navRow(0, 'Walk to Work', '3 min walk', '700ft', 'NB', RAIL.walk),
-  navRow(4, 'Arrive at Work', '', '', '', RAIL.end)];
-function sendNav(rows, current, sub, dist, bearing) {
-  var msgs = [{ NAV_COUNT: rows.length, NAV_WINDOW: current }];
+  navRow(2, 'Get off at Franklin Station', '8:24 AM', '0.5mi', 'EB', RAIL.alight),
+  WORK_HEAD,
+  navRow(4, 'Arrive at Work', '8:28 AM', '', '', RAIL.end)];
+function sendNav(rows, current, sub, dist, bearing, state, head, headEnd, title) {
+  var msgs = [{ NAV_COUNT: rows.length, NAV_WINDOW: current, NAV_HEAD: head, NAV_HEAD_END: headEnd }];
   for (var i = 0; i < rows.length; i++) {
     var m = { NAV_INDEX: i };
     for (var k in rows[i]) if (rows[i].hasOwnProperty(k)) m[k] = rows[i][k];
     msgs.push(m);
   }
-  sender.sendAll(msgs.concat([{ NAV_STATE: 1, NAV_CURRENT: current, NAV_LSUB: sub, NAV_LDIST: dist, NAV_BEARING: bearing }]));
+  sender.sendAll(msgs.concat([{ NAV_STATE: state, NAV_CURRENT: current, NAV_LSUB: sub, NAV_LDIST: dist, NAV_BEARING: bearing,
+                                NAV_TITLE: title || '', NAV_SHOW: 1 }]));
 }
 
 // Weather panel (§17): 24 hours from FIXED_NOW, 4° now warming to 9° in the afternoon, a rainy spell in between.
@@ -233,11 +264,15 @@ Pebble.addEventListener('appmessage', function (e) {
   if (!msg) return;
   if (msg.type === 'select') {
     console.log('UI-FIXTURE select ' + msg.listId + ' ' + msg.index);
-  } else if (msg.type === 'placeSelect') {
-    console.log('UI-FIXTURE place ' + msg.listId + ' ' + msg.index);
-  } else if (msg.type === 'navStart') {
     console.log('UI-FIXTURE refresh');
+    while (step < STEPS.length && STEPS[step].trip && !watchNav) step++;
     if (step < STEPS.length) STEPS[step++]();
     console.log('UI-FIXTURE step ' + step);
+  } else if (msg.type === 'placeSelect') {
+    console.log('UI-FIXTURE place ' + msg.listId + ' ' + msg.index);
+  } else if (msg.type === 'prefs') {
+    watchNav = msg.nav;
+  } else {
+    console.log('UI-FIXTURE ' + msg.type + (msg.index !== undefined ? ' ' + msg.index : ''));
   }
 });

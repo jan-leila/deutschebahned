@@ -11,6 +11,7 @@ var catalog = require('../common/catalog');
 var weather = require('../common/weather');
 var routing = require('../common/routing');
 var navModule = require('../common/nav');
+var placeEtaModule = require('../common/place-eta');
 var voiceModule = require('../common/voice');
 var storageMigrate = require('../common/storage-migrate');
 // Data sources are plug-ins: this composition root is the only place that picks them.
@@ -191,8 +192,18 @@ function locale() {
   try { return navigator.language || ''; } catch (e) { return ''; }
 }
 
+// how long getting to each saved location takes leaving now (the trip planner, one place at a time)
+var placeEta = placeEtaModule.createPlaceEta({
+  plan: function (place, origin, cb) { scheduler.planNow(place, origin, cb); },
+  clock: clock,
+  onChange: function () { session.resendPlaces(); },
+  later: function (fn) { later(fn, 0); },
+  log: log
+});
+
 var session = sessionModule.createSession({
   storage: localStorage,
+  placeEta: placeEta,
   clock: clock,
   locale: locale(),
   locate: locate,
@@ -219,9 +230,13 @@ var scheduler = schedulerModule.createScheduler({
     log('scheduling ' + wakeups.length + ' wakeups');
     sender.sendAll(protocol.encodeWakeups(wakeups));
   },
+  // a scheduled trip is due: its steps as a preview the watch can start (aplite, without the trip view: the text); while
+  // another trip is running only the status line says so
   notify: function (n) {
     log('notify: ' + n.title + ' | ' + n.body);
-    sender.sendAll([protocol.encodeNotify(n)]);
+    if (session.watchHasNav() === false) sender.sendAll([protocol.encodeNotify(n)]);
+    else if (nav.guiding()) sender.sendAll([protocol.encodeStatus(n.title)]);
+    else nav.preview(n.destinationId, n.title, n.planned ? null : n.body);
   },
   log: log
 });
@@ -317,6 +332,8 @@ Pebble.addEventListener('appmessage', function (e) {
   else if (msg && msg.type === 'navStart') nav.start(msg.listId, msg.index, !!msg.places);
   else if (msg && msg.type === 'navStop') nav.stop(true);
   else if (msg && msg.type === 'navFetch') nav.fetch(msg.index);
+  else if (msg && msg.type === 'navUnfold') nav.unfold(msg.index);
+  else if (msg && msg.type === 'navGo') nav.go();
 });
 
 Pebble.addEventListener('route', function (e) {

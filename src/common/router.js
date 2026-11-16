@@ -14,6 +14,7 @@ var MAX_LOOKAHEAD_MINUTES = 240;  // cap of the arrivals window
 var WINDOW_MARGIN_MINUTES = 30;   // arrivals are fetched until arriveBy + this, to see whether the data reaches arriveBy
 var SUMMARY_MAX = 40;
 var LAST_TRIP_GAP = 3600;         // s: a connecting run with no other one this long after it is "the last one for an hour"
+var LEAVE_NOW_WINDOW = 7200;      // s: leaving now, arrivals later than this are not looked for
 var DEFAULTS = { walkSpeed: 1.3, maxWalk: 800, transferWalk: 250, maxTransfers: 1, minTransfer: 120, lastTransfer: 600 };
 
 function num(v, d) { return typeof v === 'number' && isFinite(v) ? v : d; }
@@ -46,12 +47,14 @@ function plan(source, request, cb) {
 
   var req = request || {};
   if (!source || typeof source.route !== 'function' || typeof source.arrivals !== 'function') return finish(new Error('router: bad source'));
-  if (!isPos(req.origin) || !isPos(req.destination) || typeof req.arriveBy !== 'number' || typeof req.now !== 'number') {
+  var leaveNow = req.leaveNow === true;
+  if (!isPos(req.origin) || !isPos(req.destination) || (!leaveNow && typeof req.arriveBy !== 'number') || typeof req.now !== 'number') {
     return finish(new Error('router: bad request'));
   }
 
   var o = {
-    origin: req.origin, destination: req.destination, arriveBy: req.arriveBy, now: req.now,
+    origin: req.origin, destination: req.destination, now: req.now, leaveNow: leaveNow,
+    arriveBy: leaveNow ? req.now + LEAVE_NOW_WINDOW : req.arriveBy,
     walkSpeed: num(req.walkSpeed, DEFAULTS.walkSpeed) > 0 ? num(req.walkSpeed, DEFAULTS.walkSpeed) : DEFAULTS.walkSpeed,
     maxWalk: num(req.maxWalk, DEFAULTS.maxWalk),
     transferWalk: num(req.transferWalk, DEFAULTS.transferWalk),
@@ -139,8 +142,10 @@ function search(source, o, routes, finish) {
   var walkOnly = null;
   var wOD = walk(o.origin, o.destination);
   if (wOD.m <= o.maxWalk && o.arriveBy - wOD.s >= o.now) {
-    walkOnly = { arriveBy: o.arriveBy, leaveAt: o.arriveBy - wOD.s, arriveAt: o.arriveBy, estimated: false,
-                 legs: [walkLeg(wOD, o.destination.name)] };
+    walkOnly = o.leaveNow
+      ? { arriveBy: o.arriveBy, leaveAt: o.now, arriveAt: o.now + wOD.s, estimated: false, legs: [walkLeg(wOD, o.destination.name)] }
+      : { arriveBy: o.arriveBy, leaveAt: o.arriveBy - wOD.s, arriveAt: o.arriveBy, estimated: false,
+          legs: [walkLeg(wOD, o.destination.name)] };
   }
 
   var direct = directCandidates(dirs, o);
@@ -185,7 +190,7 @@ function search(source, o, routes, finish) {
   }
 
   function choose(bus) {
-    if (walkOnly && (!bus || walkOnly.leaveAt > bus.leaveAt)) return walkOnly;
+    if (walkOnly && (!bus || (o.leaveNow ? walkOnly.arriveAt <= bus.arriveAt : walkOnly.leaveAt > bus.leaveAt))) return walkOnly;
     return bus || null;
   }
 
@@ -388,10 +393,12 @@ function livePlan(cand, o, cache) {
       }
       if (pickRun) times = [first[i], pickRun];
     }
-    if (times && (!best || times[0].b.time > best[0].b.time)) best = times;
+    if (times && (!best || (o.leaveNow ? arrival(times) < arrival(best) : times[0].b.time > best[0].b.time))) best = times;
   }
   return best ? buildPlan(cand, best, o, false) : null;
 }
+
+function arrival(times) { return times[times.length - 1].a.time; }
 
 // does the fetched data reach arriveBy? (the last bus leg's boarding or alighting stop lists an arrival of any
 // route at or after arriveBy − final walk; a failed request never does)
@@ -408,10 +415,21 @@ function covered(cand, o, cache) {
   return false;
 }
 
-// estimated plan (no tripKeys): ride and wait slack per leg from observations, worked back from arriveBy
+// estimated plan (no tripKeys): ride and wait slack per leg from observations, worked back from arriveBy (leaving now:
+// forward from now, waiting half a headway for each bus)
 function estimatedPlan(cand, o, cache) {
   var w = cand.walks;
   var times = [];
+  if (o.leaveNow) {
+    var f = o.now + w[0].s;
+    for (var n = 0; n < cand.legs.length; n++) {
+      var est = estimateLeg(cand.legs[n], cache), board = f + Math.round(est.headway / 2);
+      times.push({ b: { time: board, headsign: '' }, a: { time: board + est.ride }, slack: 0 });
+      f = board + est.ride + w[n + 1].s + (n + 1 < cand.legs.length ? o.minTransfer : 0);
+    }
+    var ep = buildPlan(cand, times, o, true);
+    return ep.arriveAt <= o.arriveBy ? ep : null;
+  }
   var t = o.arriveBy - w[w.length - 1].s;
   for (var l = cand.legs.length - 1; l >= 0; l--) {
     var e = estimateLeg(cand.legs[l], cache);
@@ -432,14 +450,17 @@ function bestPlan(cands, o, cache) {
   for (var c = 0; c < cands.length; c++) {
     var cand = cands[c];
     var p = livePlan(cand, o, cache);
-    if (!covered(cand, o, cache)) {
+    if (o.leaveNow) {
+      if (!p) p = estimatedPlan(cand, o, cache);   // a live run beats any estimate
+    } else if (!covered(cand, o, cache)) {
       var e = estimatedPlan(cand, o, cache);
       if (e && (!p || e.leaveAt > p.leaveAt)) p = e;
     }
     if (!p) continue;
     var walked = totalWalk(cand);
-    if (!best || p.leaveAt > best.leaveAt ||
-        (p.leaveAt === best.leaveAt && (walked < bestWalk || (walked === bestWalk && best.estimated && !p.estimated)))) {
+    var better = !best || (o.leaveNow ? p.arriveAt < best.arriveAt : p.leaveAt > best.leaveAt);
+    var tie = best && (o.leaveNow ? p.arriveAt === best.arriveAt : p.leaveAt === best.leaveAt);
+    if (better || (tie && (walked < bestWalk || (walked === bestWalk && best.estimated && !p.estimated)))) {
       best = p;
       bestWalk = walked;
     }
@@ -562,5 +583,6 @@ module.exports = {
   ESTIMATED_SPEED: ESTIMATED_SPEED,
   MAX_ARRIVAL_REQUESTS: MAX_ARRIVAL_REQUESTS,
   DEFAULT_HEADWAY: DEFAULT_HEADWAY,
-  LAST_TRIP_GAP: LAST_TRIP_GAP
+  LAST_TRIP_GAP: LAST_TRIP_GAP,
+  LEAVE_NOW_WINDOW: LEAVE_NOW_WINDOW
 };

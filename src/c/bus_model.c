@@ -87,6 +87,16 @@ bool bus_places_set(BusPlaces *p, int32_t list_id, int index, const char *name, 
   pl->color = color;
   pl->bearing = (bearing >= 0 && bearing < 360) ? (int16_t)bearing : -1;
   pl->walk = walk >= 0 ? walk : -1;
+  pl->eta = -1;
+  pl->badge[0] = 0;
+  return true;
+}
+
+bool bus_places_set_eta(BusPlaces *p, int32_t list_id, int index, int32_t eta, const char *badge) {
+  if (list_id != p->list_id || index < 0 || index >= p->count || !p->items[index].present) return false;
+  BusPlace *pl = &p->items[index];
+  pl->eta = eta >= 0 ? eta : -1;
+  copy_utf8(pl->badge, sizeof pl->badge, badge);
   return true;
 }
 
@@ -108,6 +118,8 @@ void bus_place_as_item(const BusPlace *p, BusItem *out) {
   out->lanes = 1;
   out->walk = p->walk;
   out->lead = -1;
+  copy_utf8(out->badge, sizeof out->badge, p->badge);
+  if (p->badge[0] && p->eta >= 0) out->t[0] = p->eta + 1;
 }
 
 bool bus_model_set_route(BusModel *m, int32_t list_id, int index, const char *route) {
@@ -250,9 +262,16 @@ void bus_format_detail(const BusItem *it, int32_t now, bool clock24, char *buf, 
     append(buf, n, &len, b);
     return;
   }
-  if (it->kind == BUS_KIND_PLACE) {  // the address (walk, arrow and distance are drawn beside it)
+  if (it->kind == BUS_KIND_PLACE) {  // "25m trip · " by bus, the address (walk, arrow and distance are drawn beside it)
     size_t len = 0;
     buf[0] = 0;
+    if (it->t[0] > 0) {
+      char d[12];
+      bus_format_relative(it->t[0] - 1, d, sizeof d);
+      append(buf, n, &len, d);
+      append(buf, n, &len, " trip");
+      if (it->route[0]) append(buf, n, &len, " \xC2\xB7 ");
+    }
     append(buf, n, &len, it->route);
     return;
   }

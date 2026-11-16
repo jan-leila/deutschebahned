@@ -323,7 +323,7 @@ test('encodeNavList: a header and one message per row of the window, its rail pa
                   rail: { marker: 'none', top: 'none', bottom: 'dash' } },
     { type: 'turn', text: 'é'.repeat(40), meters: 2100 }, { type: 'bogus', rail: { marker: 'here', top: 'line', bottom: 'dash' } }];
   const m = protocol.encodeNavList(rows, 'metric', 0);
-  assert.deepEqual(m[0], { NAV_COUNT: 3, NAV_WINDOW: 0 });
+  assert.deepEqual(m[0], { NAV_COUNT: 3, NAV_WINDOW: 0, NAV_HEAD: -1, NAV_HEAD_END: -1 });
   assert.deepEqual(m[1], { NAV_INDEX: 0, NAV_KIND: 0, NAV_TEXT: 'Walk to First', NAV_SUB: '4 min walk', NAV_DIST: '350m', NAV_DIR: 'EB',
                            NAV_COLOR: 0xff0000, NAV_RAIL: 2 << 4 });
   assert.equal(m[2].NAV_KIND, protocol.NAV_KIND.turn);
@@ -334,13 +334,13 @@ test('encodeNavList: a header and one message per row of the window, its rail pa
   assert.equal(m[3].NAV_KIND, protocol.NAV_KIND.info);
   assert.equal(m[3].NAV_DIST, '');
   assert.equal(m[3].NAV_RAIL, 2 | 1 << 2 | 2 << 4);
-  assert.deepEqual(protocol.encodeNavList(null), [{ NAV_COUNT: 0, NAV_WINDOW: 0 }]);
+  assert.deepEqual(protocol.encodeNavList(null), [{ NAV_COUNT: 0, NAV_WINDOW: 0, NAV_HEAD: -1, NAV_HEAD_END: -1 }]);
 });
 
 test('encodeNavList: any length; only the window around the current row is sent, the current row first', () => {
   const many = Array.from({ length: 40 }, (_, i) => ({ type: 'stop', text: 'Stop ' + i }));
   const m = protocol.encodeNavList(many, 'metric', 20);
-  assert.deepEqual(m[0], { NAV_COUNT: 40, NAV_WINDOW: 20 });
+  assert.deepEqual(m[0], { NAV_COUNT: 40, NAV_WINDOW: 20, NAV_HEAD: -1, NAV_HEAD_END: -1 });
   assert.equal(m.length, 1 + protocol.NAV_WINDOW);
   assert.deepEqual(m.slice(1, 4).map(x => x.NAV_INDEX), [20, 21, 19]);
   assert.deepEqual(m.slice(1).map(x => x.NAV_INDEX).sort((a, b) => a - b), Array.from({ length: 16 }, (_, i) => 15 + i));
@@ -359,10 +359,46 @@ test('encodeNavList: any length; only the window around the current row is sent,
 
 test('encodeNavLive: state, current step, time left, distance and bearing; null closes', () => {
   assert.deepEqual(protocol.encodeNavLive({ state: 1, current: 2, sub: '4 min left', distance: 320, bearing: 89.6, units: 'metric' }),
-    { NAV_STATE: 1, NAV_CURRENT: 2, NAV_LSUB: '4 min left', NAV_LDIST: '320m', NAV_BEARING: 90 });
+    { NAV_STATE: 1, NAV_CURRENT: 2, NAV_LSUB: '4 min left', NAV_LDIST: '320m', NAV_BEARING: 90, NAV_TITLE: '' });
   assert.deepEqual(protocol.encodeNavLive({ state: 2, current: 1, sub: '', distance: null, bearing: null }),
-    { NAV_STATE: 2, NAV_CURRENT: 1, NAV_LSUB: '', NAV_LDIST: '', NAV_BEARING: -1 });
+    { NAV_STATE: 2, NAV_CURRENT: 1, NAV_LSUB: '', NAV_LDIST: '', NAV_BEARING: -1, NAV_TITLE: '' });
   assert.deepEqual(protocol.encodeNavLive(null), { NAV_STATE: 0 });
+  const p = protocol.encodeNavLive({ state: 'preview', current: 0, sub: '', distance: null, bearing: null, title: 'Work: leave 8:05 AM', show: true });
+  assert.equal(p.NAV_STATE, 3);
+  assert.equal(p.NAV_SHOW, 1);
+  assert.equal(p.NAV_TITLE, 'Work: leave 8:05 AM');
+  assert.equal(protocol.encodeNavLive({ state: 'arrived', current: 0 }).NAV_STATE, 2);
+  assert.equal('NAV_SHOW' in protocol.encodeNavLive({ state: 'guiding', current: 0 }), false);
+});
+
+test('encodeNavList: a leg header carries its route and badge, folding in the rail; the open leg you are on', () => {
+  const rows = [
+    { type: 'head', text: 'Franklin Station', sub: 'arr 8:24 · 6 stops', meters: 2100, dir: 'EB', color: 'ff0000', route: 'Franklin Av', badge: '2',
+      open: true, rail: { marker: 'none', top: 'none', bottom: 'none' } },
+    { type: 'stop', text: 'Chicago Av', sub: '8:15', color: 'ff0000', rail: { marker: 'stop', top: 'none', bottom: 'line' } },
+    { type: 'fold', text: '3 more stops', sub: '', color: 'ff0000', fold: true, rail: { marker: 'none', top: 'line', bottom: 'line' } },
+    { type: 'head', text: 'Work', sub: '', route: 'Walk', badge: '', open: false, rail: {} }];
+  const m = protocol.encodeNavList(rows, 'metric', 1, 0, 2);
+  assert.deepEqual(m[0], { NAV_COUNT: 4, NAV_WINDOW: 1, NAV_HEAD: 0, NAV_HEAD_END: 2 });
+  const byIndex = {};
+  m.slice(1).forEach(x => { byIndex[x.NAV_INDEX] = x; });
+  assert.equal(byIndex[0].NAV_KIND, protocol.NAV_KIND.head);
+  assert.equal(byIndex[0].NAV_ROUTE, 'Franklin Av');
+  assert.equal(byIndex[0].NAV_BADGE, '2');
+  assert.equal(byIndex[0].NAV_RAIL, protocol.NAV_OPEN);
+  assert.equal(byIndex[0].NAV_DIST, '2.1km');
+  assert.equal('NAV_ROUTE' in byIndex[1], false);
+  assert.equal(byIndex[2].NAV_RAIL & protocol.NAV_FOLDED, protocol.NAV_FOLDED);
+  assert.equal(byIndex[3].NAV_RAIL, protocol.NAV_FOLDED);
+  assert.deepEqual(protocol.encodeNavList(rows, 'metric', 1, 9, 12)[0], { NAV_COUNT: 4, NAV_WINDOW: 1, NAV_HEAD: -1, NAV_HEAD_END: -1 });
+});
+
+test('decodeWatchMessage: unfold, start a previewed trip, undo the last pick; the trip view flag in WATCH_PREFS', () => {
+  assert.deepEqual(protocol.decodeWatchMessage({ NAV_UNFOLD: 4 }), { type: 'navUnfold', index: 4 });
+  assert.deepEqual(protocol.decodeWatchMessage({ NAV_GO: 1 }), { type: 'navGo' });
+  assert.deepEqual(protocol.decodeWatchMessage({ UNDO_SELECT: 1 }), { type: 'undoSelect' });
+  assert.equal(protocol.decodeWatchMessage({ WATCH_PREFS: 8 }).nav, true);
+  assert.equal(protocol.decodeWatchMessage({ WATCH_PREFS: 0 }).nav, false);
 });
 
 // ---- saved locations (§19) ---------------------------------------------------------------------------------
@@ -385,6 +421,14 @@ test('encodePlaces: own header and items; name, address, arrow, distance, walk; 
   assert.equal(off[1].ITEM_DIST, require('../src/common/format').distance(350, 'imperial'), 'imperial by default');
   assert.equal(protocol.encodePlaces(1, Array(20).fill(items[0]))[0].PLACE_COUNT, protocol.MAX_PLACES);
   assert.equal(protocol.KIND.place, 3);
+  const eta = protocol.encodePlaces(1, [Object.assign({}, items[0], { eta: 1499.6, via: '2', viaColor: '00FF00' }),
+                                        Object.assign({}, items[0], { eta: 300, via: '' })]);
+  assert.equal(eta[1].PLACE_ETA, 1500);
+  assert.equal(eta[1].ITEM_BADGE, '2');
+  assert.equal(eta[1].ITEM_COLOR, 0x00FF00, 'the colour of the bus taken');
+  assert.equal(eta[2].ITEM_BADGE, '');
+  assert.equal(eta[2].ITEM_COLOR, 0xFF0000);
+  assert.equal('PLACE_ETA' in m[1], false);
 });
 
 test('decodeWatchMessage: PLACE_SELECT and PLACE_NAV', () => {

@@ -55,6 +55,7 @@ function createSession(deps) {
   var weatherShown = false;
   var placeListId = 0;
   var lastPlaces = null;  // { listId, items, pos, cfg, ctx, sent } the saved locations as last sent (ranked)
+  var watchNav = null;    // the watch has the trip view (WATCH_PREFS); null = not heard yet
 
   function send(messages) {
     try {
@@ -117,6 +118,7 @@ function createSession(deps) {
   }
   function sendPlaces(cfg, pos, ctx, force) {
     var items = context.augment(places.buildItems(cfg, pos), ctx);
+    if (deps.placeEta) items = deps.placeEta.apply(items, pos);
     var ranked = getRanking().rank(items, { places: cfg.places, maxItems: places.MAX_PLACES }, learned);
     var msgs = protocol.encodePlaces(0, ranked, placeOpts());
     var key = JSON.stringify(msgs);
@@ -175,6 +177,7 @@ function createSession(deps) {
   // the last list is sent again with distances in the new units. Returns true when something changed.
   function setPrefs(p) {
     p = isPlainObject(p) ? p : {};
+    if (typeof p.nav === 'boolean') watchNav = p.nav;
     var next = { clock24: p.clock24 === true, units: prefs.units, known: prefs.known };
     if (p.units === 'metric' || p.units === 'imperial') { next.units = p.units; next.known = true; }
     var changed = next.units !== prefs.units || next.clock24 !== prefs.clock24 || next.known !== prefs.known;
@@ -348,6 +351,27 @@ function createSession(deps) {
     return true;
   }
 
+  // "undo last selection" on the watch: the newest pick is forgotten, learnt from again and the lists re-sent
+  function undoSelect() {
+    if (!samples.length) {
+      send([protocol.encodeStatus('No pick to undo')]);
+      return false;
+    }
+    samples.pop();
+    writeJson(STORAGE_KEYS.samples, samples);
+    var cfg = (last && last.cfg) || runtimeConfig(last ? last.pos : null);
+    if (config.training.autoTrain) retrain(cfg);
+    if (last) {
+      var ranked = getRanking().rank(last.ranked || last.items.slice((last.pinned || []).length), cfg, learned);
+      var list = withPinned(last.pinned || [], ranked);
+      var newId = sendList(list, 'Undid a pick (' + samples.length + ' picks)');
+      last = { listId: newId, items: list, pinned: last.pinned, ranked: ranked, pos: last.pos, now: last.now, cfg: cfg,
+               data: last.data, ctx: last.ctx };
+    }
+    if (lastPlaces) sendPlaces(lastPlaces.cfg, lastPlaces.pos, lastPlaces.ctx, true);
+    return true;
+  }
+
   // one pick → a sample (kept: the newest training.maxSamples), then training when it is automatic
   function record(candidates, index, pos, ctx, cfg) {
     samples.push(getOptimize().makeSample(candidates, index, pos, clock(), ctx || null));
@@ -376,6 +400,7 @@ function createSession(deps) {
     }
     if (msg.type === 'select') select(msg.listId, msg.index);
     else if (msg.type === 'placeSelect') selectPlace(msg.listId, msg.index);
+    else if (msg.type === 'undoSelect') undoSelect();
     else if (msg.type === 'prefs') setPrefs(msg);
     return msg;   // e.g. {type: 'wakeup'} is routed to the scheduler by the composition root
   }
@@ -418,6 +443,10 @@ function createSession(deps) {
     refresh: refresh,
     select: select,
     selectPlace: selectPlace,
+    undoSelect: undoSelect,
+    // the saved locations again (a travel time changed)
+    resendPlaces: function () { if (lastPlaces) sendPlaces(lastPlaces.cfg, lastPlaces.pos, lastPlaces.ctx, false); },
+    watchHasNav: function () { return watchNav; },
     handleWatchMessage: handleWatchMessage,
     configPageParams: function () { return { config: config, samples: samples, learned: learned, prefs: prefs }; },
     applySettings: applySettings

@@ -164,6 +164,19 @@ function createScheduler(deps) {
     }
   }
 
+  // leaving `origin` now for place {lat, lon, name}: the plan that gets there first; cb(err, Plan|null)
+  function planNow(place, origin, cb) {
+    cb = once(cb);
+    try {
+      var cfg = config(), now = clock();
+      var req = buildRequest(cfg, place, origin, now, now);
+      req.leaveNow = true;
+      getRouter().plan(getSource(), req, function (err, plan) { cb(err || null, err ? null : (plan || null)); });
+    } catch (e) {
+      cb(e, null);
+    }
+  }
+
   function store(cfg, destId, occurrence, plan, now) {
     plans[destId] = { occurrence: occurrence, plan: plan, summary: summaryOf(cfg, plan), plannedAt: now };
   }
@@ -249,12 +262,13 @@ function createScheduler(deps) {
   function notification(cfg, dest, trigger, plan) {
     var c24 = !!cfg.clock24;
     if (!plan) {
-      return { title: dest.name, body: 'No route found to arrive by ' + format.clock(trigger.occurrence, c24), color: '' };
+      return { title: dest.name, body: 'No route found to arrive by ' + format.clock(trigger.occurrence, c24), color: '',
+               destinationId: dest.id, planned: false };
     }
     var body;
     try { body = getRouter().describe(plan, textOpts(cfg)); } catch (e) { log('describe failed: ' + errorText(e)); body = ''; }
     var title = trigger.kind === 'leave' ? 'Leave now: ' + dest.name : dest.name + ': leave ' + format.clock(plan.leaveAt, c24);
-    return { title: title, body: body, color: firstBusColor(plan) };
+    return { title: title, body: body, color: firstBusColor(plan), destinationId: dest.id, planned: true };
   }
 
   function markHandled(id) {
@@ -392,7 +406,8 @@ function createScheduler(deps) {
     reschedule: reschedule,
     checkDue: checkDue,
     refreshActive: refreshActive,
-    handleWakeup: handleWakeup
+    handleWakeup: handleWakeup,
+    planNow: planNow
   };
 }
 

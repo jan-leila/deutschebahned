@@ -311,6 +311,18 @@ static void test_places(void) {
   CHECK(it.bearing == 90 && it.walk == 240 && it.color == 0xFF0000 && it.t[0] == 0);
   char b[48];
   bus_format_detail(&it, 0, true, b, sizeof b); CHECK_STR(b, "1 Main St");
+  // the time to get there leaving now, by bus: badge and "25m trip" before the address; on foot: the walk says it
+  CHECK(!bus_places_set_eta(&p, 7, 1 + 5, 1500, "2"));
+  CHECK(bus_places_set_eta(&p, 7, 0, 1500, "2"));
+  bus_place_as_item(&p.items[0], &it);
+  CHECK_STR(it.badge, "2");
+  CHECK(it.t[0] == 1501);
+  bus_format_detail(&it, 0, true, b, sizeof b); CHECK_STR(b, "25m trip \xC2\xB7 1 Main St");
+  CHECK(bus_places_set_eta(&p, 7, 0, 300, ""));
+  bus_place_as_item(&p.items[0], &it);
+  CHECK(it.t[0] == 0 && it.badge[0] == 0);
+  CHECK(bus_places_set(&p, 7, 0, "Home", "", -1, 0, "", 0));   // a new place message resets it
+  CHECK(p.items[0].eta == -1);
   bus_places_begin(&p, 8, 0);
   CHECK(p.count == 0 && bus_places_at_row(&p, 0) == NULL);
 }

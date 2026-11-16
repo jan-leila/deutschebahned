@@ -21,7 +21,7 @@ Conventions everywhere:
                  │   └─ scheduler ──► router (trip plans)  ;  triggers (when)    │                  │
                  │          └─► protocol.encodeWakeups / encodeNotify ───────────┤  AppMessage      │
                  └───────────────────────────────────────────────────────────────┼──────────────────┘
- watch (C): main.c (wheel, arrows+compass, notify window, wakeups) ◄─ bus_model / bus_wheel / bus_arrow / bus_wakeup
+ watch (C): main.c (wheel, arrows+compass, side menu, trip view, wakeups) ◄─ bus_model / bus_wheel / bus_nav / bus_menu / …
 ```
 
 Modularity rules: `src/sources/**` never requires anything outside `src/sources/` except the pure `src/common/geo.js`.
@@ -606,7 +606,9 @@ train(samples, priorFn, opts)            // → { weights: {key: number}, before
 
 Message keys (`package.json` `messageKeys`): `LIST_ID ITEM_COUNT ITEM_INDEX ITEM_KIND ITEM_TITLE ITEM_T0 ITEM_T1 ITEM_T2 ITEM_BADGE ITEM_COLOR STATUS SELECT_INDEX REFRESH
 ITEM_BEARING ITEM_DIST ITEM_DIR ITEM_LANES ITEM_DIR2 ITEM_U0 ITEM_U1 ITEM_U2 WAKEUP_COUNT WAKEUP_INDEX WAKEUP_TIME WAKEUP_COOKIE WAKEUP_FIRED NOTIFY_TITLE NOTIFY_BODY NOTIFY_COLOR ITEM_ROUTE TEST_NOW WATCH_PREFS ITEM_WALK ITEM_LEAD NAV_START NAV_STOP NAV_STATE NAV_TEXT NAV_SUB NAV_DIST NAV_BEARING NAV_COLOR
-WEATHER_COUNT WEATHER_START WEATHER_NOW WEATHER_HI WEATHER_LO WEATHER_TEMPS WEATHER_RAIN PLACE_COUNT PLACE_INDEX PLACE_SELECT PLACE_NAV`.
+NAV_COUNT NAV_INDEX NAV_KIND NAV_DIR NAV_CURRENT NAV_LSUB NAV_LDIST NAV_RAIL NAV_WINDOW NAV_FETCH WEATHER_COUNT WEATHER_START WEATHER_NOW
+WEATHER_HI WEATHER_LO WEATHER_TEMPS WEATHER_RAIN PLACE_COUNT PLACE_INDEX PLACE_SELECT PLACE_NAV NAV_BADGE NAV_ROUTE NAV_HEAD NAV_HEAD_END
+NAV_SHOW NAV_TITLE NAV_UNFOLD NAV_GO UNDO_SELECT PLACE_ETA` (new keys go at the end: their numbers follow their order).
 `TEST_NOW` (test only, sent by `src/pkjs/ui-fixture.js`): unix seconds the watch shows its times against instead of its clock.
 
 Phase 4 (carousel): `TITLE_MAX_BYTES = 63` (full stop names; the watch scrolls what doesn't fit), item messages carry `ITEM_ROUTE` =
@@ -641,8 +643,11 @@ encodeNotify(n)                    // {title, body, color} → ONE message {NOTI
 decodeWatchMessage(payload)        // { WAKEUP_FIRED: cookie }          → {type:'wakeup', cookie: Number(cookie)} (checked first)
                                    // { SELECT_INDEX: i, LIST_ID: id } → {type:'select', listId, index}
                                    // { REFRESH: any }                  → {type:'refresh'}
-                                   // { WATCH_PREFS: flags }             → {type:'prefs', clock24, units: 'metric'|'imperial'|null}
-                                   //   PREFS = {CLOCK24: 1, METRIC: 2, UNITS_KNOWN: 4}; units null unless UNITS_KNOWN
+                                   // { WATCH_PREFS: flags }             → {type:'prefs', clock24, units: 'metric'|'imperial'|null, nav}
+                                   //   PREFS = {CLOCK24: 1, METRIC: 2, UNITS_KNOWN: 4, NAV: 8}; units null unless UNITS_KNOWN;
+                                   //   nav: the watch has the trip view (§18)
+                                   // { UNDO_SELECT: 1 }                 → {type:'undoSelect'}
+                                   // NAV_* / PLACE_*: §18, §19
                                    // anything else                      → null
 createSender(sendFn, opts)         // opts.retries (default 2); opts.timeout (ms, optional; index.js: 15000): a send neither acked
                                    //   nor refused by then counts as a failure (retried as above), so a companion app that never
@@ -658,7 +663,8 @@ createSender(sendFn, opts)         // opts.retries (default 2); opts.timeout (ms
   sender.pending()                 //   → number of messages not yet acknowledged (queued + in flight)
 ```
 
-Watch → phone: `{SELECT_INDEX, LIST_ID}` when SELECT is pressed on an item; `{REFRESH: 1}` on long SELECT; `{WAKEUP_FIRED: cookie}` when a
+Watch → phone: `{SELECT_INDEX, LIST_ID}` when an item is selected (a long SELECT, or "Select" in the menu); `{UNDO_SELECT: 1}` ("Undo
+selection"); `{WAKEUP_FIRED: cookie}` when a
 wakeup fires while the app is running; `{WATCH_PREFS: flags}` once the phone has talked to it (until delivered): the watch's 24 h clock
 style and, where Pebble Health exists, the measurement system it shows distances in.
 
@@ -691,7 +697,11 @@ deps.locale  // optional: the phone's locale, for the units guess before the wat
   If `training.autoTrain`: `learned = optimize.train(samples, k => ranking.weightFor(k, cfg, null), config.training).weights`, saved
   (`cfg` = the runtime view the list was ranked with).
   Re-ranks the last list's items, increments `listId`, sends it with status `'Learned (N picks)'`. Returns `true`.
-- `handleWatchMessage(payload)`: decodes with protocol, dispatches to `select` / `selectPlace` (§19) / `refresh` / `setPrefs`; returns the decoded message (`null` when
+- `undoSelect()` ("Undo selection" on the watch): drops the newest sample (saved), retrains when `autoTrain`, re-ranks and re-sends the
+  last list (status `'Undid a pick (N picks)'`) and the places; no sample → sends the status `'No pick to undo'`, returns `false`.
+- `watchHasNav()` → the WATCH_PREFS `nav` flag (null until the watch has said). `resendPlaces()`: the places again (§19).
+- `deps.placeEta` (optional, §19): `apply(items, pos)` adds each place's travel time before the places are ranked and sent.
+- `handleWatchMessage(payload)`: decodes with protocol, dispatches to `select` / `selectPlace` (§19) / `undoSelect` / `setPrefs`; returns the decoded message (`null` when
   unrecognized). `wakeup` is not handled by the session — the root routes it to the scheduler.
 - `configPageParams()` → `{config, samples, learned, prefs}`.
 - `applySettings(result)`: `result = {config, learned?, clearSamples?}` (as returned by the settings page).
@@ -714,7 +724,8 @@ every refresh that ran (not one skipped as busy) → `voice.flush()`.
 **Search indexes**: 15 s after `ready` and after settings are saved, each system whose stored index is missing, stale or for other settings
 is indexed in turn (`catalog.build` with its own `registry.createFor` provider) and saved; failures only logged.
 `session` gets `locale: navigator.language`. Scheduler: `createScheduler({..., sendWakeups: w => sender.sendAll(encodeWakeups(w)),
-notify: n => sender.sendAll([encodeNotify(n)])})`; on `ready`: `scheduler.load()`, `scheduler.checkDue()`, and `scheduler.replan()` when no plan is stored for
+notify})`: a due trip → `nav.preview(n.destinationId, n.title, n.planned ? null : n.body)` (§18); while a trip is running only its
+title as the status; a watch without the trip view (`session.watchHasNav() === false`, aplite) → `sendAll([encodeNotify(n)])`. On `ready`: `scheduler.load()`, `scheduler.checkDue()`, and `scheduler.replan()` when no plan is stored for
 an enabled destination's next occurrence; every refresh tick: `checkDue()`; `applySettings` → `scheduler.replan()`; watch `wakeup` message → `checkDue()`.
 The settings page params also get `plans: scheduler.plans()`, `sources: registry.types()`, `prefs` (from `configPageParams`) and
 `catalogs = {providerId: catalog.toText(packed)}` — the stored indexes of the configured systems (stale ones too), in the text form.
@@ -830,7 +841,7 @@ includes `<pebble.h>` when `PBL_RECT`/`PBL_ROUND` is defined, `<time.h>` otherwi
 ### `bus_model.h` — list state and text
 
 ```c
-#define BUS_MAX_ITEMS 12
+#define BUS_MAX_ITEMS 12   // aplite: 8 (it keeps the first ones), with titles ≤ 39 and route names ≤ 31 bytes
 #define BUS_TITLE_LEN 32
 #define BUS_BADGE_LEN 8
 #define BUS_STATUS_LEN 48
@@ -920,8 +931,16 @@ at most 8. main.c then `wakeup_cancel_all()` and `wakeup_schedule(time, cookie, 
   - rows are drawn inset by `slot.inset` on both sides, so the list visibly narrows towards the edges.
   - Color −1 → `GColorCobaltBlue` (color) / black. Aplite/diorite (black & white): badges black with white text, bars black.
 - UP/DOWN (repeating, ~120 ms) move the selection; the position animates to the new row over ~180 ms (ease-out) by
-  updating `pos_milli` and redrawing; a press during an animation retargets it from the current position.
-- SELECT on an item → send `{SELECT_INDEX, LIST_ID}`, short vibe; long SELECT → send `{REFRESH: 1}`.
+  updating `pos_milli` and redrawing; a press during an animation retargets it from the current position. UP on the first row
+  unfolds the saved locations above it (§19).
+- A long SELECT selects the row: `{SELECT_INDEX, LIST_ID}` (a place: `PLACE_SELECT`), short vibe.
+- A short SELECT opens the **side menu** (`bus_menu.h`, pure: `bus_menu_home(has_nav, trip, row)` / `bus_menu_trip(preview,
+  off_current)`): a white panel sliding in from the right edge (~70 % of the width; no slide on aplite), one item per line
+  (`GOTHIC_18_BOLD`, 26 px), the selected one on a blue (B&W: black) rounded bar. UP / DOWN choose, SELECT does it, BACK closes.
+  Home screen: Show trip (a trip is running), Select, Start trip / Replace trip (a row is selected), Clear trip (`NAV_STOP`), Undo
+  selection (`UNDO_SELECT`), Close; aplite: Select, Undo selection, Close. The trip view's menu: §18.
+- **Status line marks**: while a trip is running, a dot in its colour at the left; while the saved locations are folded above the
+  selected first row, a small up arrow at the right.
 - **Arrow + distance** on every stop tile (levels 0 and 1): an arrow filled with the route color (black on B&W) pointing at the stop,
   rotated by the compass heading when `compass_service` reports a valid heading (north-up otherwise), with `dist` drawn under it
   (GOTHIC_14). Drop-off tiles: same arrow, `dist` = distance left to ride, and the detail line shows the ETA.
@@ -935,15 +954,16 @@ at most 8. main.c then `wakeup_cancel_all()` and `wakeup_schedule(time, cookie, 
   tile (that line's times get the rest of the width); level 1 between the times and the arrow when at least 24 px of times stay.
 - **Direction labels**: `dir` is shown as its full name (`bus_dir_name`: `NB` → `North`, `SB` → `South`, `EB` → `East`, `WB` → `West`)
   next to the badge; a two-lane pickup tile shows at level 0 one line per lane: `"North 3m, 12m"` / `"South 5m"` (level 1: lane 0 only).
-- **Notifications**: NOTIFY_* → a notification window (color bar in NOTIFY_COLOR, title, scrollable body), double vibe, light; BACK closes.
+- **Notifications** (aplite only: the others show a scheduled trip as a preview in the trip view, §18): NOTIFY_* → a notification
+  window (color bar in NOTIFY_COLOR, title, scrollable body), double vibe, light; BACK closes.
 - **Wakeups**: WAKEUP_* → bus_wakeup → scheduled as above; `wakeup_service_subscribe` → send `{WAKEUP_FIRED: cookie}`.
 - No items → the status centred.
 - **Display preferences**: on every inbox message until one is acknowledged (and no wakeup report is pending), send `{WATCH_PREFS: flags}`
   (§7): bit 0 `clock_is_24h_style()`; with `PBL_HEALTH`, `health_service_get_measurement_system_for_display(HealthMetricWalkedDistanceMeters)`
-  metric → bits 1 + 2, imperial → bit 2 (unknown / aplite → neither).
+  metric → bits 1 + 2, imperial → bit 2 (unknown / aplite → neither); bit 3 = the trip view (every platform but aplite).
 - Inbox: `ITEM_COUNT` → `begin_list` (selection kept, clamped); `ITEM_INDEX` → `set_item` (with `ITEM_BADGE`, `ITEM_COLOR`,
   missing color → −1); `STATUS` → `set_status`; then redraw. A minute tick redraws so relative times update.
-  `app_message_open(768, 64)`.
+  `app_message_open(768, 64)` (aplite: 512, it gets no trip rows).
 
 ## 12. `src/common/directions.js`, `src/common/format.js` (done, shared helpers)
 
@@ -962,8 +982,14 @@ plan(source, request, cb)      // cb(err, Plan | null)   null = no way to arrive
 describe(plan, opts)           // → string, the notification body. opts = {units, clock24}
 summary(plan, opts)            // → short string ≤ 40 chars, e.g. "Leave 8:12 AM · 2 at 8:16 AM"
 ESTIMATED_SPEED = 6            // m/s, bus speed used when no live times are available
-MAX_ARRIVAL_REQUESTS = 8; DEFAULT_HEADWAY = 900
+MAX_ARRIVAL_REQUESTS = 8; DEFAULT_HEADWAY = 900; LEAVE_NOW_WINDOW = 7200
 ```
+
+**Leaving now** (`request.leaveNow: true`, no `arriveBy`): the plan that **arrives first** instead of the one that leaves last, looking
+`LEAVE_NOW_WINDOW` (2 h) ahead (arriveBy = now + that). The same candidates and request budget; within a candidate the run getting
+there first; a live run always beats an estimate, which is worked forward from now (each bus after half its headway, transfers with
+`minTransfer`); between candidates the earliest `arriveAt`, ties → less walking. Walk only: `leaveAt = now`, `arriveAt = now + walk`,
+chosen when it gets there no later than the bus plan.
 
 `source` is any provider (§3; only `route` and `arrivals` are used). `request = {origin, destination /*{lat, lon, name?}*/, arriveBy, now, routeIds,
 routeNames?: {id: name}, routeColors?: {id: 'RRGGBB'}, walkSpeed, maxWalk, transferWalk, maxTransfers, minTransfer, lastTransfer, routeCache?: {id: Route}}`
@@ -1052,6 +1078,9 @@ STORAGE_KEYS = { plans: 'deutschebahned.plans', handled: 'deutschebahned.handled
   `reschedule()`. A `checkDue`/`replan` while one runs → skipped (`cb(null, null)`).
 - `checkDue` locates once per call (fixed mode: `config.location`); if the fresh re-plan fails (locate or router error) the stored plan is kept and
   used for the notification (a router `null` = no route). Destinations without a stored plan are planned too. `cb(err, notifications[])`. `handled()` → the id list.
+  Each notification also carries `destinationId` and `planned` (false: no route): the root shows it as a trip preview (§9, §18).
+- `planNow(place, origin, cb)`: the leave-now plan (§13) from `origin` to `place` `{lat, lon, name}`, the request built like a
+  destination's; `cb(err, Plan | null)` (§19: the places' travel times).
 - `handleWakeup(cookie, cb?)` → `checkDue(cb)`. The root should also call `checkDue` on launch / after `replan` (past-due triggers get no wakeup).
 - Tests: `test/triggers.test.js`, `test/scheduler.test.js` (fake router).
 
@@ -1113,88 +1142,129 @@ low (`GOTHIC_14`, `GOTHIC_18` when the panel is ≥ 56 px), and beside them the 
 column), a baseline, and the temperature line 2 px wide (`GColorRed`; B&W black), carried flat to both edges of the graph.
 Tests: `test/weather.test.js`, `test/session.test.js`, `test/c/test_bus_weather.c`, `test/c/test_bus_wheel.c`.
 
-## 18. Navigation — `src/common/nav.js`, `src/common/routing.js`, `protocol.encodeNavList / encodeNavLive`, `src/c/bus_nav.{h,c}`
+## 18. Trips — `src/common/nav.js`, `src/common/nav-rows.js`, `src/common/routing.js`, `protocol.encodeNavList / encodeNavLive`, `src/c/bus_nav.{h,c}`
 
-Long SELECT on a tile starts navigation to it (it no longer refreshes; the phone refreshes on its own timer). The watch shows
-the steps as a wheel like the main list, the current step open; the phone follows the GPS every `POLL_MS` (5 s), advances through
-the steps and sends what changed. **Aplite has no navigation** (not enough RAM: the long press does nothing there).
+A **trip** is navigation that the phone follows: to a tile (a pickup stop, a drop-off stop, a saved location, a planned trip leg) or a
+scheduled destination. It is started from the side menu ("Start trip" / "Replace trip", §11) and runs until it is cancelled
+("Clear trip", "Cancel trip"), replaced, a settings save, or 2 h have passed, also while the watch shows its home screen. A scheduled
+trip that is due (§15) is first shown as a **preview**: its legs, nothing followed, until the watch starts it. The phone follows the
+GPS every `POLL_MS` (5 s), advances through the steps and sends what changed. **Aplite has no trips** (not enough RAM: it gets the
+scheduled trip as a notification, §15).
 
-- Watch → phone: `{NAV_START: index, LIST_ID}` (index −1 when no tile is selected → ignored) and `{NAV_STOP: 1}` (BACK, or the window
-  closing). Decoded as `{type: 'navStart', listId, index}` / `{type: 'navStop'}`. `REFRESH` from the watch is no longer decoded
-  (phone → watch, `REFRESH` is still the UI test hook).
+- Watch → phone:
+  - `{NAV_START: index, LIST_ID}` / `{PLACE_NAV: index, LIST_ID}` → `{type: 'navStart', listId, index, places?}`: a trip to that tile,
+    replacing the one running (a stale list id / bad index changes nothing).
+  - `{NAV_STOP: 1}` → `navStop`: the trip is cancelled or the preview dismissed.
+  - `{NAV_GO: 1}` → `navGo`: start the previewed trip.
+  - `{NAV_UNFOLD: row}` → `navUnfold`: a long SELECT on a row (below).
+  - `{NAV_FETCH: row}` → `navFetch` (below).
 - Phone → watch, the **row list** (any length, ≤ `NAV_MAX_ROWS` 1000), in windows: the watch keeps `NAV_WINDOW` 16 rows (row i in slot
-  i % 16). `encodeNavList(rows, units, center)` → `[{NAV_COUNT: n, NAV_WINDOW: center (the current row)}, …the window]`. The window is
-  `navWindow(center, n)` = rows `[lo, lo + 16)` with `lo = clamp(center − NAV_WINDOW_BEFORE 5, 0, n − 16)`. It is sent centre first,
-  then outwards. Each row is `{NAV_INDEX: i, NAV_KIND, NAV_TEXT, NAV_SUB, NAV_DIST, NAV_DIR, NAV_COLOR, NAV_RAIL}`.
-  - `NAV_KIND`: walk 0 · board 1 · ride 2 · wait 3 · arrive 4 · info 5 · turn 6 · stop 7 (a stop along a ride) · fold 8 (hidden rows).
-  - `NAV_TEXT` is the instruction. `NAV_SUB` is its detail ("4 min walk · 44 at 8:10", "First · 8:10", "8 stops · Arrive 8:20").
-  - `NAV_DIST` is the row's **length** from the previous point (as `ITEM_DIST`, '' = unknown). `NAV_DIR` is its travel direction
-    (`NB EB SB WB`; a bus leg's own). `NAV_COLOR` is the colour. Strings are ≤ 47 bytes each.
-  - `NAV_RAIL` = marker | top << 2 | bottom << 4. Markers: none 0 · stop 1 (hollow circle) · here 2 (filled: the stop you are at).
-    Lines: none 0 · line 1 (solid, the row's colour) · dash 2 (grey).
+  i % 16). `encodeNavList(rows, units, center, head, headEnd)` → `[{NAV_COUNT: n, NAV_WINDOW: center (the current row), NAV_HEAD,
+  NAV_HEAD_END}, …the window]`. `NAV_HEAD` / `NAV_HEAD_END` are the header row and the last row of the open leg you are on (−1 when
+  there is none). The window is `navWindow(center, n)` = rows `[lo, lo + 16)` with `lo = clamp(center − NAV_WINDOW_BEFORE 5, 0, n − 16)`,
+  sent centre first, then outwards. Each row is `{NAV_INDEX: i, NAV_KIND, NAV_TEXT, NAV_SUB, NAV_DIST, NAV_DIR, NAV_COLOR, NAV_RAIL}`,
+  and a leg header also has `NAV_ROUTE` and `NAV_BADGE`.
+  - `NAV_KIND`: walk 0 · board 1 · ride 2 · wait 3 · arrive 4 · info 5 · turn 6 · stop 7 (a stop along a ride) · fold 8 (hidden rows)
+    · head 9 (a leg's header).
+  - A step row: `NAV_TEXT` is the instruction, `NAV_SUB` its detail. A step still ahead starts with the time you get there ("8:16 AM",
+    "8:16 AM · First"). `NAV_DIST` is its **length** from the previous point (as `ITEM_DIST`, '' = unknown). `NAV_DIR` is its travel
+    direction (`NB EB SB WB`; a bus leg's own). `NAV_COLOR` is the colour.
+  - A header: `NAV_TEXT` is where the leg goes (the stop you get off at, the stop / place you walk to), `NAV_SUB` is "arr 8:24 AM ·
+    6 stops" (a walk: "· 3 turns"; the stops / turns still ahead on the leg you are on), `NAV_DIST` the leg's length (still to go),
+    `NAV_DIR` its direction, `NAV_ROUTE` its band (the route's full name, else "to <headsign>"; a walk: "Walk", "Walk · 2 at 8:09"),
+    `NAV_BADGE` the route's short name, `NAV_COLOR` the route's colour (a walk: grey `555555`).
+  - Strings are ≤ 47 bytes each, the badge ≤ 7.
+  - `NAV_RAIL` = marker | top << 2 | bottom << 4 | folding. Markers: none 0 · stop 1 (hollow circle) · here 2 (filled: the stop you
+    are at). Lines: none 0 · line 1 (solid, the row's colour) · dash 2 (grey). Folding: `NAV_FOLDED` 64 (a long SELECT opens it: a
+    closed leg's header, a fold row) · `NAV_OPEN` 128 (a long SELECT closes it: an open leg's header).
 
-  The list is sent with its header whenever a row changes. A header from the phone drops queued, unsent messages of an older nav list.
-  Watch → phone `{NAV_FETCH: i}` (→ `{type: 'navFetch', index}`) → `encodeNavRows(rows, units, i)`, the window around row i with
-  no header.
-- **Rows** (`src/common/nav-rows.js`, pure: `build(steps, i, {walkSpeed})` → `{rows, current}`): the steps split into legs. A walk is
-  one walk step or its turns. A ride is board? + ride, plus a wait / arrive step right after it, which happens at its last stop. Any
-  other step is a leg of its own.
-  - The leg you are on is **open**:
-    - A walk shows the 2 turns behind the current one and the 3 ahead, a fold row for the rest ("12 more turns", "3 earlier
-      turns"), and always its last turn.
-    - A ride shows its stops (`ride.stops`, see below) in the same way: before boarding, around its first stop; riding, around
-      `ride.at`, the stop you are at (marker here, sub "4 stops to <stop>"). It always shows the stop you get off at:
-      "Get off at <stop>", sub "8 stops · Arrive 8:20", or the wait / arrive step that ends the ride.
-  - Every other leg is **folded**: a walk is one row (a routed walk: its turns' total length), a ride is two (where you board,
-    where you get off).
-  - A fold of one row is just that row.
-  - Rails: stop rows of a ride, and wait / arrive rows, have a stop marker. Rows of one ride are joined by its line, everything
-    else by dashes. Info rows have no rail, and neither do the ends of the list.
-  - The current row is the "here" stop while riding, else the current step's row.
+  The list is sent with its header whenever a row changes (the times change at most once a minute). A header from the phone drops
+  queued, unsent messages of an older trip list. `{NAV_FETCH: i}` → `encodeNavRows(rows, units, i)`, the window around row i with no
+  header.
+- **Rows** (`src/common/nav-rows.js`, pure: `build(steps, i, {walkSpeed, clock24, now, live, start, preview, open, expand})` → `{rows,
+  current, head, headEnd, legs}`): the steps split into legs. A walk is one walk step or its turns. A ride is board? + ride, plus a
+  wait / arrive step right after it, which happens at its last stop. Any other step is a leg of its own (one row, no header).
+  - Every walk / ride is a **header** row, and while it is **open** its steps under it. The leg you are on is open, the others closed,
+    unless opened / closed on the watch (`open[leg]`; a leg you move on to opens again). A preview has every leg closed and no
+    current row.
+  - An open walk shows the 2 turns behind the current one and the 3 ahead, a fold row for the rest ("12 more turns", "3 earlier
+    turns"), and always its last turn. An open ride shows its stops (`ride.stops`, see below) in the same way: before boarding, around
+    its first stop; riding, around `ride.at`, the stop you are at (marker here). It always shows the stop you get off at ("Get off at
+    <stop>", or the wait / arrive step that ends the ride). A fold of one row is just that row. A long SELECT on a fold row shows
+    every row of that leg (`expand[leg]`).
+  - **Times** (`etas`): from now (a preview: the plan's leave time, at least now), walking at `walkSpeed` (the current step from `live`
+    metres away), a bus at its departure / arrival (no times: 6 m/s), a wait until its next time you can make. A ride's stops are timed
+    between boarding and getting off by their distance along it.
+  - Rails: stop rows of a ride, and wait / arrive rows, have a stop marker. Rows of one ride are joined by its line, a walk's by dashes.
+    Headers and info rows have no rail, and neither do the ends of the list.
+  - The current row is the "here" stop while riding, else the current step's row (its leg closed: its header).
 - **Ride stops** (`rideStops(data, routeId, dirId, fromId, toId, pos)`): the stops of one direction of the route from `fromId` to
   `toId`, leaving out stops without a position. Plan legs carry `dirId`, so that direction is tried first, and the first direction
   serving both stops in order is used. A drop-off has no `fromId`: once the first position is known, its ride starts at the stop
   nearest you before `toId`, over every direction. While riding, `ride.at` = the last stop passed: the nearest stop ahead, minus
   one while you are still closer to the stop before it than that stop is to it, or itself within 40 m. It never goes back.
-- Phone → watch, the **live guidance** `encodeNavLive({state, current, sub, distance, bearing, units})` → `{NAV_STATE: 1 guiding |
-  2 arrived (the current step is the last kind: wait / arrive / info), NAV_CURRENT: row index, NAV_LSUB: time left ("4 min left",
-  "Departs in 10 min", "Arrive in 12 min", "Next 5 min"), NAV_LDIST: distance to the step's target, NAV_BEARING: −1 = no arrow}`,
-  sent when it changes (bearing in 5° steps); `encodeNavLive(null)` → `{NAV_STATE: 0}` closes the window.
-- Steps, from the session's last list (`lastList()` carries `data` for stop coordinates): *pickup* → walk to the stop, then "Wait for the 44"
-  (next time); *drop-off* → "Ride to <stop>", then "Get off here"; *trip* → every remaining leg of the stored plan:
-  walk (radius 30 m) → board (until `departAt` + 30 s) → ride (radius 60 m or `arriveAt` + 60 s) → … → "Arrive at <destination>".
-  A stop without coordinates → an info step, no arrow. A route is navigated to as its pickup tile: the most accessible stop of that route.
-- Navigation ends on `navStop`, a new settings save, or after 2 h.
+- Phone → watch, the **live state** `encodeNavLive({state, current, sub, distance, bearing, units, title, show})` → `{NAV_STATE: 1
+  guiding | 2 arrived (the current step is the last kind: wait / arrive / info) | 3 preview, NAV_CURRENT: row index, NAV_LSUB: time
+  left ("4 min left", "Departs in 10 min", "Arrive in 12 min", "Next 5 min"), NAV_LDIST: distance to the step's target, NAV_BEARING:
+  −1 = no arrow, NAV_TITLE: a preview's top line, NAV_SHOW?: 1 = open the trip view (a trip just started, a preview)}`, sent when it
+  changes (bearing in 5° steps); `encodeNavLive(null)` → `{NAV_STATE: 0}`: no trip (the view closes).
+- Steps, from the session's last list (`lastList()` carries `data` for stop coordinates): *pickup* → walk to the stop, then "Wait for
+  the 44" (next time); *drop-off* → "Ride to <stop>", then "Get off here"; *trip* → every remaining leg of the stored plan: walk
+  (radius 30 m) → board (until `departAt` + 30 s) → ride (radius 60 m or `arriveAt` + 60 s) → … → "Arrive at <destination>". A stop
+  without coordinates → an info step, no arrow. A route is navigated to as its pickup tile: the most accessible stop of that route.
+- **Preview** (`preview(destinationId, title, empty)`): the scheduled destination's stored plan as a trip that is not followed (one
+  position fix for the first walk's length; no polling). No plan → one info row `empty`. Refused (false) while a trip is running.
+  `go()` starts it: followed from now, the first leg open.
 - **Routing source** (`routingUrl`, optional): a URL template with `{fromLat} {fromLon} {toLat} {toLon}` (or `{from}` / `{to}` = `lat,lon`),
   fetched once per walking step. Answers understood: `{steps: [{text, lat, lon}]}`, `{points: [{lat, lon}] | [[lat, lon]]}`, OSRM
   (`routes[0].legs[].steps[].maneuver` → instructions, else `routes[0].geometry.coordinates`); ≤ 40 waypoints. The walking step is
   replaced by one `turn` step per waypoint (passed within 20 m; the last within 30 m), every one kept (the rows fold them). A failed
   fetch keeps the straight arrow.
-- **Watch model:** `bus_nav_begin(count, center) / set_step(…, rail) / set_live` keep the rows and the live state.
+- **Watch model:** `bus_nav_begin(count, center, head, head_end) / set_step(…, rail, badge, route) / set_live(…, title)` keep the rows
+  and the live state.
   - `begin` keeps the rows it has, marked stale, and draws them until they are re-sent. It drops rows past the new end.
+  - The open leg's header is also kept on its own (`head_row`); `bus_nav_pinned(sel)`: the selection is on that leg's other rows.
   - Strings are cut at UTF-8 boundaries, and a bearing outside 0..359 becomes −1.
-  - `set_live` returns true when the current row changed: the watch scrolls to it with one short vibration.
+  - `set_live` returns true when the current row changed: the watch scrolls to it with one short vibration (also while the trip view
+    is closed). `bus_nav_running`: a trip (guiding / arrived, not a preview).
   - `bus_nav_fetch_for(sel)`: when a row within 3 of the selection is missing or stale and not in the window on its way (the last
     one sent or asked for), it gives the row to send as `NAV_FETCH`. It is checked on every redraw, and if the outbox is busy the
     next redraw asks again.
-- **Watch display:** the nav window is a wheel (`bus_wheel`).
-  - **Rail:** left of every row, at x = 9 on rectangular screens (one straight line) or the row's inset + 9 on round ones. Stops are
-    a circle in the route colour with radius 6 / 5 / 4 by level, hollow (white inside) or filled for "here". Lines meet the
+- **Watch display:** the trip view is a wheel (`bus_wheel`), opened by `NAV_SHOW` or "Show trip".
+  - **Header rows** are drawn like a home tile: at level 0 a band in the route's colour with the route (the leg's length at its
+    right), the badge, direction and where it goes, then its detail; at levels 1 / 2 the badge and where it goes, with the leg's
+    colour down its left edge. A small triangle at the right end of the title shows what a long SELECT does (right: open, down: close).
+  - **Pinned header:** while the selection is on the open leg's rows below its header, the header (54 px, as level 0) stays at the
+    top and the wheel turns in the room under it; rows up to the header pass under it. On the header itself, above it or on the
+    next leg, it is an ordinary row.
+  - **Rail:** left of every step row, at x = 9 on rectangular screens (one straight line) or the row's inset + 9 on round ones. Stops
+    are a circle in the route colour with radius 6 / 5 / 4 by level, hollow (white inside) or filled for "here". Lines meet the
     circle's edge, centred on the title line. A ride's line is 3 px in its colour. Walking is grey dashes, 4 px every 7 px, phased
     on the wheel's y so they line up across rows. On B&W screens both are black.
-  - **Level 0:** a band with the kind, direction and the row's length, then the instruction (scrolls when long), then the detail.
-    The current row adds the time left beside an arrow over the distance.
-  - **Level 1:** a kind pill (none for stop and fold rows), the instruction and the detail.
-  - Done rows are dimmed. The status line reads "Step 2 of 5" (rows).
-  - UP / DOWN look ahead or back, SELECT returns to the current row, BACK stops.
-  Tests: `test/nav.test.js`, `test/routing.test.js`, `test/c/test_bus_nav.c`.
+  - **Step rows, level 0:** a band with the kind, direction and the row's length, then the instruction (scrolls when long), then the
+    detail. The current row adds the time left beside an arrow over the distance. **Level 1:** a kind pill (none for stop and fold
+    rows), the instruction and the detail.
+  - Done rows are dimmed. The status line reads "Step 2 of 5" (rows); a preview's reads its title.
+  - UP / DOWN look ahead or back. A long SELECT on a header / fold row sends `NAV_UNFOLD`. A short SELECT opens the side menu: Home
+    (the trip goes on), Go to current (when you are not on it), Cancel trip, Close; a preview: Start trip (`NAV_GO`), Dismiss, Close.
+    BACK goes home (the trip goes on); on a preview it dismisses it (`NAV_STOP`).
+  Tests: `test/nav.test.js`, `test/nav-rows.test.js`, `test/routing.test.js`, `test/c/test_bus_nav.c`.
 
 ## 19. Saved locations and the learning context — `src/common/places.js`, `src/common/context.js`, `protocol.encodePlaces`
 
-**Places**: `config.places` (§2) are shown on the watch *above* the first row: UP on the first row of the list (also on the empty
-screen) switches the wheel to the places, the best-ranked one selected at the bottom (next to the list), UP for the next ones; DOWN
-from the bottom row or BACK returns to the list's first row. Only a fresh press crosses between the two (not the button's auto-repeat, `click_number_of_clicks_counted > 1`):
-holding UP stops at the list's first row. The status line reads "Saved places"; there is no weather panel in that view.
+**Places**: `config.places` (§2) unfold on the watch *above* the first row, between the weather panel and the list: UP on the first
+row of the list (also on the empty screen) opens them in the same wheel, the best-ranked one selected (next to the list), UP for the
+next ones. Scrolling down onto the list again folds them away once none is on screen (the rows renumbered, nothing moves); BACK goes
+straight back to the list's first row. Only a fresh press opens them (not the button's auto-repeat, `click_number_of_clicks_counted
+> 1`): holding UP stops at the list's first row. While they are folded and the first row is selected, a small arrow at the right of
+the status line says they are there. The status line reads "Saved places" while one is selected.
+
+**How long to get there** (`src/common/place-eta.js`): each place's travel time leaving now, from the trip planner's leave-now plan
+(`router.plan` with `leaveNow`, §13; `scheduler.planNow(place, origin, cb)` builds the request like a destination's). `createPlaceEta({plan,
+clock, onChange, later?})`: `apply(items, pos)` gives each item `eta` (s, counting down since it was planned), `via` (the first bus's
+route name, '' on foot) and `viaColor` from what is known near `pos` (planned ≤ 15 min ago, within 300 m), and plans the stale ones
+(> 5 min, or moved) one at a time afterwards; a changed time calls `onChange` on its own turn (the session sends the places again,
+`resendPlaces`). A failed plan / no plan → nothing shown.
 
 ```js
 places.buildItems(cfg, pos) // cfg: runtime view → [{kind: 'place', key: 'place:<id>', placeId, title: name, address, color: '',
@@ -1203,9 +1273,10 @@ places.buildItems(cfg, pos) // cfg: runtime view → [{kind: 'place', key: 'plac
                             //   distance / walk null, feature 0
 protocol.encodePlaces(listId, items, opts) // opts {units, showWalk, showArrow} as encodeList →
   // [{LIST_ID, PLACE_COUNT: n ≤ MAX_PLACES}, {LIST_ID, PLACE_INDEX: i, ITEM_TITLE, ITEM_ROUTE (address), ITEM_COLOR, ITEM_BEARING,
-  //   ITEM_DIST, ITEM_WALK?} × n]  (texts ≤ PLACE_TEXT_MAX_BYTES 47)
-// watch → phone: {PLACE_SELECT: index, LIST_ID} → {type: 'placeSelect', listId, index};
-//                {PLACE_NAV: index, LIST_ID}    → {type: 'navStart', places: true, listId, index}  (long SELECT)
+  //   ITEM_DIST, ITEM_WALK?, PLACE_ETA? (s), ITEM_BADGE (with PLACE_ETA: the bus, '' on foot; ITEM_COLOR is then its colour)} × n]
+  //   (texts ≤ PLACE_TEXT_MAX_BYTES 47)
+// watch → phone: {PLACE_SELECT: index, LIST_ID} → {type: 'placeSelect', listId, index}  (long SELECT, or "Select")
+//                {PLACE_NAV: index, LIST_ID}    → {type: 'navStart', places: true, listId, index}  ("Start trip")
 ```
 
 Session: every refresh (once the position is known, before `gather`) builds the places, adds the context (below), ranks them
@@ -1219,8 +1290,10 @@ resends the re-ranked places with a new id. Navigation (§18): `nav.start(listId
 Watch (`bus_model.h`, pure): `BusPlaces` (≤ `BUS_MAX_PLACES` = 8, 4 on aplite, which keeps the first ones), `bus_places_begin / set`
 (strings ≤ 47 bytes cut at a UTF-8 boundary; bearing outside 0..359 → −1; negative walk → −1), `bus_places_at_row(p, row)` = place
 `count − 1 − row` (NULL until it arrives), `bus_place_as_item` → a `BUS_KIND_PLACE` tile (title = name, route = address, no badge /
-times; `bus_format_detail` = the address, drawn on the detail line, not in the level-0 band). Tests: `test/context.test.js`,
-`test/session.test.js`, `test/protocol.test.js`, `test/nav.test.js`, `test/c/test_bus_model.c`.
+times; `bus_format_detail` = the address, drawn on the detail line, not in the level-0 band). `bus_places_set_eta(p, list, i, eta,
+badge)` (reset by `set`): by bus the tile gets the badge and `t[0]` = eta + 1, and its detail reads "25m trip · <address>"; on foot the
+walking time beside it says it. Tests: `test/context.test.js`, `test/place-eta.test.js`, `test/session.test.js`,
+`test/protocol.test.js`, `test/nav.test.js`, `test/c/test_bus_model.c`.
 
 **Context**: the moment a list is shown is part of every ranked list (main list and places; pinned trip tiles aren't ranked):
 

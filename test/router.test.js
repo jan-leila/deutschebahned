@@ -369,6 +369,26 @@ test('throwing / double-calling sources: cb exactly once', async () => {
 });
 
 // ---- text ----
+test('leave now: the earliest arrival (not the latest leave); walking wins when it gets there first', async () => {
+  const src = fakeSource({ routes: [R1], trips: R1_TRIPS });
+  const p = await plan(src, { destination: DEST, leaveNow: true, routeIds: ['R1'] });
+  assert.equal(p.legs[1].tripKey, 't2', 't1 leaves before you can walk to the stop; t2 gets there first');
+  assert.equal(p.arriveAt, NOW + 840 + W2);
+  assert.equal(p.arriveBy, NOW + router.LEAVE_NOW_WINDOW);
+  // close by: on foot
+  const near = Object.assign(at(C, 300, 0), { name: 'Shop' });
+  const w = await plan(fakeSource({ routes: [R1], trips: R1_TRIPS }), { destination: near, leaveNow: true, routeIds: ['R1'] });
+  assert.equal(w.legs.length, 1);
+  assert.equal(w.legs[0].mode, 'walk');
+  assert.equal(w.leaveAt, NOW);
+  assert.equal(w.arriveAt, NOW + walkS(C, near));
+  // nothing live: the estimate, forward from now
+  const e = await plan(fakeSource({ routes: [R1], trips: [] }), { destination: DEST, leaveNow: true, routeIds: ['R1'] });
+  assert.equal(e.estimated, true);
+  assert.ok(e.arriveAt > NOW + W0 && e.arriveAt < NOW + router.LEAVE_NOW_WINDOW);
+  await assert.rejects(plan(src, { destination: DEST, routeIds: ['R1'] }), /bad request/, 'neither arriveBy nor leaveNow');
+});
+
 test('describe / summary', async () => {
   const p = await plan(fakeSource({ routes: [R1], trips: R1_TRIPS }), { destination: DEST, arriveBy: NOW + 2000, routeIds: ['R1'] });
   // leave 8:15 - W0 (77 s) → 8:13 AM, bus 8:15, off 8:24, arrive 8:25:49 → 8:25

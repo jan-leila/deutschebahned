@@ -92,7 +92,9 @@ wait_log() {  # wait_log PATTERN SECONDS
 }
 
 STEP=0
-next_step() {  # long SELECT -> REFRESH -> the fixture runs its next STEP
+long_select() { e emu-button click select --duration 1200 || bad "long select"; sleep 1; }
+
+next_step() {  # long SELECT (select the row) -> the fixture runs its next STEP
   STEP=$((STEP + 1))
   e emu-button click select --duration 1200 || bad "long select"
   wait_log "UI-FIXTURE step ${STEP}\b" 15 || bad "fixture step $STEP not seen in logs"
@@ -120,9 +122,11 @@ run_scenes() {
   next_step
   compass 90;           shot 04-heading90
   compass 0
-  btn click up;         shot 04a-places              # UP on the first row: the saved locations, the best one at the bottom
+  btn click select;     shot 04c-menu                # a short SELECT: the side menu (select, start trip, undo, close)
+  btn click back
+  btn click up;         shot 04a-places              # UP on the first row: the saved locations unfold above it, the best one next to it
   btn click up;         shot 04b-places-up
-  btn click select
+  long_select
   wait_log "UI-FIXTURE place 1 1" 10 || bad "SELECT on a place not reported as PLACE_SELECT 1 1"
   btn click down; btn click down                     # back to the list's first row
   btn click down;       shot 05-down1-dropoff      # drop-off tile selected
@@ -135,15 +139,29 @@ run_scenes() {
   next_step                                          # planned-trip legs pinned first
   hold up 3;            shot 11-trip-board
   btn click down;       shot 12-trip-riding
-  next_step;            shot 13-notify
-  btn click down; btn click down; btn click down;  shot 14-notify-scroll
+  next_step;            shot 13-preview                # a scheduled trip is due: its legs, closed (aplite: the notification)
+  if [ "$P" = aplite ]; then
+    btn click down; btn click down; btn click down;  shot 14-preview-menu   # (aplite: the text scrolled)
+    btn click back
+  else
+    btn click select;   shot 14-preview-menu           # start / dismiss / close
+    btn click back; btn click back                     # the menu, then the preview (dismissed)
+  fi
+  if [ "$P" = aplite ]; then                         # no trips on aplite (not enough RAM): the fixture skips them
+    STEP=$((STEP + 2))
+    next_step;          shot 15-empty
+    return
+  fi
+  next_step;            shot 16-nav-walk           # a trip, walking: the leg's header pinned, its step open (arrow, distance, time left)
+  btn click back;       shot 16a-home-trip         # home, the trip running: its dot at the top left
+  btn click select;     shot 16b-menu-trip         # the menu with a trip: show / replace / clear
   btn click back
-  next_step;            shot 15-empty
-  [ "$P" = aplite ] && return                        # no navigation on aplite (not enough RAM)
-  next_step;            shot 16-nav-walk           # navigation: the trip's steps, the first one open (arrow, distance, time left)
+  next_step;            shot 17-nav-ride           # riding: the ride's header pinned, the stops around the one you are at
+  btn click select;     shot 17a-nav-menu          # home / go to current / cancel / close
   btn click back
-  next_step;            shot 17-nav-ride           # the third step open, the first two done
+  btn click up; btn click up; btn click up; btn click up;  shot 17b-nav-unpinned   # on the ride's header: it is a row again
   btn click back
+  next_step;            shot 15-empty            # (last: a long SELECT on the empty list selects nothing)
 }
 
 for P in "${PLATFORMS[@]}"; do

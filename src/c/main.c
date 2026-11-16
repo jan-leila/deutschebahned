@@ -8,6 +8,7 @@
 #include "bus_marquee.h"
 #include "bus_weather.h"
 #include "bus_nav.h"
+#include "bus_menu.h"
 
 // Navigation (the nav window, CONTRACTS.md §18) needs RAM that Pebble Classic / Steel (aplite) does not have.
 #if defined(PBL_PLATFORM_APLITE)
@@ -36,9 +37,10 @@ static Window *s_window;
 static TextLayer *s_status_layer;
 static Layer *s_wheel_layer;
 static BusModel s_model;
-static BusPlaces s_places;   // saved locations: the view above the first row (UP from the top)
-static bool s_in_places;     // the wheel shows the places (s_sel / s_pos are rows of that view)
+static BusPlaces s_places;   // saved locations: unfolded into the wheel above the first row (UP from the top)
+static bool s_places_open;   // they are: wheel rows 0..count-1 are the places, the list follows (s_sel / s_pos count them)
 static BusItem s_place_tile; // the place being drawn, as a tile (bus_place_as_item)
+static Layer *s_hud_layer;   // over the status line: the trip blip, the "places above" hint
 static BusWeather s_weather;
 #if HAS_NAV
 static BusNav s_nav;
@@ -80,6 +82,8 @@ static int32_t s_test_now;
 
 // ---- Animation --------------------------------------------------------------
 
+static void fold_places_if_hidden(void);
+
 static uint32_t now_ms(void) {
   time_t sec;
   uint16_t ms;
@@ -93,6 +97,7 @@ static void anim_step(void *data) {
   uint32_t t = now_ms() - s_anim_start;
   if (t >= ANIM_MS) {
     s_pos = target;
+    fold_places_if_hidden();
   } else {
     int32_t p = (int32_t)(t * 1000u / ANIM_MS);                  // linear progress 0..1000
     int32_t e = 1000 - (1000 - p) * (1000 - p) / 1000;           // quadratic ease-out
@@ -165,32 +170,41 @@ static int16_t text_width(const char *text, GFont font) {
                                                GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft).w;
 }
 
-static int16_t badge_width(const BusItem *it, GFont font, int16_t max_w) {
-  if (!it->badge[0]) return 0;
+static int16_t badge_text_width(const char *badge, GFont font, int16_t max_w) {
+  if (!badge[0]) return 0;
   FontMetrics fi = font_info(font);
   int16_t pad = fi.cap >= 12 ? 5 : 3;
-  int16_t w = text_width(it->badge, font) + 2 * pad, h = fi.cap + 2 * pad + 1;
+  int16_t w = text_width(badge, font) + 2 * pad, h = fi.cap + 2 * pad + 1;
   if (w < h) w = h;
   return w > max_w ? max_w : w;
+}
+
+static int16_t badge_width(const BusItem *it, GFont font, int16_t max_w) {
+  return badge_text_width(it->badge, font, max_w);
 }
 
 // Route badge: rounded rect in the route color centred on cy; returns its width (0 when there is no badge).
 // The badge never reaches above min_y: when the room above cy is short it shrinks vertically (still centred on cy,
 // never below the glyph height) so it cannot run into the level-0 route band / top bar.
-static int16_t draw_badge(GContext *ctx, const BusItem *it, GFont font, int16_t x, int16_t cy, int16_t max_w,
-                          int16_t min_y) {
-  int16_t w = badge_width(it, font, max_w);
+static int16_t draw_badge_text(GContext *ctx, const char *badge, int32_t color, GFont font, int16_t x, int16_t cy,
+                               int16_t max_w, int16_t min_y) {
+  int16_t w = badge_text_width(badge, font, max_w);
   if (!w) return 0;
   FontMetrics fi = font_info(font);
   int16_t pad = fi.cap >= 12 ? 5 : 3;
   int16_t h = fi.cap + 2 * pad + 1;
   int32_t room = 2 * ((int32_t)cy - min_y);
   if (h > room) h = room < fi.cap + 3 ? fi.cap + 3 : (int16_t)room;
-  graphics_context_set_fill_color(ctx, route_color(it->color));
+  graphics_context_set_fill_color(ctx, route_color(color));
   graphics_fill_rect(ctx, GRect(x, cy - h / 2, w, h), 4, GCornersAll);
-  graphics_context_set_text_color(ctx, badge_text_color(it->color));
-  draw_line(ctx, it->badge, font, x, w, cy, GTextAlignmentCenter);
+  graphics_context_set_text_color(ctx, badge_text_color(color));
+  draw_line(ctx, badge, font, x, w, cy, GTextAlignmentCenter);
   return w;
+}
+
+static int16_t draw_badge(GContext *ctx, const BusItem *it, GFont font, int16_t x, int16_t cy, int16_t max_w,
+                          int16_t min_y) {
+  return draw_badge_text(ctx, it->badge, it->color, font, x, cy, max_w, min_y);
 }
 
 static uint32_t marquee_elapsed(void) {
@@ -312,13 +326,21 @@ static int16_t draw_dir(GContext *ctx, const char *code, GFont font, int16_t x, 
   return w + 4;
 }
 
-// What wheel row `row` shows in the current view: a list tile, or a saved location as one.
+// What wheel row `row` shows: a saved location (as a tile) while they are unfolded, else a list tile.
+static int places_rows(void) {
+  return s_places_open ? s_places.count : 0;
+}
+
 static int view_rows(void) {
-  return s_in_places ? s_places.count : s_model.count;
+  return places_rows() + s_model.count;
+}
+
+static bool row_is_place(int row) {
+  return row >= 0 && row < places_rows();
 }
 
 static const BusItem *row_item(int row) {
-  if (!s_in_places) return bus_model_item(&s_model, row);
+  if (!row_is_place(row)) return bus_model_item(&s_model, row - places_rows());
   const BusPlace *pl = bus_places_at_row(&s_places, row);
   if (!pl) return NULL;
   bus_place_as_item(pl, &s_place_tile);
@@ -606,7 +628,7 @@ static void wheel_update(Layer *layer, GContext *ctx) {
 
   WheelSlot slots[WHEEL_MAX_SLOTS];
   int n = bus_wheel_layout(&s_geom, view_rows(), s_pos, slots, WHEEL_MAX_SLOTS);
-  if (!s_in_places && n > 0 && slots[0].index == 0) draw_weather(ctx, slots[0].y, b.size.w);
+  if (n > 0 && slots[0].index == 0) draw_weather(ctx, slots[0].y, b.size.w);   // above the places when they are open
   // Draw the selected row last so its bars sit on top of its neighbours.
   int sel = -1;
   for (int i = 0; i < n; i++) {
@@ -619,10 +641,11 @@ static void wheel_update(Layer *layer, GContext *ctx) {
 
 static void redraw(void) {
   if (s_status_layer) {
-    text_layer_set_text(s_status_layer, s_in_places ? "Saved places" : s_model.status);
+    text_layer_set_text(s_status_layer, row_is_place(s_sel) ? "Saved places" : s_model.status);
     layer_set_hidden(text_layer_get_layer(s_status_layer), view_rows() == 0);
   }
   if (s_wheel_layer) layer_mark_dirty(s_wheel_layer);
+  if (s_hud_layer) layer_mark_dirty(s_hud_layer);
 }
 
 // ---- Notification window ----------------------------------------------------
@@ -724,21 +747,34 @@ static void notify_show(const char *title, const char *body, int32_t color) {
   light_enable_interaction();
 }
 
+// the side menu and plain messages to the phone (below)
+static BusMenu s_menu;
+static void menu_open(Window *window, ClickConfigProvider own, void (*fn)(int act));
+static void menu_close(void);
+static void send_flag(uint32_t key, int32_t value);
+
 #if HAS_NAV
-// ---- Navigation window --------------------------------------------------------
-// Opened by the phone (NAV_STATE 1 / 2) after a long SELECT on a tile: the steps as a wheel like the main list, the
-// current step open (kind and direction in the band, the step's length, instruction, time left, an arrow to its target
-// with the distance). UP / DOWN look ahead or back, SELECT returns to the current step, BACK closes the window and
-// tells the phone to stop. The phone follows the GPS and moves through the steps; the wheel follows it.
+// ---- Trip view ------------------------------------------------------------------
+// Opened by the phone (NAV_SHOW) when a trip starts ("Start trip" in the menu) or a scheduled one is due (a preview,
+// NAV_STATE 3): the legs as a wheel like the main list, each a header (its route in the band like a home tile, where it
+// goes, direction, length, arrival, the stops / turns left) with its steps under it while it is open; the current step
+// open (kind and direction in the band, the step's length, instruction, time left, an arrow to its target with the
+// distance). While you look at the rows of the open leg you are on, its header stays at the top. UP / DOWN look ahead or
+// back, a long SELECT opens / closes the leg (or shows the hidden rows) under the selection, a short SELECT opens the
+// menu (home, back to the current step, cancel; a preview: start, dismiss). BACK goes home: the trip goes on (a dot on
+// the home screen; "Show trip" brings it back); a preview is dismissed. The phone follows the GPS and moves through the
+// steps; the wheel follows it.
+
+#define PIN_H 54          // the pinned leg header
 
 static Window *s_nav_window;
 static TextLayer *s_nav_status_layer;
-static WheelGeometry s_nav_geom;
+static WheelGeometry s_nav_geom, s_nav_geom_pin;
 static int s_nav_sel;            // selected step
 static int32_t s_nav_pos;        // drawn position, milli-rows
 static int32_t s_nav_anim_from;
 static uint32_t s_nav_anim_start;
-static char s_nav_status[32];
+static char s_nav_status[BUS_NAV_TEXT_LEN];
 
 // Rows near the selection that the watch does not have: ask the phone for the window around it. If the outbox is
 // busy nothing is marked as on its way, so the next redraw asks again.
@@ -757,10 +793,12 @@ static void nav_fetch_near(int sel) {
 static void nav_redraw(void) {
   nav_fetch_near(s_nav_sel);
   if (s_nav_status_layer) {
-    snprintf(s_nav_status, sizeof s_nav_status, "Step %d of %d", s_nav_sel + 1, s_nav.count ? (int)s_nav.count : 1);
+    if (s_nav.state == BUS_NAV_PREVIEW) snprintf(s_nav_status, sizeof s_nav_status, "%s", s_nav.title);
+    else snprintf(s_nav_status, sizeof s_nav_status, "Step %d of %d", s_nav_sel + 1, s_nav.count ? (int)s_nav.count : 1);
     text_layer_set_text(s_nav_status_layer, s_nav_status);
   }
   if (s_nav_layer) layer_mark_dirty(s_nav_layer);
+  if (s_hud_layer) layer_mark_dirty(s_hud_layer);
 }
 
 static void nav_anim_step(void *data) {
@@ -841,11 +879,76 @@ static void draw_rail(GContext *ctx, const BusNavStep *st, const WheelSlot *s, i
   }
 }
 
+// A small triangle at (cx, cy): pointing right (a closed leg: a long SELECT opens it) or down (open).
+static void draw_fold_mark(GContext *ctx, int16_t cx, int16_t cy, bool open, GColor c) {
+  for (int16_t r = 0; r < 4; r++) {
+    if (open) fill_span(ctx, c, cx - 3 + r, cx + 4 - r, cy - 2 + r, cy - 1 + r);
+    else fill_span(ctx, c, cx - 2 + r, cx - 1 + r, cy - 3 + r, cy + 4 - r);
+  }
+}
+
+// A leg's header in the box (x, y, w, h): selected (level 0) or pinned like a home tile: its route in a band in the
+// route's colour (the length at the right), the badge, direction and where it goes, then "arr 8:24 · 6 stops"; a
+// neighbour: the badge and where it goes. The fold mark at the right end of its title.
+static void draw_head(GContext *ctx, const BusNavStep *st, int16_t x, int16_t y, int16_t w, int16_t h, int level,
+                      int16_t width) {
+  GColor rc = route_color(st->color);
+  int16_t pad = level == 0 ? 4 : 3, ix = x + pad, iw = w - 2 * pad;
+  bool tall = level == 0 && h >= 60;
+  GFont title_font = level == 0 ? (tall ? s_f24b : s_f18b) : level == 1 ? s_f18b : s_f14;
+  GFont badge_font = level == 0 ? s_f18b : s_f14b, detail_font = tall ? s_f18 : s_f14;
+  FontMetrics tfi = font_info(title_font), dfi = font_info(detail_font);
+  int16_t top = y, bottom = y + h;
+  GColor fg = level == 2 ? PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack) : GColorBlack;
+  fill_span(ctx, GColorWhite, x, x + w, y, y + h);
+  if (level == 0) {
+    fill_span(ctx, rc, x, x + w, y, y + ROUTE_BAND_H);
+    fill_span(ctx, rc, x, x + w, y + h - BAR_H, y + h);
+    graphics_context_set_text_color(ctx, badge_text_color(st->color));
+    int16_t dw = st->dist[0] ? text_width(st->dist, s_f14) : 0;
+    draw_line(ctx, st->route, s_f14, ix, iw - (dw ? dw + 6 : 0), y + ROUTE_BAND_H / 2, GTextAlignmentLeft);
+    if (dw) draw_line(ctx, st->dist, s_f14, ix + iw - dw - 2, dw + 2, y + ROUTE_BAND_H / 2, GTextAlignmentRight);
+    top += ROUTE_BAND_H;
+    bottom -= BAR_H;
+  } else {
+    fill_span(ctx, rc, x, x + 3, y + 2, y + h - 2);   // the leg's colour down its left edge
+    ix += 3;
+    iw -= 3;
+  }
+  int16_t ih = bottom - top, title_cy, detail_cy = 0;
+  bool detail = st->sub[0] && level < 2 && ih >= tfi.cap + dfi.cap + 8;
+  if (detail) {
+    int16_t gap = (ih - tfi.cap - dfi.cap) / 3;
+    title_cy = top + gap + tfi.cap / 2;
+    detail_cy = bottom - gap - dfi.cap / 2;
+  } else {
+    title_cy = top + ih / 2;
+  }
+  bool foldable = (st->rail & (BUS_RAIL_FOLDED | BUS_RAIL_OPEN)) != 0;
+  int16_t mark_w = foldable ? 10 : 0;
+  int16_t bw = draw_badge_text(ctx, st->badge, st->color, badge_font, ix, title_cy, iw / 2,
+                               level == 0 ? top + BADGE_GAP : INT16_MIN);
+  int16_t tx = ix + (bw ? bw + 4 : 0);   // (a ride's direction is in its detail: beside the title it reads as the name)
+  graphics_context_set_text_color(ctx, fg);
+  draw_line(ctx, st->text, title_font, tx, ix + iw - tx - mark_w, title_cy, GTextAlignmentLeft);
+  if (foldable) draw_fold_mark(ctx, ix + iw - 4, title_cy, (st->rail & BUS_RAIL_OPEN) != 0, fg);
+  if (detail) {
+    graphics_context_set_text_color(ctx, level == 0 ? GColorBlack : PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack));
+    draw_line(ctx, st->sub, detail_font, ix, iw, detail_cy, GTextAlignmentLeft);
+  }
+  (void)width;
+}
+
 static void draw_nav_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
   const BusNavStep *st = bus_nav_step(&s_nav, s->index);
   int16_t x = s->inset, w = width - 2 * s->inset;
   if (w <= 8) return;
-  bool current = s->index == s_nav.current, past = s->index < s_nav.current;
+  if (st && st->kind == BUS_NAV_HEAD) {
+    draw_head(ctx, st, x, s->y, w, s->h, s->level, width);
+    return;
+  }
+  bool preview = s_nav.state == BUS_NAV_PREVIEW;
+  bool current = !preview && s->index == s_nav.current, past = !preview && s->index < s_nav.current;
   int32_t color = st ? st->color : -1;
 
   int16_t pad = s->level == 0 ? 4 : 3;
@@ -976,30 +1079,93 @@ static void draw_nav_slot(GContext *ctx, const WheelSlot *s, int16_t width) {
   }
 }
 
+// While the selection is on a row of the open leg you are on (below its header), the header is pinned at the top and
+// the wheel turns in the room under it; the rows up to the header pass under it.
 static void nav_update(Layer *layer, GContext *ctx) {
   GRect b = layer_get_bounds(layer);
   s_marquee_wait = 0;
   graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
+  bool pin = bus_nav_pinned(&s_nav, s_nav_sel);
+  int16_t top = pin ? PIN_H : 0;
   WheelSlot slots[WHEEL_MAX_SLOTS];
-  int n = bus_wheel_layout(&s_nav_geom, bus_nav_row_count(&s_nav), s_nav_pos, slots, WHEEL_MAX_SLOTS);
+  int n = bus_wheel_layout(pin ? &s_nav_geom_pin : &s_nav_geom, bus_nav_row_count(&s_nav), s_nav_pos, slots, WHEEL_MAX_SLOTS);
+  if (pin) {
+    // the rows that pass under the header would leave a gap above the first one shown: the wheel moves up by it (laid
+    // out twice as tall below, so the room it leaves at the bottom has rows too)
+    int16_t gap = 0;
+    for (int i = 0; i < n && !gap; i++) if (slots[i].index > s_nav.head) gap = slots[i].y > 0 ? slots[i].y : -1;
+    if (gap > 0) {
+      WheelGeometry g = s_nav_geom_pin;
+      g.height += 2 * gap;
+      n = bus_wheel_layout(&g, bus_nav_row_count(&s_nav), s_nav_pos, slots, WHEEL_MAX_SLOTS);
+      for (int i = 0; i < n; i++) slots[i].y -= 2 * gap;
+    }
+  }
   int sel = -1;
   for (int i = 0; i < n; i++) {
+    slots[i].y += top;
+    if (pin && slots[i].index <= s_nav.head) continue;
     if (slots[i].level == 0 && sel < 0) { sel = i; continue; }
     draw_nav_slot(ctx, &slots[i], b.size.w);
   }
   if (sel >= 0) draw_nav_slot(ctx, &slots[sel], b.size.w);
+  if (pin) {
+    int16_t inset = bus_wheel_round_inset(&s_nav_geom, 0, PIN_H);
+    fill_span(ctx, GColorWhite, 0, b.size.w, 0, PIN_H);
+    draw_head(ctx, &s_nav.head_row, inset, 0, b.size.w - 2 * inset, PIN_H - 1, 0, b.size.w);
+  }
   schedule_marquee();
 }
 
 static void nav_up(ClickRecognizerRef rec, void *ctx) { nav_select_step(s_nav_sel - 1, true); }
 static void nav_down(ClickRecognizerRef rec, void *ctx) { nav_select_step(s_nav_sel + 1, true); }
-static void nav_current(ClickRecognizerRef rec, void *ctx) { nav_select_step(s_nav.current, true); }
+
+static void nav_click_config(void *ctx);
+
+// the trip is over (cancelled, a preview dismissed): the phone stops following it, the view closes
+static void nav_clear(void) {
+  send_flag(MESSAGE_KEY_NAV_STOP, 1);
+  bus_nav_init(&s_nav);
+  if (s_nav_window && window_stack_contains_window(s_nav_window)) window_stack_remove(s_nav_window, true);
+  redraw();
+}
+
+static void nav_action(int act) {
+  switch (act) {
+    case BUS_ACT_HOME: window_stack_remove(s_nav_window, true); break;
+    case BUS_ACT_CURRENT: nav_select_step(s_nav.current, true); break;
+    case BUS_ACT_GO: send_flag(MESSAGE_KEY_NAV_GO, 1); break;
+    case BUS_ACT_CANCEL_TRIP:
+    case BUS_ACT_DISMISS: nav_clear(); break;
+    default: break;
+  }
+}
+
+static void nav_menu(ClickRecognizerRef rec, void *ctx) {
+  bus_menu_trip(&s_menu, s_nav.state == BUS_NAV_PREVIEW, s_nav_sel != s_nav.current);
+  menu_open(s_nav_window, nav_click_config, nav_action);
+}
+
+// a long SELECT on a leg's header or on hidden rows: the phone opens / closes them and sends the rows again
+static void nav_unfold(ClickRecognizerRef rec, void *ctx) {
+  const BusNavStep *st = bus_nav_step(&s_nav, s_nav_sel);
+  if (!st || !(st->rail & (BUS_RAIL_FOLDED | BUS_RAIL_OPEN))) return;
+  send_flag(MESSAGE_KEY_NAV_UNFOLD, s_nav_sel);
+  vibes_short_pulse();
+}
+
+static void nav_back(ClickRecognizerRef rec, void *ctx) {
+  if (s_nav.state == BUS_NAV_PREVIEW) nav_clear();
+  else window_stack_pop(true);
+}
 
 static void nav_click_config(void *ctx) {
   window_single_repeating_click_subscribe(BUTTON_ID_UP, REPEAT_MS, nav_up);
   window_single_repeating_click_subscribe(BUTTON_ID_DOWN, REPEAT_MS, nav_down);
-  window_single_click_subscribe(BUTTON_ID_SELECT, nav_current);
+  window_single_click_subscribe(BUTTON_ID_SELECT, nav_menu);
+  window_long_click_subscribe(BUTTON_ID_SELECT, 0, nav_unfold, NULL);
+  window_single_click_subscribe(BUTTON_ID_BACK, nav_back);
 }
 
 static void nav_window_load(Window *window) {
@@ -1016,9 +1182,14 @@ static void nav_window_load(Window *window) {
   s_nav_status_layer = text_layer_create(status);
   text_layer_set_font(s_nav_status_layer, s_f14);
   text_layer_set_text_alignment(s_nav_status_layer, GTextAlignmentCenter);
+  text_layer_set_overflow_mode(s_nav_status_layer, GTextOverflowModeTrailingEllipsis);
   text_layer_set_background_color(s_nav_status_layer, GColorClear);
   layer_add_child(root, text_layer_get_layer(s_nav_status_layer));
   bus_wheel_geometry(&s_nav_geom, wheel.size.w, wheel.size.h, PBL_IF_ROUND_ELSE(true, false));
+  bus_wheel_geometry(&s_nav_geom_pin, wheel.size.w, wheel.size.h - PIN_H, PBL_IF_ROUND_ELSE(true, false));
+  s_nav_geom_pin.row_h[0] = s_nav_geom.row_h[0];   // (the same rows as without the header, just fewer of them)
+  s_nav_geom_pin.row_h[1] = s_nav_geom.row_h[1];
+  s_nav_geom_pin.row_h[2] = s_nav_geom.row_h[2];
   s_nav_layer = layer_create(wheel);
   layer_set_update_proc(s_nav_layer, nav_update);
   layer_add_child(root, s_nav_layer);
@@ -1028,14 +1199,8 @@ static void nav_window_load(Window *window) {
   nav_redraw();
 }
 
-static void send_nav_stop(void) {
-  DictionaryIterator *out;
-  if (app_message_outbox_begin(&out) != APP_MSG_OK) return;
-  dict_write_int32(out, MESSAGE_KEY_NAV_STOP, 1);
-  app_message_outbox_send();
-}
-
 static void nav_window_unload(Window *window) {
+  menu_close();
   if (s_nav_anim_timer) {
     app_timer_cancel(s_nav_anim_timer);
     s_nav_anim_timer = NULL;
@@ -1044,31 +1209,48 @@ static void nav_window_unload(Window *window) {
   s_nav_layer = NULL;
   text_layer_destroy(s_nav_status_layer);
   s_nav_status_layer = NULL;
-  bus_nav_init(&s_nav);
-  send_nav_stop();   // BACK (or the phone's own close: it ignores a stop it did not expect)
+  if (s_nav.state == BUS_NAV_PREVIEW) {   // a preview goes with its view (a trip goes on)
+    send_flag(MESSAGE_KEY_NAV_STOP, 1);
+    bus_nav_init(&s_nav);
+  }
+  redraw();
 }
 
-// NAV_STATE from the phone: open / update / close the window; a new current step scrolls to it and buzzes the wrist.
-static void nav_live(int state, int current, const char *sub, const char *dist, int bearing) {
+// "Show trip": the trip view again, at the current step
+static void nav_show(void) {
+  if (s_nav.state == BUS_NAV_CLOSED) return;
+  if (!s_nav_window) {
+    s_nav_window = window_create();
+    window_set_click_config_provider(s_nav_window, nav_click_config);
+    window_set_window_handlers(s_nav_window, (WindowHandlers){ .load = nav_window_load, .unload = nav_window_unload });
+  }
+  if (!window_stack_contains_window(s_nav_window)) window_stack_push(s_nav_window, true);
+}
+
+// NAV_STATE from the phone: the trip (or preview) as it is now; `show` (a trip just started / a preview) opens the trip
+// view. A new current step scrolls to it and buzzes the wrist, also while the view is closed.
+static void nav_live(int state, int current, const char *sub, const char *dist, int bearing, const char *title, bool show) {
   bool shown = s_nav_window && window_stack_contains_window(s_nav_window);
-  if (state != BUS_NAV_GUIDING && state != BUS_NAV_ARRIVED) {
+  if (state != BUS_NAV_GUIDING && state != BUS_NAV_ARRIVED && state != BUS_NAV_PREVIEW) {
     bus_nav_init(&s_nav);
     if (shown) window_stack_remove(s_nav_window, true);
+    redraw();
     return;
   }
-  bool new_step = bus_nav_set_live(&s_nav, state, current, sub, dist, bearing);
+  bool new_step = bus_nav_set_live(&s_nav, state, current, sub, dist, bearing, title);
   if (!shown) {
-    if (!s_nav_window) {
-      s_nav_window = window_create();
-      window_set_click_config_provider(s_nav_window, nav_click_config);
-      window_set_window_handlers(s_nav_window, (WindowHandlers){ .load = nav_window_load, .unload = nav_window_unload });
+    if (show) {
+      nav_show();
+      if (state == BUS_NAV_PREVIEW) vibes_double_pulse();
+      else vibes_short_pulse();
+      light_enable_interaction();
+    } else if (new_step) {
+      vibes_short_pulse();
     }
-    window_stack_push(s_nav_window, true);
-    vibes_short_pulse();
-    light_enable_interaction();
+    redraw();
     return;
   }
-  if (new_step) {
+  if (new_step || show) {
     nav_select_step(s_nav.current, true);
     vibes_short_pulse();
     light_enable_interaction();
@@ -1168,7 +1350,7 @@ static void apply_wakeups(void) {
 static void apply_test_hook(int32_t v) {
   APP_LOG(APP_LOG_LEVEL_INFO, "test hook %d", (int)v);
   if (v <= -1000) {
-    int32_t p = (int32_t)s_sel * 1000 + (-v - 1000), max = (int32_t)(bus_model_row_count(&s_model) - 1) * 1000;
+    int32_t p = (int32_t)s_sel * 1000 + (-v - 1000), max = (int32_t)(view_rows() - 1) * 1000;
     jump_to_selection();
     s_pos = p > max ? max : p;
     if (s_test_marquee < 0) s_test_marquee = 0;
@@ -1182,11 +1364,14 @@ static void apply_test_hook(int32_t v) {
 // ---- Display preferences -> phone ---------------------------------------------
 // The phone formats distances and notification times; it follows the watch's own settings: the 24 h clock style
 // and (where Pebble Health exists) the measurement system. Sent once the phone talks to us, retried until delivered.
-// Flags: bit 0 = 24 h clock, bit 1 = metric, bit 2 = measurement system known.
+// Flags: bit 0 = 24 h clock, bit 1 = metric, bit 2 = measurement system known, bit 3 = the trip view (not aplite).
 static bool s_prefs_sent = false;
 
 static int32_t watch_prefs(void) {
   int32_t flags = clock_is_24h_style() ? 1 : 0;
+#if HAS_NAV
+  flags |= 8;   // the trip view: the phone shows a scheduled trip as its steps (else as a notification)
+#endif
 #if defined(PBL_HEALTH)
   MeasurementSystem ms = health_service_get_measurement_system_for_display(HealthMetricWalkedDistanceMeters);
   if (ms == MeasurementSystemMetric) flags |= 2 | 4;
@@ -1214,9 +1399,9 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
 
   if (count) {
     bus_model_begin_list(&s_model, tuple_int(list_id), (int)tuple_int(count));
-    if (!s_in_places) {
+    if (!row_is_place(s_sel)) {
       s_marquee_start = now_ms();
-      int sel = bus_model_clamp_selection(&s_model, s_sel);
+      int p = places_rows(), sel = bus_model_clamp_selection(&s_model, s_sel - p) + p;
       if (sel != s_sel) {
         s_sel = sel;
         jump_to_selection();
@@ -1225,27 +1410,28 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
   }
   Tuple *pcount = dict_find(iter, MESSAGE_KEY_PLACE_COUNT);
   if (pcount) {
+    int before = places_rows();
     bus_places_begin(&s_places, tuple_int(list_id), (int)tuple_int(pcount));
-    if (s_in_places) {
+    if (s_places_open) {
+      if (s_places.count == 0) s_places_open = false;   // nothing left to show
+      int after = places_rows();
+      if (s_sel >= before) s_sel += after - before;        // on the list: the same row
+      else if (s_sel >= after) s_sel = after > 0 ? after - 1 : 0;
       s_marquee_start = now_ms();
-      if (s_places.count == 0) {
-        s_in_places = false;   // nothing left to show: back to the list's first row
-        s_sel = 0;
-        jump_to_selection();
-      } else if (s_sel >= s_places.count) {
-        s_sel = s_places.count - 1;
-        jump_to_selection();
-      }
+      jump_to_selection();
     }
   }
   Tuple *pindex = dict_find(iter, MESSAGE_KEY_PLACE_INDEX);
   if (pindex) {
-    bus_places_set(&s_places, tuple_int(list_id), (int)tuple_int(pindex),
+    int pi = (int)tuple_int(pindex);
+    bus_places_set(&s_places, tuple_int(list_id), pi,
                    tuple_str(dict_find(iter, MESSAGE_KEY_ITEM_TITLE)), tuple_str(dict_find(iter, MESSAGE_KEY_ITEM_ROUTE)),
                    tuple_int_or(dict_find(iter, MESSAGE_KEY_ITEM_COLOR), -1),
                    tuple_int_or(dict_find(iter, MESSAGE_KEY_ITEM_BEARING), -1),
                    tuple_str(dict_find(iter, MESSAGE_KEY_ITEM_DIST)),
                    tuple_int_or(dict_find(iter, MESSAGE_KEY_ITEM_WALK), -1));
+    bus_places_set_eta(&s_places, tuple_int(list_id), pi, tuple_int_or(dict_find(iter, MESSAGE_KEY_PLACE_ETA), -1),
+                       tuple_str(dict_find(iter, MESSAGE_KEY_ITEM_BADGE)));
   }
   if (index) {
     int32_t lid = tuple_int(list_id);
@@ -1285,21 +1471,25 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
   }
 #if HAS_NAV
   Tuple *nav_count = dict_find(iter, MESSAGE_KEY_NAV_COUNT);
-  if (nav_count) bus_nav_begin(&s_nav, (int)tuple_int(nav_count), (int)tuple_int(dict_find(iter, MESSAGE_KEY_NAV_WINDOW)));
+  if (nav_count) bus_nav_begin(&s_nav, (int)tuple_int(nav_count), (int)tuple_int(dict_find(iter, MESSAGE_KEY_NAV_WINDOW)),
+                               (int)tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_HEAD), -1),
+                               (int)tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_HEAD_END), -1));
   Tuple *nav_index = dict_find(iter, MESSAGE_KEY_NAV_INDEX);
   if (nav_index) {
     bus_nav_set_step(&s_nav, (int)tuple_int(nav_index), (int)tuple_int(dict_find(iter, MESSAGE_KEY_NAV_KIND)),
                      tuple_str(dict_find(iter, MESSAGE_KEY_NAV_TEXT)), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_SUB)),
                      tuple_str(dict_find(iter, MESSAGE_KEY_NAV_DIST)), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_DIR)),
                      tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_COLOR), -1),
-                     (int)tuple_int(dict_find(iter, MESSAGE_KEY_NAV_RAIL)));
+                     (int)tuple_int(dict_find(iter, MESSAGE_KEY_NAV_RAIL)),
+                     tuple_str(dict_find(iter, MESSAGE_KEY_NAV_BADGE)), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_ROUTE)));
     nav_redraw();
   }
   Tuple *nav_state = dict_find(iter, MESSAGE_KEY_NAV_STATE);
   if (nav_state) {
     nav_live((int)tuple_int(nav_state), (int)tuple_int(dict_find(iter, MESSAGE_KEY_NAV_CURRENT)),
              tuple_str(dict_find(iter, MESSAGE_KEY_NAV_LSUB)), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_LDIST)),
-             (int)tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_BEARING), -1));
+             (int)tuple_int_or(dict_find(iter, MESSAGE_KEY_NAV_BEARING), -1), tuple_str(dict_find(iter, MESSAGE_KEY_NAV_TITLE)),
+             dict_find(iter, MESSAGE_KEY_NAV_SHOW) != NULL);
   }
 #endif
   Tuple *hook = dict_find(iter, MESSAGE_KEY_REFRESH);  // phone -> watch REFRESH = test hook (see s_test_marquee)
@@ -1339,28 +1529,35 @@ static void outbox_failed(DictionaryIterator *iter, AppMessageResult reason, voi
   if (dict_find(iter, MESSAGE_KEY_WAKEUP_FIRED)) schedule_wakeup_retry();
 }
 
-// SELECT on a tile (or, in the places view, on a saved location: its index in the phone's list)
+// SELECT on a tile (or on a saved location: its index in the phone's list)
 static void send_select(int index) {
   DictionaryIterator *out;
   if (app_message_outbox_begin(&out) != APP_MSG_OK) return;
-  dict_write_int32(out, s_in_places ? MESSAGE_KEY_PLACE_SELECT : MESSAGE_KEY_SELECT_INDEX, index);
-  dict_write_int32(out, MESSAGE_KEY_LIST_ID, s_in_places ? s_places.list_id : s_model.list_id);
+  dict_write_int32(out, row_is_place(s_sel) ? MESSAGE_KEY_PLACE_SELECT : MESSAGE_KEY_SELECT_INDEX, index);
+  dict_write_int32(out, MESSAGE_KEY_LIST_ID, row_is_place(s_sel) ? s_places.list_id : s_model.list_id);
   app_message_outbox_send();
 }
 
 // the selected row's index in its list: the main list as it is, the places from the bottom up (bus_places_at_row)
 static int selected_index(void) {
-  if (s_in_places) return bus_places_at_row(&s_places, s_sel) ? s_places.count - 1 - s_sel : -1;
-  return bus_model_item(&s_model, s_sel) ? s_sel : -1;
+  if (row_is_place(s_sel)) return bus_places_at_row(&s_places, s_sel) ? s_places.count - 1 - s_sel : -1;
+  return bus_model_item(&s_model, s_sel - places_rows()) ? s_sel - places_rows() : -1;
+}
+
+static void send_flag(uint32_t key, int32_t value) {
+  DictionaryIterator *out;
+  if (app_message_outbox_begin(&out) != APP_MSG_OK) return;
+  dict_write_int32(out, key, value);
+  app_message_outbox_send();
 }
 
 #if HAS_NAV
-// Long SELECT: ask the phone to navigate to the selected tile (index -1: nothing is selected).
+// "Start trip" / "Replace trip": ask the phone for a trip to the selected tile (index -1: nothing is selected).
 static void send_nav_start(int index) {
   DictionaryIterator *out;
   if (app_message_outbox_begin(&out) != APP_MSG_OK) return;
-  dict_write_int32(out, s_in_places ? MESSAGE_KEY_PLACE_NAV : MESSAGE_KEY_NAV_START, index);
-  dict_write_int32(out, MESSAGE_KEY_LIST_ID, s_in_places ? s_places.list_id : s_model.list_id);
+  dict_write_int32(out, row_is_place(s_sel) ? MESSAGE_KEY_PLACE_NAV : MESSAGE_KEY_NAV_START, index);
+  dict_write_int32(out, MESSAGE_KEY_LIST_ID, row_is_place(s_sel) ? s_places.list_id : s_model.list_id);
   app_message_outbox_send();
 }
 #endif
@@ -1382,26 +1579,164 @@ static void compass_handler(CompassHeadingData data) {
   }
 }
 
+// ---- Side menu ----------------------------------------------------------------
+// A short SELECT slides a menu in from the right edge over the window it is pressed in (bus_menu: what can be done
+// there). While it is open it has the buttons: UP / DOWN choose, SELECT does it, BACK closes the menu.
+
+#define MENU_ITEM_H 26
+
+static Layer *s_menu_layer;
+static Window *s_menu_window;
+static ClickConfigProvider s_menu_restore;   // the window's own buttons, back when the menu closes
+static void (*s_menu_do)(int act);
+static int16_t s_menu_left;                  // the panel's left edge (slides in)
+static uint32_t s_menu_start;
+static AppTimer *s_menu_timer;
+
+static int16_t menu_target(int16_t w) {
+  return PBL_IF_ROUND_ELSE(w * 30 / 100, w * 28 / 100);
+}
+
+static void menu_update(Layer *layer, GContext *ctx) {
+  GRect b = layer_get_bounds(layer);
+  int16_t x0 = s_menu_left, w = b.size.w - x0;
+  if (w <= 0) return;
+  fill_span(ctx, GColorWhite, x0, b.size.w, 0, b.size.h);
+  fill_span(ctx, GColorBlack, x0, x0 + 2, 0, b.size.h);
+  int16_t ih = MENU_ITEM_H, total = ih * s_menu.count, y = (b.size.h - total) / 2;
+  int16_t tx = x0 + 8, tw = b.size.w - tx - PBL_IF_ROUND_ELSE(16, 4);
+  for (int i = 0; i < s_menu.count; i++, y += ih) {
+    bool sel = i == s_menu.sel;
+    if (sel) {
+      graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorCobaltBlue, GColorBlack));
+      graphics_fill_rect(ctx, GRect(x0 + 4, y + 1, b.size.w - x0 - 4, ih - 2), 4, GCornersLeft);
+    }
+    graphics_context_set_text_color(ctx, sel ? GColorWhite : GColorBlack);
+    draw_line(ctx, bus_menu_label(s_menu.acts[i]), s_f18b, tx, tw, y + ih / 2, GTextAlignmentLeft);
+  }
+}
+
+static void menu_slide(void *data) {
+  s_menu_timer = NULL;
+  if (!s_menu_layer) return;
+  int16_t w = layer_get_bounds(s_menu_layer).size.w, target = menu_target(w);
+  uint32_t t = now_ms() - s_menu_start;
+  if (t >= ANIM_MS || s_test_marquee >= 0 || !HAS_NAV) {   // (aplite: no room for the slide)
+    s_menu_left = target;
+  } else {
+    int32_t p = (int32_t)(t * 1000u / ANIM_MS), e = 1000 - (1000 - p) * (1000 - p) / 1000;
+    s_menu_left = (int16_t)(w - (w - target) * e / 1000);
+    s_menu_timer = app_timer_register(FRAME_MS, menu_slide, NULL);
+  }
+  layer_mark_dirty(s_menu_layer);
+}
+
+static void menu_close(void) {
+  if (s_menu_timer) {
+    app_timer_cancel(s_menu_timer);
+    s_menu_timer = NULL;
+  }
+  if (!s_menu_layer) return;
+  layer_remove_from_parent(s_menu_layer);
+  layer_destroy(s_menu_layer);
+  s_menu_layer = NULL;
+  if (s_menu_window) window_set_click_config_provider(s_menu_window, s_menu_restore);
+  s_menu_window = NULL;
+}
+
+static void menu_up(ClickRecognizerRef rec, void *ctx) {
+  bus_menu_move(&s_menu, -1);
+  layer_mark_dirty(s_menu_layer);
+}
+
+static void menu_down(ClickRecognizerRef rec, void *ctx) {
+  bus_menu_move(&s_menu, 1);
+  layer_mark_dirty(s_menu_layer);
+}
+
+static void menu_choose(ClickRecognizerRef rec, void *ctx) {
+  int act = bus_menu_action(&s_menu);
+  void (*fn)(int) = s_menu_do;
+  menu_close();
+  if (fn && act >= 0) fn(act);
+}
+
+static void menu_back(ClickRecognizerRef rec, void *ctx) {
+  menu_close();
+}
+
+static void menu_click_config(void *ctx) {
+  window_single_repeating_click_subscribe(BUTTON_ID_UP, REPEAT_MS, menu_up);
+  window_single_repeating_click_subscribe(BUTTON_ID_DOWN, REPEAT_MS, menu_down);
+  window_single_click_subscribe(BUTTON_ID_SELECT, menu_choose);
+  window_single_click_subscribe(BUTTON_ID_BACK, menu_back);
+}
+
+// Opens the menu (s_menu filled in) over `window`, whose buttons are `own`; `fn` does the chosen action.
+static void menu_open(Window *window, ClickConfigProvider own, void (*fn)(int act)) {
+  menu_close();
+  Layer *root = window_get_root_layer(window);
+  GRect b = layer_get_bounds(root);
+  s_menu_layer = layer_create(b);
+  layer_set_update_proc(s_menu_layer, menu_update);
+  layer_add_child(root, s_menu_layer);
+  s_menu_window = window;
+  s_menu_restore = own;
+  s_menu_do = fn;
+  s_menu_left = b.size.w;
+  s_menu_start = now_ms();
+  window_set_click_config_provider(window, menu_click_config);
+  menu_slide(NULL);
+}
+
 // ---- Buttons ----------------------------------------------------------------
 
-// Switch between the list and the saved locations above it: UP from the first row opens the places with the best one
-// selected (at the bottom, next to the list); DOWN from there, or BACK, returns to the first row. Only a fresh press
-// crosses over: holding UP to get to the top stops at the first row.
-static void show_places(bool on) {
-  s_in_places = on;
-  s_sel = on ? s_places.count - 1 : 0;
+// The saved locations unfold into the wheel between the weather and the list: UP from the first row opens them with the
+// best one selected (next to the list); the rows above it are the others. Scrolling down past them folds them away
+// again once none is on screen; BACK goes straight back to the first row. Only a fresh press opens them: holding UP to
+// get to the top stops at the first row.
+static void open_places(void) {
+  int p = s_places.count;
+  s_places_open = true;
+  s_sel += p;                     // the same rows, now below the places
+  s_pos += p * 1000;
+  s_anim_from += p * 1000;
+  s_sel = p - 1;
+  if (s_test_marquee >= 0) {
+    jump_to_selection();
+  } else {
+    animate_to_selection();
+  }
+  s_marquee_start = now_ms();
+  redraw();
+}
+
+static void close_places(void) {
+  if (!s_places_open) return;
+  s_places_open = false;
+  s_sel = 0;
   jump_to_selection();
   s_marquee_start = now_ms();
   redraw();
 }
 
+// on the list again, and no place in view: fold them (the same rows, renumbered)
+static void fold_places_if_hidden(void) {
+  int p = places_rows();
+  if (!p || s_sel < p) return;
+  WheelSlot slots[WHEEL_MAX_SLOTS];
+  int n = bus_wheel_layout(&s_geom, view_rows(), s_pos, slots, WHEEL_MAX_SLOTS);
+  if (n > 0 && slots[0].index < p) return;
+  s_places_open = false;
+  s_sel -= p;
+  s_pos -= p * 1000;
+  s_anim_from -= p * 1000;
+  redraw();
+}
+
 static void move(int delta, bool held) {
-  if (!s_in_places && delta < 0 && s_sel == 0 && s_places.count > 0) {
-    if (!held) show_places(true);
-    return;
-  }
-  if (s_in_places && delta > 0 && s_sel >= s_places.count - 1) {
-    if (!held) show_places(false);
+  if (!s_places_open && delta < 0 && s_sel == 0 && s_places.count > 0) {
+    if (!held) open_places();
     return;
   }
   int rows = view_rows(), sel = s_sel + delta;
@@ -1411,31 +1746,60 @@ static void move(int delta, bool held) {
   s_sel = sel;
   if (s_test_marquee >= 0) {
     jump_to_selection();  // test hook: deterministic frames, no animation
+    fold_places_if_hidden();
     if (s_wheel_layer) layer_mark_dirty(s_wheel_layer);
   } else {
     animate_to_selection();
   }
+  redraw();
 }
 
 // a repeating click counts its repeats: more than one = the button is being held
 static void up_click(ClickRecognizerRef rec, void *ctx) { move(-1, click_number_of_clicks_counted(rec) > 1); }
 static void down_click(ClickRecognizerRef rec, void *ctx) { move(1, click_number_of_clicks_counted(rec) > 1); }
 
-static void select_click(ClickRecognizerRef rec, void *ctx) {
+// "Select" (a long SELECT does it at once): the row was picked, the phone learns from it
+static void select_row(void) {
   int index = selected_index();
   if (index < 0) return;
   send_select(index);
   vibes_short_pulse();
 }
 
+static void select_long_click(ClickRecognizerRef rec, void *ctx) { select_row(); }
+
 #if HAS_NAV
-static void select_long_click(ClickRecognizerRef rec, void *ctx) {
-  send_nav_start(selected_index());
-}
+static void nav_show(void);
+static void nav_clear(void);
 #endif
 
+static void home_action(int act) {
+  switch (act) {
+    case BUS_ACT_SELECT: select_row(); break;
+    case BUS_ACT_UNDO: send_flag(MESSAGE_KEY_UNDO_SELECT, 1); break;
+#if HAS_NAV
+    case BUS_ACT_SHOW_TRIP: nav_show(); break;
+    case BUS_ACT_START_TRIP:
+    case BUS_ACT_REPLACE_TRIP: send_nav_start(selected_index()); break;
+    case BUS_ACT_CLEAR_TRIP: nav_clear(); break;
+#endif
+    default: break;
+  }
+}
+
+static void click_config(void *ctx);
+
+static void select_click(ClickRecognizerRef rec, void *ctx) {
+  bool trip = false;
+#if HAS_NAV
+  trip = bus_nav_running(&s_nav);
+#endif
+  bus_menu_home(&s_menu, HAS_NAV, trip, selected_index() >= 0);
+  menu_open(s_window, click_config, home_action);
+}
+
 static void back_click(ClickRecognizerRef rec, void *ctx) {
-  if (s_in_places) show_places(false);
+  if (s_places_open) close_places();
   else window_stack_pop(true);
 }
 
@@ -1444,9 +1808,26 @@ static void click_config(void *ctx) {
   window_single_repeating_click_subscribe(BUTTON_ID_DOWN, REPEAT_MS, down_click);
   window_single_click_subscribe(BUTTON_ID_SELECT, select_click);
   window_single_click_subscribe(BUTTON_ID_BACK, back_click);
-#if HAS_NAV
   window_long_click_subscribe(BUTTON_ID_SELECT, 0, select_long_click, NULL);
+}
+
+// Over the status line: a dot in the trip's colour while a trip is running (left), and a small arrow up while the
+// saved locations are folded above the first row you are on (right).
+static void hud_update(Layer *layer, GContext *ctx) {
+  GRect b = layer_get_bounds(layer);
+  int16_t cy = b.size.h / 2 + 1;
+#if HAS_NAV
+  if (bus_nav_running(&s_nav)) {
+    const BusNavStep *st = bus_nav_step(&s_nav, s_nav.current);
+    graphics_context_set_fill_color(ctx, route_color(st ? st->color : -1));
+    graphics_fill_circle(ctx, GPoint(PBL_IF_ROUND_ELSE(6, 7), cy), 4);
+  }
 #endif
+  if (!s_places_open && s_places.count > 0 && s_sel == 0 && s_model.count > 0) {
+    int16_t x = b.size.w - PBL_IF_ROUND_ELSE(6, 8);
+    graphics_context_set_fill_color(ctx, GColorBlack);
+    for (int16_t r = 0; r < 4; r++) fill_span(ctx, GColorBlack, x - r, x + r + 1, cy - 2 + r, cy - 1 + r);
+  }
 }
 
 static void focus_handler(bool in_focus) {
@@ -1489,6 +1870,9 @@ static void window_load(Window *window) {
   s_wheel_layer = layer_create(wheel);
   layer_set_update_proc(s_wheel_layer, wheel_update);
   layer_add_child(root, s_wheel_layer);
+  s_hud_layer = layer_create(status);
+  layer_set_update_proc(s_hud_layer, hud_update);
+  layer_add_child(root, s_hud_layer);
   redraw();
 }
 
@@ -1497,8 +1881,11 @@ static void window_unload(Window *window) {
     app_timer_cancel(s_anim_timer);
     s_anim_timer = NULL;
   }
+  menu_close();
   layer_destroy(s_wheel_layer);
   s_wheel_layer = NULL;
+  layer_destroy(s_hud_layer);
+  s_hud_layer = NULL;
   text_layer_destroy(s_status_layer);
   s_status_layer = NULL;
 }
@@ -1530,7 +1917,7 @@ static void init(void) {
   app_message_register_inbox_dropped(inbox_dropped);
   app_message_register_outbox_sent(outbox_sent);
   app_message_register_outbox_failed(outbox_failed);
-  app_message_open(768, 64);
+  app_message_open(HAS_NAV ? 768 : 512, 64);   // a trip row is the biggest message (aplite has no trip view)
 
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
   compass_service_set_heading_filter(DEG_TO_TRIGANGLE(5));
