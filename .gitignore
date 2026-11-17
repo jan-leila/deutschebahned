@@ -22,6 +22,7 @@ node_modules/
 test/out/
 test/ui-out/
 test/app-out/
+test/gravel-out/
 # Screenshot runs: baseline/ is the committed reference; current/, diff/ and the emulator state are per run.
 test/screenshots/current/
 test/screenshots/diff/

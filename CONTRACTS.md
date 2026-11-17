@@ -735,6 +735,11 @@ list on `ready` and logs `UI-FIXTURE select <listId> <index>` / `UI-FIXTURE refr
 Its items carry badges and colors (e.g. Metro Transit `2` `771473`, `B Line` `ED1B2E`, `Blue` `00539F`, one item with no color).
 It keeps at least 8 items so the wheel has rows above and below the selection.
 
+`src/pkjs/gravel-weather.js` is another alternative entry (`PKJS_ENTRY=src/pkjs/gravel-weather.js pebble build`): it sets `showWeather: true`
+in the stored config (`STORAGE_KEYS.config`; defaults when nothing is stored), logs `gravel-weather: showWeather turned on` when it changed
+something, and then requires `index.js` unchanged. `tools/test-gravel.sh --expect weather` installs that build through Gravel (README,
+"Through Gravel") to check the weather panel (§17) end to end; the bundle is never the one left in `build/`.
+
 ## 9a. `src/common/storage-migrate.js` — one-time storage key rename
 
 `migrate(storage) → movedCount`, called by `index.js` before anything reads `localStorage`. Every key was once stored as

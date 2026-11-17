@@ -67,8 +67,29 @@ Each part is tested on its own (see `CONTRACTS.md` for the interfaces):
 | watch UI in the emulator (fixture data) | `tools/test-ui-emulator.sh [platform]` | |
 | integration (all JS parts together) | `test/integration.test.js`, `test/pkjs-glue.test.js` | `node tools/run-tests.js integration pkjs-glue` |
 | end to end in the emulator | `tools/test-app-emulator.sh [platform]` | |
+| through Gravel (real phone side in Gravel's runtime and permissions, live services, weather panel) | `tools/test-gravel.sh [--expect waiting\|answer\|weather]` | needs an adb device with a debug build of Gravel |
 
 `node tools/run-tests.js` runs every `test/*.test.js`. `node tools/smoke-metrotransit.js [lat lon] [routes] [route:stop]` runs the real pipeline against the live Metro Transit API.
+
+### Through Gravel
+
+The phone side runs inside the Pebble phone app. In [Gravel](https://github.com/jan-leila/gravel) a watchapp has neither internet access nor the phone's position until you allow both: Settings > Apps > Watch App Permissions > Deutschebahned, *Internet access* and *Location*: Allow. Until then the watch stays on `Waiting for phone` (Gravel does not start the phone side at all, or, on arm64 phones, starts it with the network blocked).
+
+`tools/test-gravel.sh` checks this without a watch. It boots a Pebble emulator of its own, attaches it as a watch to a debug build of Gravel on an Android device or emulator (`adb`; release builds have no adb hooks), installs the `.pbw` through Gravel's developer connection and judges the watch's screen and the phone-side log:
+
+```
+tools/test-gravel.sh --expect waiting --permissions default      # Gravel's defaults: still "Waiting for phone"
+tools/test-gravel.sh --expect answer  --permissions allow        # the phone side ran and the watch answered it
+tools/test-gravel.sh --expect weather --permissions allow        # the weather panel is on the watch
+```
+
+- `--expect waiting` compares the screen pixel for pixel with `test/gravel/<platform>-waiting.png` (emery and basalt are there; `--update-waiting` saves one for another platform).
+- `--expect weather` builds with `PKJS_ENTRY=src/pkjs/gravel-weather.js`, an entry that turns `showWeather` on in the stored settings and then runs the real phone side, so the position, the Open-Meteo request through Gravel and the `WEATHER_*` message are the real thing. It passes when the panel's red temperature line is on the upper half of the watch's screen (colour platforms only). The setting stays on in Gravel afterwards.
+- `--permissions allow|default|deny` sets the app's two permissions in Gravel's settings by reading the phone's screen and tapping; without it they are left alone. Gravel's "Keep watch / Replace" question for each new emulator is answered with "Keep watch".
+- `--mock-location LAT,LON` (Android emulator only) keeps feeding the emulator's location provider, which has no fix of its own; without a position the app shows a location error and no weather. `--reset-settings` deletes what the app stored in Gravel first (settings, learned weights, indexes).
+- `--platform` (default emery), `--seconds N` (default 90; `answer` and `weather` stop as soon as they are met), `--serial`. Output: `test/gravel-out/`.
+
+Use a test device: Gravel connects to one watch at a time, so the emulator takes the place of a watch that was connected. The Pebble emulator sometimes stops answering during an install; the script says so, and a second run usually goes through. On an x86_64 Android emulator a network-denied app's phone side is not started at all, so what a real phone does in the denied state (phone side running with the network blocked) is not covered.
 
 ### Settings page screenshots
 
